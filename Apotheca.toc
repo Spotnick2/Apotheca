@@ -1,0 +1,9 @@
+## Interface: 20504
+## Title: Apotheca
+## Notes: Smart consumable action bar for TBC Classic
+## Author: Spotnick
+## Version: @project-version@
+## IconTexture: Interface\Icons\INV_Potion_137
+## SavedVariablesPerCharacter: ApothecaCharDB
+
+Apotheca.lua
