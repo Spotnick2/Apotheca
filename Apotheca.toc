@@ -1,9 +1,21 @@
 ## Interface: 20505
 ## Title: Apotheca
-## Notes: Smart consumable action bar for TBC Classic
+## Notes: Smart consumable action bars for healers that automatically select the best potions, runes, and recovery items.
+## Category-enUS: User Interface
+## Category-deDE: Benutzerinterface
+## Category-esES: Interfaz de usuario
+## Category-esMX: Interfaz de usuario
+## Category-frFR: Interface utilisateur
+## Category-itIT: Interfaccia utente
+## Category-koKR: 사용자 인터페이스
+## Category-ptBR: Interface do usuário
+## Category-ruRU: Интерфейс пользователя
+## Category-zhCN: 用户界面
+## Category-zhTW: 使用者介面
 ## Author: Spotnick
-## Version: @project-version@
-## IconTexture: Interface\Icons\INV_Potion_137
+## Version: 1.0.0
+## SavedVariables: ApothecaDB
 ## SavedVariablesPerCharacter: ApothecaCharDB
 
 Apotheca.lua
+Apotheca_Options.lua
