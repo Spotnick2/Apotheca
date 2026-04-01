@@ -1,170 +1,101 @@
 # Apotheca
 
-**Smart consumable action bars for WoW Classic (TBC)**
+**Apotheca** is a smart consumable bar for **World of Warcraft: The Burning Crusade Classic / Classic Anniversary** focused on healer-friendly recovery and buff upkeep.
 
-Apotheca is a lightweight addon that creates dynamic action bar buttons for your consumables.
-It automatically selects the **best available item** from your bags — no macros, no micromanagement.
+It builds a compact on-screen bar that automatically selects the best available consumables from your bags and presents them as clickable buttons.
 
----
+## Features
 
-## ✨ Features
-
-### 🧠 Smart Selection Engine
-
-* Automatically picks the highest priority consumable available
-* Supports:
-
-  * Mana potions
-  * Healing potions
-  * Runes (Demonic Rune / Dark Rune)
-* Falls back to lower-tier or previous-expansion items when needed
-
----
-
-### ⚡ Dynamic Buttons
-
-* Action bar-style buttons that update in real time
-* Displays:
-
-  * Icon
-  * Stack count
-  * Cooldown
-* Automatically hides when no item is available
-
----
-
-### 🔥 Context-Aware Logic
-
-* Tempest Keep consumables handled automatically
-
-  * Bottled Nethergon Energy only appears in TK instances
-* Prioritizes appropriate items (e.g. Demonic Rune before Dark Rune)
+- Smart consumable bar with automatic bag scanning
+- Healer-focused recovery and maintenance items
+- Support for:
+  - Recovery potions / runes / stones
+  - Food and drink
+  - Buff food
+  - Flasks and elixirs
+  - Spirit scrolls
+  - Protection scrolls
+  - Weapon oils
+- Character-specific or global profiles
+- Options panel with configurable layout and behavior
+- Horizontal or vertical layout
+- Adjustable rows, icon size, and padding
+- Visibility rules:
+  - Always visible
+  - In combat only
+  - Out of combat only
+  - Hidden
+- Optional healer-spec-only display
+- Optional empty button display
+- Optional anti-waste behavior to avoid using food/drink at full health or mana
+- Ready check glow support for missing buffs:
+  - Buff food
+  - Scrolls
+  - Weapon oil
+- Debug mode for safe testing
 
 ---
 
-### 🧪 Debug Mode
+## Supported Button Types
 
-Safe testing mode to validate behavior without consuming items.
+Apotheca dynamically shows buttons based on your settings and what is available in your bags.
 
-```lua
-/run Apotheca.SetDebug(true)
-/run Apotheca.SetDebug(false)
-```
+### Core Recovery
+- Mana consumables
+- Health consumables
+- Runes / equivalent recovery items
+- Food
+- Drink
 
-When enabled:
+### Buff Maintenance
+- Buff food
+- Spirit scrolls
+- Protection scrolls
+- Weapon oils
 
-* Buttons do not consume items
-* Clicking shows what would be used
-* Debug indicator is displayed
-
----
-
-### 🖱️ Simple UI
-
-* Move the bar with **Shift + Left Click**
-* Position is saved per character
-* Minimal, unobtrusive design
-
----
-
-## 📦 Installation
-
-1. Download or clone this repository
-2. Place the folder inside:
-
-```
-World of Warcraft/_classic_/Interface/AddOns/
-```
-
-3. Ensure the folder name is:
-
-```
-Apotheca
-```
-
-4. Reload UI:
-
-```
-/reload
-```
+### Elixirs and Flasks
+Depending on your settings, Apotheca can:
+- prefer flasks
+- prefer separate elixirs
+- auto-pick the best available option
 
 ---
 
-## 🧩 Supported Consumables (Phase 1)
+## Profiles
 
-### Mana
+Apotheca supports:
 
-* Bottled Nethergon Energy (TK only)
-* Cenarion Mana Salve
-* Auchenai Mana Potion
-* Super Mana Potion
-* Mana Potion Injector
-* Classic fallback potions
+- **Global profile**
+- **Character-specific profile**
 
-### Healing
-
-* Auchenai Healing Potion
-* Super Healing Potion
-* Fel Blossom
-* Nightmare Seed
-* Classic fallback potions
-
-### Runes
-
-* Demonic Rune
-* Dark Rune
+This lets you keep different settings on different characters while still having a shared default if you want one.
 
 ---
 
-## 🧱 Project Structure
+## Options
 
-```
-Apotheca/
- ├── Apotheca.lua
- └── Apotheca.toc
-```
+Apotheca includes an in-game options panel where you can configure:
 
----
-
-## ⚙️ Technical Notes
-
-* Uses `SecureActionButtonTemplate` for combat-safe interaction
-* Handles combat lockdown correctly (updates deferred until leaving combat)
-* Compatible with both legacy and `C_Container` APIs
-* Optimized bag scanning using a single-pass map
-
----
-
-## 🔮 Roadmap
-
-### Phase 2
-
-* Smart food & drink system
-* Config options (slash commands / UI)
-
-### Phase 3
-
-* Manual override (TotemTimers-style selection)
-* Advanced customization
+- Enable / disable the addon
+- Only show in healing spec
+- Show empty buttons
+- Lock bar position
+- Prevent waste
+- Visibility mode
+- Orientation
+- Number of rows
+- Icon size
+- Icon padding
+- Buff food behavior and priority
+- Elixir / flask mode
+- Scroll toggles
+- Weapon oil behavior
+- Debug mode
 
 ---
 
-## 💬 Contributing / Feedback
+## Slash Commands
 
-Suggestions, ideas, and feedback are welcome.
-
----
-
-## 🧠 Philosophy
-
-Apotheca focuses on:
-
-* Automation without loss of control
-* Minimal UI, maximum efficiency
-* Smart defaults that “just work”
-
----
-
-## 📜 License
-
-Add your preferred license here (MIT recommended).
+```text
+/apotheca
+/apo
