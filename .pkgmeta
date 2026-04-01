@@ -1,14 +1,9 @@
 package-as: Apotheca
-
 enable-nolib-creation: no
 
 ignore:
-
-* .github
-* .gitignore
-* README.md
-* screenshots
-* docs
-
-move-folders:
-Apotheca: Apotheca
+  - .github
+  - .gitignore
+  - README.md
+  - screenshots
+  - docs
