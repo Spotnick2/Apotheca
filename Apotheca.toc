@@ -13,7 +13,7 @@
 ## Category-zhCN: 用户界面
 ## Category-zhTW: 使用者介面
 ## Author: Spotnick
-## Version: 1.0.0
+## Version: 1.0.2
 ## SavedVariables: ApothecaDB
 ## SavedVariablesPerCharacter: ApothecaCharDB
 

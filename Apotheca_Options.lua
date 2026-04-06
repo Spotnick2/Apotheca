@@ -334,9 +334,16 @@ function Apotheca.BuildOptionsPanelContent(panel)
     Checkbox("Lock bar position  |cff888888(disables Alt+Drag)|r",
         function() return DBGet("lockPosition") == true end,
         function(v) DBSet(v, "lockPosition") end)
-    Checkbox("Prevent using food/drink at full health/mana",
-        function() return DBGet("preventWaste") ~= false end,
-        function(v) DBSet(v, "preventWaste") end)
+    Gap(4)
+    SmallLabel("When at full health/mana, recovery buttons:")
+    RadioGroup(
+        {
+            { value = "BLOCK",      label = "Block usage  |cff888888(silently disable button)|r" },
+            { value = "ASK",        label = "Ask first  |cff888888(confirmation popup)|r" },
+            { value = "DO_NOTHING", label = "Do nothing  |cff888888(allow free usage)|r" },
+        },
+        function() return DBGet("preventWasteMode") or "BLOCK" end,
+        function(v) DBSet(v, "preventWasteMode") end)
 
     -- ════════════════════════════════════════════════════════════
     -- VISIBILITY
@@ -378,6 +385,163 @@ function Apotheca.BuildOptionsPanelContent(panel)
     Slider("Icon Padding", 0, 10, 1,
         function() return DBGet("iconPadding") or 3 end,
         function(v) DBSet(v, "iconPadding") end)
+
+    -- ════════════════════════════════════════════════════════════
+    -- BUTTON ORDER
+    -- ════════════════════════════════════════════════════════════
+    SectionHeader("Button Order")
+    SmallLabel("Drag categories up/down to set the visual order on the bar.")
+    Gap(6)
+
+    -- Human-readable labels for each button key.
+    local BUTTON_LABELS = {
+        mana             = "Mana Potion",
+        health           = "Health Potion / Healthstone",
+        rune             = "Rune / Battle Res",
+        recovery         = "Recovery (Conjured Combo)",
+        food             = "Food",
+        drink            = "Drink",
+        flask            = "Flask",
+        battle           = "Battle Elixir",
+        guardian         = "Guardian Elixir",
+        bufffood         = "Buff Food",
+        spiritscroll     = "Spirit Scroll",
+        protectionscroll = "Protection Scroll",
+        weaponoil        = "Weapon Oil",
+        bandage          = "Bandage",
+    }
+
+    local ROW_HEIGHT = 22
+    local ROW_WIDTH  = CONTENT_W - PAD * 2
+
+    -- Container for all order rows.
+    local orderContainer = CreateFrame("Frame", nil, content)
+    orderContainer:SetPoint("TOPLEFT", content, "TOPLEFT", PAD, Y())
+    orderContainer:SetWidth(ROW_WIDTH)
+
+    local orderRows = {}  -- { frame, key }
+
+    -- Rebuilds visual positions of all rows inside the container.
+    local function RepositionOrderRows()
+        for i, row in ipairs(orderRows) do
+            row.frame:ClearAllPoints()
+            row.frame:SetPoint("TOPLEFT", orderContainer, "TOPLEFT", 0, -(i - 1) * (ROW_HEIGHT + 2))
+            row.indexText:SetText(i .. ".")
+        end
+        orderContainer:SetHeight(#orderRows * (ROW_HEIGHT + 2))
+    end
+
+    -- Persist the current row order to the profile.
+    local function SaveOrder()
+        local order = {}
+        for _, row in ipairs(orderRows) do
+            order[#order + 1] = row.key
+        end
+        DBSet(order, "buttonOrder")
+        Apotheca.ResetLayout()
+        Apotheca.UpdateAllButtons()
+    end
+
+    -- Swap two rows and save.
+    local function SwapRows(indexA, indexB)
+        if indexA < 1 or indexB < 1 or indexA > #orderRows or indexB > #orderRows then return end
+        orderRows[indexA], orderRows[indexB] = orderRows[indexB], orderRows[indexA]
+        RepositionOrderRows()
+        SaveOrder()
+    end
+
+    -- Build one row.
+    local function MakeOrderRow(i, key)
+        local f = CreateFrame("Frame", nil, orderContainer)
+        f:SetWidth(ROW_WIDTH)
+        f:SetHeight(ROW_HEIGHT)
+
+        -- Alternating background for readability
+        local bg = f:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        bg:SetColorTexture(0.10, 0.10, 0.18, (i % 2 == 0) and 0.5 or 0.8)
+
+        -- Index number
+        local idx = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        idx:SetPoint("LEFT", f, "LEFT", 6, 0)
+        idx:SetWidth(20)
+        idx:SetJustifyH("RIGHT")
+        idx:SetText(i .. ".")
+
+        -- Label
+        local lbl = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        lbl:SetPoint("LEFT", f, "LEFT", 30, 0)
+        lbl:SetText(BUTTON_LABELS[key] or key)
+
+        -- Up arrow
+        local up = CreateFrame("Button", nil, f)
+        up:SetWidth(16) ; up:SetHeight(16)
+        up:SetPoint("RIGHT", f, "RIGHT", -22, 0)
+        up:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollUp-Up")
+        up:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollUp-Highlight")
+        up:SetScript("OnClick", function()
+            -- Find current index of this row
+            for idx2, row in ipairs(orderRows) do
+                if row.key == key then SwapRows(idx2, idx2 - 1) ; return end
+            end
+        end)
+
+        -- Down arrow
+        local down = CreateFrame("Button", nil, f)
+        down:SetWidth(16) ; down:SetHeight(16)
+        down:SetPoint("RIGHT", f, "RIGHT", -4, 0)
+        down:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+        down:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Highlight")
+        down:SetScript("OnClick", function()
+            for idx2, row in ipairs(orderRows) do
+                if row.key == key then SwapRows(idx2, idx2 + 1) ; return end
+            end
+        end)
+
+        return { frame = f, key = key, indexText = idx, label = lbl }
+    end
+
+    -- Initial build from saved order.
+    local initOrder = Apotheca.GetButtonOrder()
+    for i, key in ipairs(initOrder) do
+        orderRows[#orderRows + 1] = MakeOrderRow(i, key)
+    end
+    RepositionOrderRows()
+
+    -- Reset button
+    Gap(#initOrder * (ROW_HEIGHT + 2) + 4)
+    local resetBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+    resetBtn:SetPoint("TOPLEFT", content, "TOPLEFT", PAD, Y())
+    resetBtn:SetWidth(130)
+    resetBtn:SetHeight(22)
+    resetBtn:SetText("Reset to Default")
+    resetBtn:SetScript("OnClick", function()
+        DBSet(nil, "buttonOrder")
+        -- Rebuild rows from default order
+        for _, row in ipairs(orderRows) do row.frame:Hide() end
+        orderRows = {}
+        local defOrder = Apotheca.GetButtonOrder()
+        for i, key in ipairs(defOrder) do
+            orderRows[#orderRows + 1] = MakeOrderRow(i, key)
+        end
+        RepositionOrderRows()
+        Apotheca.ResetLayout()
+        Apotheca.UpdateAllButtons()
+    end)
+    totalH = totalH + 26
+
+    -- Refresh callback: rebuild rows when profile changes.
+    refreshCallbacks[#refreshCallbacks + 1] = function()
+        for _, row in ipairs(orderRows) do row.frame:Hide() end
+        orderRows = {}
+        local curOrder = Apotheca.GetButtonOrder()
+        for i, key in ipairs(curOrder) do
+            orderRows[#orderRows + 1] = MakeOrderRow(i, key)
+        end
+        RepositionOrderRows()
+    end
+
+    Gap(8)
 
     -- ════════════════════════════════════════════════════════════
     -- BUFF FOOD
@@ -497,6 +661,18 @@ function Apotheca.BuildOptionsPanelContent(panel)
     Checkbox("Glow when weapon oil is missing  |cff888888(ready check)|r",
         function() return DBGet("weaponOil", "glowOnMissingBuff") ~= false end,
         function(v) DBSet(v, "weaponOil", "glowOnMissingBuff") end)
+
+    -- ════════════════════════════════════════════════════════════
+    -- BANDAGE
+    -- ════════════════════════════════════════════════════════════
+    SectionHeader("Bandage")
+    SmallLabel("Shows the best available bandage from your bags.")
+    Gap(4)
+    Checkbox("Enable Bandage button",
+        function() return DBGet("bandage", "enabled") ~= false end,
+        function(v) DBSet(v, "bandage", "enabled") end)
+    SmallLabel("|cff888888Button is automatically disabled while Recently Bandaged is active.|r")
+    Gap(4)
 
     -- ════════════════════════════════════════════════════════════
     -- DEBUG

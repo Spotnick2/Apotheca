@@ -68,7 +68,15 @@ local PROFILE_DEFAULTS = {
     health = {
         preferHealthstone = true,
     },
-    preventWaste        = true,
+    bandage = {
+        enabled = true,
+    },
+    -- "BLOCK" = silently disable button, "ASK" = confirmation popup,
+    -- "DO_NOTHING" = no prevention
+    preventWasteMode    = "BLOCK",
+    -- Custom visual order of button categories.
+    -- nil / missing = use the built-in default order.
+    buttonOrder         = nil,
 }
 
 local function DeepCopy(src)
@@ -137,6 +145,12 @@ local function InitDB()
             else
                 ApplyDefaults(ApothecaDB.profiles[key], PROFILE_DEFAULTS)
             end
+            -- Migrate old boolean preventWaste → new preventWasteMode
+            local prof = ApothecaDB.profiles[key]
+            if prof and prof.preventWaste ~= nil and prof.preventWasteMode == nil then
+                prof.preventWasteMode = prof.preventWaste and "BLOCK" or "DO_NOTHING"
+                prof.preventWaste     = nil
+            end
             return
         end
 
@@ -155,7 +169,7 @@ local function InitDB()
                        "showEmptyButtons","orientation","rows",
                        "iconSize","iconPadding","buffFood","categories",
                        "buffFoodPriority","elixirs","lockPosition","enabled",
-                       "preventWaste" }
+                       "preventWasteMode","buttonOrder" }
         for _, k in ipairs(safe) do
             if old[k] ~= nil then
                 ApothecaDB.profiles.Global[k] = old[k]
@@ -332,7 +346,9 @@ local RUNE_ITEMS     = { 12662, 20520 }
 local CONJURED_ITEMS = { 34062, 22895 }
 
 local DRINK_ITEMS = {
-    { id = 27860, manaValue = 4800 },
+    { id = 30703, manaValue = 4800, conjured = true },  -- Conjured Mountain Spring Water (mage 65)
+    { id = 27860, manaValue = 4800 },                   -- Filtered Draenic Water
+    { id = 22018, manaValue = 3600, conjured = true },   -- Conjured Sparkling Water (mage 55)
     { id = 28399, manaValue = 3600 },
     { id = 8766,  manaValue = 2400 },
 }
@@ -340,6 +356,7 @@ local DRINK_ITEMS = {
 local FOOD_ITEMS = {
     { id = 29449, healthValue = 7500 },
     { id = 29450, healthValue = 6966 },
+    { id = 22019, healthValue = 4800, conjured = true },   -- Conjured Croissant (mage 55)
     { id = 27856, healthValue = 4320 },
     { id = 27859, healthValue = 4320 },
     { id = 29451, healthValue = 4320 },
@@ -403,6 +420,26 @@ local HEALTHSTONE_ITEMS = {
     5506,   -- Lesser Healthstone (rank 1)
     5175,   -- Healthstone        (rank 2)
     5174,   -- Healthstone        (rank 1)
+}
+
+-- ============================================================
+-- BANDAGE ITEMS  (highest heal → lowest)
+-- Only standard First Aid bandages. Ordered by total heal amount
+-- so FindBestItem picks the strongest available.
+-- ============================================================
+local BANDAGE_ITEMS = {
+    21991,  -- Heavy Netherweave Bandage  (3400 over 8 s, req 350 First Aid)
+    21990,  -- Netherweave Bandage        (2800 over 8 s, req 330 First Aid)
+    14530,  -- Heavy Runecloth Bandage    (2000 over 8 s, req 290 First Aid)
+    14529,  -- Runecloth Bandage          (1360 over 8 s, req 260 First Aid)
+    8545,   -- Heavy Mageweave Bandage    (1104 over 8 s)
+    8544,   -- Mageweave Bandage          (800 over 8 s)
+    6451,   -- Heavy Silk Bandage         (640 over 8 s)
+    6450,   -- Silk Bandage               (400 over 8 s)
+    3531,   -- Heavy Wool Bandage         (301 over 7 s)
+    3530,   -- Wool Bandage               (161 over 7 s)
+    2581,   -- Heavy Linen Bandage        (114 over 6 s)
+    1251,   -- Linen Bandage              (66 over 6 s)
 }
 
 -- ============================================================
@@ -554,6 +591,11 @@ local WEAPONOIL_BUTTON_CONFIG = {
     key = "weaponoil", label = "Weapon Oil", emptyIcon = "Interface\\Icons\\INV_Potion_95",
 }
 
+local BANDAGE_BUTTON_CONFIG = {
+    key = "bandage", label = "Bandage", emptyIcon = "Interface\\Icons\\INV_Misc_Bandage_Netherweave_Heavy",
+    emptyTooltip = "No bandage in bags",
+}
+
 -- ============================================================
 -- RESOLUTION FUNCTIONS
 -- ============================================================
@@ -595,32 +637,23 @@ function Apotheca.FindBestFood(bagMap, missingHP)
     for _, entry in ipairs(FOOD_ITEMS) do
         local count = bagMap[entry.id]
         if count and count > 0 then
-            available[#available + 1] = { id = entry.id, healthValue = entry.healthValue, count = count }
+            available[#available + 1] = {
+                id = entry.id, healthValue = entry.healthValue,
+                count = count, conjured = entry.conjured or false,
+            }
         end
     end
     if #available == 0 then return nil, 0, nil end
 
-    local chosen
-    if missingHP > 0 then
-        local bestSuff = nil
-        for i = #available, 1, -1 do
-            local e = available[i]
-            if e.healthValue >= missingHP then
-                if not bestSuff or e.healthValue < bestSuff.healthValue
-                or (e.healthValue == bestSuff.healthValue and e.count < bestSuff.count) then
-                    bestSuff = e
-                end
-            end
-        end
-        chosen = bestSuff or available[1]
-    else
-        local bestVal = -1
-        for _, e in ipairs(available) do
-            if e.healthValue > bestVal
-            or (e.healthValue == bestVal and chosen and e.count < chosen.count) then
-                bestVal = e.healthValue
-                chosen  = e
-            end
+    -- Always pick the highest health-value food.
+    -- On a tie, prefer conjured items (free/renewable).
+    local chosen = available[1]
+    for i = 2, #available do
+        local e = available[i]
+        if e.healthValue > chosen.healthValue then
+            chosen = e
+        elseif e.healthValue == chosen.healthValue and e.conjured and not chosen.conjured then
+            chosen = e
         end
     end
 
@@ -800,6 +833,34 @@ function Apotheca.FindBestWeaponOil(bagMap)
 end
 
 -- ============================================================
+-- BANDAGE HELPERS
+-- ============================================================
+
+-- Pick the best available bandage from bags (highest rank first).
+function Apotheca.FindBestBandage(bagMap)
+    for _, id in ipairs(BANDAGE_ITEMS) do
+        local count = bagMap[id]
+        if count and count > 0 then
+            return id, count, GetCachedTexture(id)
+        end
+    end
+    return nil, 0, nil
+end
+
+-- Returns true if the player has the "Recently Bandaged" debuff,
+-- which prevents using another bandage for 60 seconds.
+function Apotheca.HasRecentlyBandaged()
+    local i = 1
+    while true do
+        local name = UnitDebuff("player", i)
+        if not name then break end
+        if name == "Recently Bandaged" then return true end
+        i = i + 1
+    end
+    return false
+end
+
+-- ============================================================
 -- ELIXIR BUFF DETECTION
 -- Scans UnitBuff for known flask/battle/guardian buff names.
 -- Returns separate flags rather than one combined check so the
@@ -971,8 +1032,19 @@ local function ResolveRecovery(bagMap)
             local bestAvail, bestSuff = nil, nil
             for _, e in ipairs(DRINK_ITEMS) do
                 if bagMap[e.id] and bagMap[e.id] > 0 then
-                    if not bestAvail then bestAvail = e end
-                    if e.manaValue >= missingMana then bestSuff = e end
+                    -- Prefer conjured over non-conjured at equal manaValue
+                    if not bestAvail
+                    or e.manaValue > bestAvail.manaValue
+                    or (e.manaValue == bestAvail.manaValue and e.conjured and not bestAvail.conjured) then
+                        bestAvail = e
+                    end
+                    if e.manaValue >= missingMana then
+                        if not bestSuff
+                        or e.manaValue < bestSuff.manaValue
+                        or (e.manaValue == bestSuff.manaValue and e.conjured and not bestSuff.conjured) then
+                            bestSuff = e
+                        end
+                    end
                 end
             end
             local chosen = bestSuff or bestAvail
@@ -982,13 +1054,21 @@ local function ResolveRecovery(bagMap)
                 dTex = GetCachedTexture(chosen.id)
             end
         else
+            -- Pick highest manaValue; prefer conjured on tie
+            local bestEntry = nil
             for _, e in ipairs(DRINK_ITEMS) do
                 if bagMap[e.id] and bagMap[e.id] > 0 then
-                    dID  = e.id
-                    dCnt = bagMap[e.id]
-                    dTex = GetCachedTexture(e.id)
-                    break
+                    if not bestEntry
+                    or e.manaValue > bestEntry.manaValue
+                    or (e.manaValue == bestEntry.manaValue and e.conjured and not bestEntry.conjured) then
+                        bestEntry = e
+                    end
                 end
+            end
+            if bestEntry then
+                dID  = bestEntry.id
+                dCnt = bagMap[bestEntry.id]
+                dTex = GetCachedTexture(bestEntry.id)
             end
         end
         result.drinkID = dID ; result.drinkCount = dCnt ; result.drinkTexture = dTex
@@ -1300,6 +1380,26 @@ local function UpdateWeaponOilGlow()
     end
 end
 
+-- Lightweight bandage debuff check called from UNIT_AURA.
+-- Toggles the button without a full UpdateAllButtons pass.
+local function UpdateBandageUsability()
+    local btn = Apotheca.buttons["bandage"]
+    if not btn or not btn.itemID then return end
+    if InCombatLockdown() then return end
+    local db = DB()
+    if db.debug then return end
+
+    if Apotheca.HasRecentlyBandaged() then
+        btn:SetAttribute("type", nil)
+        btn:SetAttribute("item", nil)
+        btn.icon:SetDesaturated(true)
+    else
+        -- Re-enable if the debuff just fell off
+        Apotheca.ApplySecureItemAttributes(btn, btn.itemID)
+        btn.icon:SetDesaturated(false)
+    end
+end
+
 local function CalcFrameWidth(n)
     return FRAME_PADDING * 2 + n * BUTTON_SIZE + (n - 1) * BUTTON_GAP
 end
@@ -1540,6 +1640,112 @@ for _, cfg in ipairs(SCROLL_BUTTON_CONFIG) do
 end
 Apotheca.buttons["bufffood"]  = CreateApothecaButton(BUFFFOOD_BUTTON_CONFIG)
 Apotheca.buttons["weaponoil"] = CreateApothecaButton(WEAPONOIL_BUTTON_CONFIG)
+Apotheca.buttons["bandage"]   = CreateApothecaButton(BANDAGE_BUTTON_CONFIG)
+
+-- ============================================================
+-- WASTE PREVENTION — "ASK" MODE POPUP & OVERLAYS
+-- StaticPopup for the "Are you sure?" confirmation.
+-- Non-secure overlay frames that intercept clicks when the
+-- button is in ASK-disabled state.
+-- ============================================================
+
+StaticPopupDialogs["APOTHECA_WASTE_CONFIRM"] = {
+    text    = "|cff9966ffApotheca|r\nYou are at full %s.\nUse %s anyway?",
+    button1 = "Yes",
+    button2 = "No",
+    OnAccept = function(self, data)
+        if data and data.itemID and not InCombatLockdown() then
+            -- Temporarily clear the ASK overlay so the button works,
+            -- then use the item directly (only safe out of combat).
+            local name = GetItemInfo(data.itemID)
+            if name then
+                -- UseItemByName is a hardware-event-free alternative
+                -- that works outside of combat.
+                RunMacroText("/use " .. name)
+            end
+        end
+    end,
+    timeout       = 0,
+    whileDead     = false,
+    hideOnEscape  = true,
+    preferredIndex = 3,
+}
+
+-- Create a click-intercepting overlay for ASK mode.
+-- When shown it sits above the secure button and swallows clicks
+-- to present the confirmation popup instead.
+local function CreateAskOverlay(btn)
+    local overlay = CreateFrame("Button", nil, btn)
+    overlay:SetAllPoints(btn)
+    overlay:SetFrameLevel(btn:GetFrameLevel() + 10)
+    overlay:RegisterForClicks("AnyDown", "AnyUp")
+    overlay:Hide()
+    overlay:SetScript("OnClick", function()
+        if not btn.itemID then return end
+        local name = GetCachedItemName(btn.itemID) or ("item:" .. btn.itemID)
+        local resType = btn._wasteResource or "health/mana"
+        local dialog = StaticPopup_Show("APOTHECA_WASTE_CONFIRM", resType, name)
+        if dialog then
+            dialog.data = { itemID = btn.itemID }
+        end
+    end)
+    -- Forward tooltip so hovering still works
+    overlay:SetScript("OnEnter", function() btn:GetScript("OnEnter")(btn) end)
+    overlay:SetScript("OnLeave", function() btn:GetScript("OnLeave")(btn) end)
+    btn._askOverlay = overlay
+end
+
+-- Create overlays for the recovery buttons that can be waste-blocked.
+for _, key in ipairs({ "recovery", "food", "drink" }) do
+    CreateAskOverlay(Apotheca.buttons[key])
+end
+
+-- ============================================================
+-- BUTTON ORDER — DEFAULT KEY SEQUENCE
+-- This is the canonical default order. Custom orders stored
+-- in db.buttonOrder override it.
+-- ============================================================
+
+Apotheca.DEFAULT_BUTTON_ORDER = {
+    "mana", "health", "rune",
+    "recovery", "food", "drink",
+    "flask", "battle", "guardian",
+    "bufffood",
+    "spiritscroll", "protectionscroll",
+    "weaponoil",
+    "bandage",
+}
+
+-- All known button keys (for validation).
+Apotheca.ALL_BUTTON_KEYS = {}
+for _, k in ipairs(Apotheca.DEFAULT_BUTTON_ORDER) do
+    Apotheca.ALL_BUTTON_KEYS[k] = true
+end
+
+-- Returns the saved order from the profile, validated and
+-- back-filled with any missing keys.
+function Apotheca.GetButtonOrder()
+    local db    = DB()
+    local saved = db.buttonOrder
+    if not saved or type(saved) ~= "table" or #saved == 0 then
+        return { unpack(Apotheca.DEFAULT_BUTTON_ORDER) }
+    end
+
+    -- Validate: strip unknowns and duplicates, then append missing.
+    local seen, clean = {}, {}
+    for _, k in ipairs(saved) do
+        if Apotheca.ALL_BUTTON_KEYS[k] and not seen[k] then
+            seen[k]         = true
+            clean[#clean+1] = k
+        end
+    end
+    for _, k in ipairs(Apotheca.DEFAULT_BUTTON_ORDER) do
+        if not seen[k] then
+            clean[#clean+1] = k
+        end
+    end
+    return clean
+end
 
 -- ============================================================
 -- LAYOUT
@@ -1555,47 +1761,42 @@ local function RefreshLayout(recoveryMode, elixirMode, staticFlags, scrollFlags)
     currentRecoveryMode = recoveryMode
     currentElixirMode   = elixirMode
 
-    local active = {}
+    -- 1. Determine which keys are active this frame.
+    local shouldShow = {}
 
-    -- ── Core: static slots (only if visible) ───────────────────
     for _, cfg in ipairs(STATIC_BUTTON_CONFIG) do
         if not staticFlags or staticFlags[cfg.key] then
-            active[#active + 1] = cfg.key
+            shouldShow[cfg.key] = true
         end
     end
 
-    -- ── Recovery ────────────────────────────────────────────────
     if recoveryMode == "conjured" then
-        active[#active + 1] = "recovery"
+        shouldShow["recovery"] = true
     elseif recoveryMode == "split" then
-        active[#active + 1] = "food"
-        active[#active + 1] = "drink"
+        shouldShow["food"]  = true
+        shouldShow["drink"] = true
     end
 
-    -- ── Elixirs / Flask ─────────────────────────────────────────
     if elixirMode == "flask" then
-        active[#active + 1] = "flask"
+        shouldShow["flask"] = true
     elseif elixirMode == "elixirs" then
-        active[#active + 1] = "battle"
-        active[#active + 1] = "guardian"
+        shouldShow["battle"]   = true
+        shouldShow["guardian"] = true
     end
 
-    -- ── Buff food ────────────────────────────────────────────────
-    if scrollFlags and scrollFlags.food then
-        active[#active + 1] = "bufffood"
-    end
+    if scrollFlags and scrollFlags.food       then shouldShow["bufffood"]         = true end
+    if scrollFlags and scrollFlags.spirit     then shouldShow["spiritscroll"]     = true end
+    if scrollFlags and scrollFlags.protection then shouldShow["protectionscroll"] = true end
+    if scrollFlags and scrollFlags.oil        then shouldShow["weaponoil"]        = true end
+    if scrollFlags and scrollFlags.bandage    then shouldShow["bandage"]          = true end
 
-    -- ── Scrolls (last, after core buttons) ──────────────────────
-    if scrollFlags and scrollFlags.spirit then
-        active[#active + 1] = "spiritscroll"
-    end
-    if scrollFlags and scrollFlags.protection then
-        active[#active + 1] = "protectionscroll"
-    end
-
-    -- ── Weapon oil (very last) ───────────────────────────────────
-    if scrollFlags and scrollFlags.oil then
-        active[#active + 1] = "weaponoil"
+    -- 2. Build the active list in the user's custom order.
+    local order  = Apotheca.GetButtonOrder()
+    local active = {}
+    for _, key in ipairs(order) do
+        if shouldShow[key] then
+            active[#active + 1] = key
+        end
     end
 
     ApplyLayout(active)
@@ -1609,7 +1810,8 @@ local function RefreshLayout(recoveryMode, elixirMode, staticFlags, scrollFlags)
     end
     -- Dynamic buttons
     for _, k in ipairs({ "recovery", "food", "drink", "flask", "battle", "guardian",
-                         "bufffood", "spiritscroll", "protectionscroll", "weaponoil" }) do
+                         "bufffood", "spiritscroll", "protectionscroll", "weaponoil",
+                         "bandage" }) do
         if not activeSet[k] then Apotheca.buttons[k]:Hide() end
     end
 end
@@ -1644,18 +1846,13 @@ local function ApplyItemToButton(btn, itemID, count, texture)
     else
         btn.countText:SetText("")
         btn.cooldown:SetCooldown(0, 0)
-        if db.debug then
-            btn.icon:SetTexture(btn.cfg.emptyIcon)
-            btn.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-            btn.icon:SetDesaturated(true)
-            btn.icon:Show()
-            btn.emptyBg:SetAlpha(0.6)
-        else
-            btn.icon:SetTexture(nil)
-            btn.icon:SetDesaturated(false)
-            btn.icon:Hide()
-            btn.emptyBg:SetAlpha(0.6)
-        end
+        -- Always show the empty-slot icon desaturated so the player
+        -- knows what WOULD go here. Previously only debug mode did this.
+        btn.icon:SetTexture(btn.cfg.emptyIcon)
+        btn.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        btn.icon:SetDesaturated(true)
+        btn.icon:Show()
+        btn.emptyBg:SetAlpha(0.6)
     end
 end
 
@@ -1684,6 +1881,9 @@ function Apotheca.UpdateAllButtons()
     local bagMap    = Apotheca.BuildBagMap()
 
     -- ── Static slots ─────────────────────────────────────────────
+    -- "mana" and "health" are always visible — show greyed out
+    -- with the highest-tier icon when nothing is in bags.
+    local ALWAYS_VISIBLE_STATIC = { mana = true, health = true }
     local staticFlags = {}
     for _, cfg in ipairs(STATIC_BUTTON_CONFIG) do
         local btn = Apotheca.buttons[cfg.key]
@@ -1694,7 +1894,7 @@ function Apotheca.UpdateAllButtons()
             id, cnt, tex = Apotheca.FindBestItem(cfg.list, bagMap)
         end
         ApplyItemToButton(btn, id, cnt, tex)
-        local show = id ~= nil or showEmpty
+        local show = id ~= nil or showEmpty or ALWAYS_VISIBLE_STATIC[cfg.key]
         staticFlags[cfg.key] = show
         if show then btn:Show() else btn:Hide() end
     end
@@ -1706,10 +1906,10 @@ function Apotheca.UpdateAllButtons()
     local recovMode
     if rec.mode == "conjured" then
         recovMode = "conjured"
-    elseif rec.foodID or rec.drinkID or showEmpty then
-        recovMode = "split"
     else
-        recovMode = "none"
+        -- Always use split mode so food/drink buttons remain visible
+        -- (greyed out when empty).
+        recovMode = "split"
     end
 
     local elixMode
@@ -1747,12 +1947,19 @@ function Apotheca.UpdateAllButtons()
         buffFoodID, buffFoodCnt, buffFoodTex = Apotheca.FindBestBuffFood(bagMap)
     end
 
+    -- ── Bandage ──────────────────────────────────────────────────
+    local bandageID, bandageCnt, bandageTex
+    if not db.bandage or db.bandage.enabled then
+        bandageID, bandageCnt, bandageTex = Apotheca.FindBestBandage(bagMap)
+    end
+
     -- ── Build layout flags — only include a slot if it has content (or showEmpty) ──
     local flags = {
         food        = (buffFoodID ~= nil)          or (db.buffFood and db.buffFood.enabled and showEmpty),
         spirit      = (spiritID   ~= nil)          or (scrollsOn   and (not scrollsDB or scrollsDB.spirit)   and showEmpty),
         protection  = (protID     ~= nil)          or (scrollsOn   and (not scrollsDB or scrollsDB.protection) and showEmpty),
         oil         = (oilID      ~= nil)          or ((not db.weaponOil or db.weaponOil.enabled) and showEmpty),
+        bandage     = (bandageID  ~= nil)          or ((not db.bandage or db.bandage.enabled) and showEmpty),
     }
 
     RefreshLayout(recovMode, elixMode, staticFlags, flags)
@@ -1763,8 +1970,8 @@ function Apotheca.UpdateAllButtons()
     elseif recovMode == "split" then
         ApplyItemToButton(Apotheca.buttons["food"],  rec.foodID,  rec.foodCount,  rec.foodTexture)
         ApplyItemToButton(Apotheca.buttons["drink"], rec.drinkID, rec.drinkCount, rec.drinkTexture)
-        if not (rec.foodID  or showEmpty) then Apotheca.buttons["food"]:Hide()  end
-        if not (rec.drinkID or showEmpty) then Apotheca.buttons["drink"]:Hide() end
+        -- Food and drink are always visible; ApplyItemToButton handles
+        -- greyed-out display when itemID is nil.
     end
 
     if elixMode == "flask" then
@@ -1788,27 +1995,70 @@ function Apotheca.UpdateAllButtons()
     if flags.oil then
         ApplyItemToButton(Apotheca.buttons["weaponoil"], oilID, oilCnt, oilTex)
     end
+    if flags.bandage then
+        ApplyItemToButton(Apotheca.buttons["bandage"], bandageID, bandageCnt, bandageTex)
+    end
+
+    -- ── Bandage usability ─────────────────────────────────────────
+    -- "Recently Bandaged" debuff blocks further bandage use for 60 s.
+    -- Desaturate and disable the button while the debuff is active.
+    if flags.bandage and not db.debug and not InCombatLockdown() then
+        local bandageBtn = Apotheca.buttons["bandage"]
+        if bandageBtn and bandageBtn.itemID and Apotheca.HasRecentlyBandaged() then
+            bandageBtn:SetAttribute("type", nil)
+            bandageBtn:SetAttribute("item", nil)
+            bandageBtn.icon:SetDesaturated(true)
+        end
+    end
 
     -- ── Waste prevention ──────────────────────────────────────────
-    -- When enabled, disable recovery food/drink buttons if the player
-    -- is already at full HP or mana. Buff food is excluded — you eat
-    -- that for the Well Fed buff, not for the HP.
-    if db.preventWaste ~= false and not db.debug and not InCombatLockdown() then
+    -- Modes: "BLOCK"      — disable button entirely (old default)
+    --        "ASK"        — show overlay that asks for confirmation
+    --        "DO_NOTHING" — no prevention
+    -- Buff food is always excluded (you eat for the buff, not the HP).
+    local wasteMode = db.preventWasteMode or "BLOCK"
+    if wasteMode ~= "DO_NOTHING" and not db.debug and not InCombatLockdown() then
         local hpFull   = (UnitHealth("player") or 0) >= (UnitHealthMax("player") or 1)
         local manaFull = (UnitPower("player")  or 0) >= (UnitPowerMax("player")  or 1)
 
-        local function DisableButton(btn)
+        local function DisableButton(btn, resource)
             if not btn or not btn.itemID then return end
-            btn:SetAttribute("type", nil)
-            btn:SetAttribute("item", nil)
-            btn.icon:SetDesaturated(true)
+            if wasteMode == "BLOCK" then
+                btn:SetAttribute("type", nil)
+                btn:SetAttribute("item", nil)
+                btn.icon:SetDesaturated(true)
+                if btn._askOverlay then btn._askOverlay:Hide() end
+            elseif wasteMode == "ASK" then
+                -- Remove secure action so the click does nothing,
+                -- but show the ASK overlay to intercept the click.
+                btn:SetAttribute("type", nil)
+                btn:SetAttribute("item", nil)
+                btn._wasteResource = resource
+                if btn._askOverlay then btn._askOverlay:Show() end
+            end
         end
 
-        if recovMode == "conjured" and hpFull and manaFull then
-            DisableButton(Apotheca.buttons["recovery"])
+        local function EnableButton(btn)
+            if btn and btn._askOverlay then btn._askOverlay:Hide() end
+        end
+
+        if recovMode == "conjured" then
+            if hpFull and manaFull then
+                DisableButton(Apotheca.buttons["recovery"], "health and mana")
+            else
+                EnableButton(Apotheca.buttons["recovery"])
+            end
         elseif recovMode == "split" then
-            if hpFull   then DisableButton(Apotheca.buttons["food"])  end
-            if manaFull then DisableButton(Apotheca.buttons["drink"]) end
+            if hpFull   then DisableButton(Apotheca.buttons["food"],  "health")
+            else             EnableButton(Apotheca.buttons["food"]) end
+            if manaFull then DisableButton(Apotheca.buttons["drink"], "mana")
+            else             EnableButton(Apotheca.buttons["drink"]) end
+        end
+    else
+        -- Ensure overlays are hidden when waste prevention is off
+        for _, key in ipairs({ "recovery", "food", "drink" }) do
+            local btn = Apotheca.buttons[key]
+            if btn and btn._askOverlay then btn._askOverlay:Hide() end
         end
     end
 
@@ -1981,6 +2231,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
             UpdateElixirGlow(Apotheca._lastElixRes)
             UpdateScrollGlow()
             UpdateWeaponOilGlow()
+            UpdateBandageUsability()
         end
 
     elseif event == "READY_CHECK" then
