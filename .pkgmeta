@@ -1,9 +1,14 @@
 package-as: Apotheca
 enable-nolib-creation: no
 
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
 ignore:
   - .github
   - .gitignore
   - README.md
+  - CHANGELOG.md
   - screenshots
   - docs
