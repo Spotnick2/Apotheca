@@ -6,6 +6,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.4] - 2026-04-08
+
+### Added
+- Added right-click alternate support for recovery items when waste prevention is set to **Ask**.
+- Added a configurable **Conjured preference threshold** to control when non-conjured food or drink should be preferred over conjured items.
+- Added a dedicated **Button Order** tab in the options panel with move up / move down controls and a reset to default option.
+- Added a **Profile** tab with support for switching between global and character-specific settings from the UI.
+- Added tooltip hints showing the alternate item available on right-click for food and drink buttons.
+- Added support for many more recovery food and drink items, including additional conjured, vendor, quest, drop, and cooked options.
+
+### Changed
+- Reworked the options panel into a tabbed layout for easier navigation.
+- Food and drink selection is now smarter:
+  - conjured food and drink are preferred by default,
+  - non-conjured alternatives are chosen only when they are significantly better based on the configured threshold,
+  - the non-primary choice is preserved as an alternate right-click option.
+- Health consumable handling now separates **healthstones** from healing potions instead of mixing them in the same item list.
+- Recovery buttons now expose clearer alternate behavior and better waste-prevention flow.
+
+### Fixed
+- Corrected healthstone priority and expanded healthstone coverage to include the proper improved and base ranks.
+- Added missing healing potion tiers to improve fallback health consumable selection.
+- Added missing drink tiers and corrected food/drink coverage for lower and mid-level consumables.
+- Prevented secure button updates while in combat to avoid combat-lockdown issues during bar refreshes.
+- Cleared temporary alternate-item swaps on refresh so buttons always return to their proper primary item state.
+
 ## [1.0.3] - 2026-04-05
 
 - Fixed changelog packaging

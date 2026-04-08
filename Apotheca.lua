@@ -74,6 +74,11 @@ local PROFILE_DEFAULTS = {
     -- "BLOCK" = silently disable button, "ASK" = confirmation popup,
     -- "DO_NOTHING" = no prevention
     preventWasteMode    = "BLOCK",
+    -- Right-click on food/drink (via waste popup) to use the alternate item.
+    -- "OFF" = right-click same as left, "ASK" = confirmation popup.
+    rightClickAlternate = "OFF",
+    -- Prefer conjured food/drink unless non-conjured is >= this multiplier better.
+    conjuredThreshold   = 1.5,
     -- Custom visual order of button categories.
     -- nil / missing = use the built-in default order.
     buttonOrder         = nil,
@@ -335,12 +340,15 @@ end
 
 local MANA_ITEMS     = { 32902, 32903, 32948, 22832, 33093, 13444, 6149 }
 local HEALTH_ITEMS   = {
-    -- Healthstones first (conjured, always preferred)
-    22103,  -- Master Healthstone (rank 3)
-    22102,  -- Master Healthstone (rank 2)
-    22101,  -- Master Healthstone (rank 1)
-    -- Potions
-    32947, 22829, 22795, 22797, 13446, 1710,
+    -- Potions only — healthstones are scanned separately in
+    -- FindBestHealthConsumable via HEALTHSTONE_ITEMS.
+    32947,  -- Bottled Nethergon Vapor
+    22829,  -- Super Healing Potion
+    22795,  -- Fel Regeneration Potion
+    22797,  -- Super Rejuvenation Potion
+    13446,  -- Major Healing Potion
+    3928,   -- Superior Healing Potion
+    1710,   -- Greater Healing Potion
 }
 local RUNE_ITEMS     = { 12662, 20520 }
 local CONJURED_ITEMS = { 34062, 22895 }
@@ -348,20 +356,65 @@ local CONJURED_ITEMS = { 34062, 22895 }
 local DRINK_ITEMS = {
     { id = 30703, manaValue = 4800, conjured = true },  -- Conjured Mountain Spring Water (mage 65)
     { id = 27860, manaValue = 4800 },                   -- Filtered Draenic Water
-    { id = 22018, manaValue = 3600, conjured = true },   -- Conjured Sparkling Water (mage 55)
-    { id = 28399, manaValue = 3600 },
-    { id = 8766,  manaValue = 2400 },
+    { id = 8079,  manaValue = 4200, conjured = true },   -- Conjured Crystal Water (mage 55)
+    { id = 28399, manaValue = 3600 },                    -- Sweetened Goat's Milk
+    { id = 8078,  manaValue = 2934, conjured = true },   -- Conjured Spring Water (mage 45)
+    { id = 8766,  manaValue = 2400 },                    -- Morning Glory Dew
+    { id = 8077,  manaValue = 1992, conjured = true },   -- Conjured Mineral Water (mage 35)
 }
 
+-- Threshold: prefer conjured over non-conjured UNLESS the non-conjured
+-- item restores at least this multiplier more mana/health.
+-- Configurable via db.conjuredThreshold (default 1.5).
+local function GetConjuredThreshold()
+    local db = DB()
+    return db.conjuredThreshold or 1.5
+end
+
+-- Recovery food ONLY — no Well Fed buff items. Buff food belongs in
+-- BUFF_FOOD_BY_STAT. These are vendor, drop, quest, and cooked foods
+-- that restore health without granting a stat buff.
 local FOOD_ITEMS = {
-    { id = 29449, healthValue = 7500 },
-    { id = 29450, healthValue = 6966 },
-    { id = 22019, healthValue = 4800, conjured = true },   -- Conjured Croissant (mage 55)
-    { id = 27856, healthValue = 4320 },
-    { id = 27859, healthValue = 4320 },
-    { id = 29451, healthValue = 4320 },
-    { id = 8953,  healthValue = 2148 },
-    { id = 8952,  healthValue = 2148 },
+    -- ── 7500 health (level 65+) ──
+    { id = 29449, healthValue = 7500 },                     -- Talbuk Steak (vendor)
+    { id = 33662, healthValue = 7500 },                     -- Homemade Cherry Pie (daily quest, health+mana)
+
+    -- ── 6966 health ──
+    { id = 29450, healthValue = 6966 },                     -- Mag'har Grainbread (vendor)
+
+    -- ── 4800 health (conjured) ──
+    { id = 22019, healthValue = 4800, conjured = true },    -- Conjured Croissant (mage 55)
+
+    -- ── 4320 health (level 55+) ──
+    { id = 27660, healthValue = 4320 },                     -- Smoked Talbuk Venison (vendor)
+    { id = 27636, healthValue = 4320 },                     -- Roasted Quail (vendor)
+    { id = 27856, healthValue = 4320 },                     -- Skethyl Berries (vendor/drop)
+    { id = 27859, healthValue = 4320 },                     -- Zangar Caps (vendor/drop)
+    { id = 29451, healthValue = 4320 },                     -- Lynx Steak (vendor)
+    { id = 30355, healthValue = 4320 },                     -- Ogri'la Chicken Fingers (daily quest)
+    { id = 29292, healthValue = 4320 },                     -- Helboar Bacon (drop)
+    { id = 24009, healthValue = 4320 },                     -- Dried Mushroom Rations (drop)
+    { id = 24338, healthValue = 4320 },                     -- Hellfire Spineleaf (drop)
+    { id = 27854, healthValue = 4320 },                     -- Smoked Sausage (vendor)
+    { id = 27855, healthValue = 4320 },                     -- Mag'hari Mild Cheese (vendor)
+    { id = 29453, healthValue = 4320 },                     -- Sporeggar Mushroom (vendor Sporeggar)
+    { id = 33443, healthValue = 4320 },                     -- Sour Goat Cheese (vendor)
+    { id = 33449, healthValue = 4320 },                     -- Crusty Flatbread (vendor)
+    { id = 33454, healthValue = 4320 },                     -- Salted Venison (vendor)
+
+    -- ── Cooked TBC recovery food (no buff) ──
+    { id = 24105, healthValue = 2148 },                     -- Roasted Moongraze Tenderloin (cooking 1)
+    { id = 27635, healthValue = 2148 },                     -- Lynx Steak (cooking 1)
+
+    -- ── 2148 health (level 45+) ──
+    { id = 8076,  healthValue = 2148, conjured = true },    -- Conjured Sweet Roll (mage 45)
+    { id = 8953,  healthValue = 2148 },                     -- Alterac Swiss (vendor)
+    { id = 8952,  healthValue = 2148 },                     -- Dried King Bolete (vendor)
+    { id = 4601,  healthValue = 2148 },                     -- Soft Banana Bread (vendor)
+
+    -- ── 1392 health (level 35+) ──
+    { id = 3927,  healthValue = 1392 },                     -- Fine Aged Cheddar (vendor)
+    { id = 4542,  healthValue = 1392 },                     -- Moist Cornbread (vendor)
 }
 
 local BUFF_FOOD_BY_STAT = {
@@ -408,18 +461,30 @@ local TEMPEST_KEEP_INSTANCES = {
 -- HEALTHSTONE ITEMS  (highest rank → lowest)
 -- ============================================================
 local HEALTHSTONE_ITEMS = {
-    22103,  -- Master Healthstone (rank 3)
-    22102,  -- Master Healthstone (rank 2)
-    22101,  -- Master Healthstone (rank 1)
-    5512,   -- Major Healthstone  (rank 3)
-    5511,   -- Major Healthstone  (rank 2)
-    5510,   -- Major Healthstone  (rank 1)
-    5509,   -- Greater Healthstone (rank 2)
-    5508,   -- Greater Healthstone (rank 1)
-    5507,   -- Lesser Healthstone (rank 2)
-    5506,   -- Lesser Healthstone (rank 1)
-    5175,   -- Healthstone        (rank 2)
-    5174,   -- Healthstone        (rank 1)
+    -- Master Healthstone (Create Healthstone rank 6, TBC)
+    22105,  -- Master Healthstone (Improved rank 2)
+    22104,  -- Master Healthstone (Improved rank 1)
+    22103,  -- Master Healthstone (base)
+    -- Major Healthstone (rank 5)
+    19013,  -- Major Healthstone (Improved rank 2)
+    19012,  -- Major Healthstone (Improved rank 1)
+    9421,   -- Major Healthstone (base)
+    -- Greater Healthstone (rank 4)
+    19011,  -- Greater Healthstone (Improved rank 2)
+    19010,  -- Greater Healthstone (Improved rank 1)
+    5510,   -- Greater Healthstone (base)
+    -- Healthstone (rank 3)
+    19009,  -- Healthstone (Improved rank 2)
+    19008,  -- Healthstone (Improved rank 1)
+    5509,   -- Healthstone (base)
+    -- Lesser Healthstone (rank 2)
+    19007,  -- Lesser Healthstone (Improved rank 2)
+    19006,  -- Lesser Healthstone (Improved rank 1)
+    5511,   -- Lesser Healthstone (base)
+    -- Minor Healthstone (rank 1)
+    19005,  -- Minor Healthstone (Improved rank 2)
+    19004,  -- Minor Healthstone (Improved rank 1)
+    5512,   -- Minor Healthstone (base)
 }
 
 -- ============================================================
@@ -631,36 +696,94 @@ function Apotheca.FindBestItem(list, bagMap)
     return nil, 0, nil
 end
 
+-- Returns: primaryID, primaryCount, primaryTex, alternateID, alternateCount, alternateTex
 function Apotheca.FindBestFood(bagMap, missingHP)
     missingHP = missingHP or 0
-    local available = {}
+
+    -- Find the best conjured and best non-conjured food in bags.
+    local bestConj, bestNonConj = nil, nil
     for _, entry in ipairs(FOOD_ITEMS) do
         local count = bagMap[entry.id]
         if count and count > 0 then
-            available[#available + 1] = {
-                id = entry.id, healthValue = entry.healthValue,
-                count = count, conjured = entry.conjured or false,
-            }
-        end
-    end
-    if #available == 0 then return nil, 0, nil end
-
-    -- Always pick the highest health-value food.
-    -- On a tie, prefer conjured items (free/renewable).
-    local chosen = available[1]
-    for i = 2, #available do
-        local e = available[i]
-        if e.healthValue > chosen.healthValue then
-            chosen = e
-        elseif e.healthValue == chosen.healthValue and e.conjured and not chosen.conjured then
-            chosen = e
+            local e = { id = entry.id, healthValue = entry.healthValue,
+                        count = count, conjured = entry.conjured or false }
+            if e.conjured then
+                if not bestConj or e.healthValue > bestConj.healthValue then
+                    bestConj = e
+                end
+            else
+                if not bestNonConj or e.healthValue > bestNonConj.healthValue then
+                    bestNonConj = e
+                end
+            end
         end
     end
 
-    if chosen then
-        return chosen.id, chosen.count, GetCachedTexture(chosen.id)
+    if not bestConj and not bestNonConj then return nil, 0, nil, nil, 0, nil end
+
+    -- Only one type available — no alternate.
+    if not bestConj then
+        return bestNonConj.id, bestNonConj.count, GetCachedTexture(bestNonConj.id),
+               nil, 0, nil
     end
-    return nil, 0, nil
+    if not bestNonConj then
+        return bestConj.id, bestConj.count, GetCachedTexture(bestConj.id),
+               nil, 0, nil
+    end
+
+    -- Both available — apply 1.5x threshold.
+    -- Prefer conjured unless the non-conjured item restores >= 1.5× more.
+    if bestNonConj.healthValue >= bestConj.healthValue * GetConjuredThreshold() then
+        -- Non-conjured is significantly better → primary, conjured is alternate.
+        return bestNonConj.id, bestNonConj.count, GetCachedTexture(bestNonConj.id),
+               bestConj.id, bestConj.count, GetCachedTexture(bestConj.id)
+    else
+        -- Conjured preferred → primary, non-conjured is alternate.
+        return bestConj.id, bestConj.count, GetCachedTexture(bestConj.id),
+               bestNonConj.id, bestNonConj.count, GetCachedTexture(bestNonConj.id)
+    end
+end
+
+-- Returns: primaryID, primaryCount, primaryTex, alternateID, alternateCount, alternateTex
+function Apotheca.FindBestDrink(bagMap)
+    -- Find the best conjured and best non-conjured drink in bags.
+    local bestConj, bestNonConj = nil, nil
+    for _, entry in ipairs(DRINK_ITEMS) do
+        local count = bagMap[entry.id]
+        if count and count > 0 then
+            local e = { id = entry.id, manaValue = entry.manaValue,
+                        count = count, conjured = entry.conjured or false }
+            if e.conjured then
+                if not bestConj or e.manaValue > bestConj.manaValue then
+                    bestConj = e
+                end
+            else
+                if not bestNonConj or e.manaValue > bestNonConj.manaValue then
+                    bestNonConj = e
+                end
+            end
+        end
+    end
+
+    if not bestConj and not bestNonConj then return nil, 0, nil, nil, 0, nil end
+
+    if not bestConj then
+        return bestNonConj.id, bestNonConj.count, GetCachedTexture(bestNonConj.id),
+               nil, 0, nil
+    end
+    if not bestNonConj then
+        return bestConj.id, bestConj.count, GetCachedTexture(bestConj.id),
+               nil, 0, nil
+    end
+
+    -- Both available — apply 1.5x threshold.
+    if bestNonConj.manaValue >= bestConj.manaValue * GetConjuredThreshold() then
+        return bestNonConj.id, bestNonConj.count, GetCachedTexture(bestNonConj.id),
+               bestConj.id, bestConj.count, GetCachedTexture(bestConj.id)
+    else
+        return bestConj.id, bestConj.count, GetCachedTexture(bestConj.id),
+               bestNonConj.id, bestNonConj.count, GetCachedTexture(bestNonConj.id)
+    end
 end
 
 function Apotheca.FindBestBuffFood(bagMap)
@@ -999,6 +1122,9 @@ local function ResolveRecovery(bagMap)
         conjuredID = nil, conjuredCount = 0, conjuredTexture = nil,
         foodID     = nil, foodCount     = 0, foodTexture     = nil,
         drinkID    = nil, drinkCount    = 0, drinkTexture    = nil,
+        -- Alternate items for right-click
+        foodAltID  = nil, foodAltCount  = 0, foodAltTexture  = nil,
+        drinkAltID = nil, drinkAltCount = 0, drinkAltTexture = nil,
     }
 
     local conjID, conjCount, conjTex = Apotheca.FindBestItem(CONJURED_ITEMS, bagMap)
@@ -1010,68 +1136,22 @@ local function ResolveRecovery(bagMap)
         return result
     end
 
-    local hpMax   = UnitHealthMax("player") or 0
-    local hp      = UnitHealth("player")    or 0
-    local manaMax = UnitPowerMax("player")  or 0
-    local mana    = UnitPower("player")     or 0
-    local missingHP   = hpMax   > 0 and (hpMax   - hp)   or 0
-    local missingMana = manaMax > 0 and (manaMax - mana) or 0
-
     local debug   = DB().debug
-    local showFood  = (not Apotheca.hideWhenFull) or missingHP   > 0 or debug
-    local showDrink = (not Apotheca.hideWhenFull) or missingMana > 0 or debug
+    local showFood  = (not Apotheca.hideWhenFull) or debug
+                      or ((UnitHealthMax("player") or 0) - (UnitHealth("player") or 0)) > 0
+    local showDrink = (not Apotheca.hideWhenFull) or debug
+                      or ((UnitPowerMax("player") or 0) - (UnitPower("player") or 0)) > 0
 
     if showFood then
-        local id, cnt, tex = Apotheca.FindBestFood(bagMap, missingHP)
-        result.foodID = id ; result.foodCount = cnt ; result.foodTexture = tex
+        local id, cnt, tex, aID, aCnt, aTex = Apotheca.FindBestFood(bagMap, 0)
+        result.foodID  = id  ; result.foodCount  = cnt  ; result.foodTexture  = tex
+        result.foodAltID = aID ; result.foodAltCount = aCnt ; result.foodAltTexture = aTex
     end
 
     if showDrink then
-        local dID, dCnt, dTex = nil, 0, nil
-        if Apotheca.waterSmartMode and missingMana > 0 then
-            local bestAvail, bestSuff = nil, nil
-            for _, e in ipairs(DRINK_ITEMS) do
-                if bagMap[e.id] and bagMap[e.id] > 0 then
-                    -- Prefer conjured over non-conjured at equal manaValue
-                    if not bestAvail
-                    or e.manaValue > bestAvail.manaValue
-                    or (e.manaValue == bestAvail.manaValue and e.conjured and not bestAvail.conjured) then
-                        bestAvail = e
-                    end
-                    if e.manaValue >= missingMana then
-                        if not bestSuff
-                        or e.manaValue < bestSuff.manaValue
-                        or (e.manaValue == bestSuff.manaValue and e.conjured and not bestSuff.conjured) then
-                            bestSuff = e
-                        end
-                    end
-                end
-            end
-            local chosen = bestSuff or bestAvail
-            if chosen then
-                dID  = chosen.id
-                dCnt = bagMap[chosen.id]
-                dTex = GetCachedTexture(chosen.id)
-            end
-        else
-            -- Pick highest manaValue; prefer conjured on tie
-            local bestEntry = nil
-            for _, e in ipairs(DRINK_ITEMS) do
-                if bagMap[e.id] and bagMap[e.id] > 0 then
-                    if not bestEntry
-                    or e.manaValue > bestEntry.manaValue
-                    or (e.manaValue == bestEntry.manaValue and e.conjured and not bestEntry.conjured) then
-                        bestEntry = e
-                    end
-                end
-            end
-            if bestEntry then
-                dID  = bestEntry.id
-                dCnt = bagMap[bestEntry.id]
-                dTex = GetCachedTexture(bestEntry.id)
-            end
-        end
-        result.drinkID = dID ; result.drinkCount = dCnt ; result.drinkTexture = dTex
+        local id, cnt, tex, aID, aCnt, aTex = Apotheca.FindBestDrink(bagMap)
+        result.drinkID  = id  ; result.drinkCount  = cnt  ; result.drinkTexture  = tex
+        result.drinkAltID = aID ; result.drinkAltCount = aCnt ; result.drinkAltTexture = aTex
     end
 
     return result
@@ -1539,8 +1619,6 @@ function Apotheca.ApplySecureItemAttributes(btn, itemID)
         return
     end
     if itemID then
-        -- Use "item:ID" format — bypasses item-name cache entirely and is the
-        -- most reliable identifier for SecureActionButtonTemplate in Classic.
         btn:SetAttribute("type", "item")
         btn:SetAttribute("item", "item:" .. itemID)
     else
@@ -1608,6 +1686,13 @@ local function CreateApothecaButton(cfg)
                 local name = GetItemInfo(self.itemID) or ("id:" .. self.itemID)
                 GameTooltip:AddLine("|cff9966ffWould use:|r " .. name, 1, 1, 1, true)
             end
+            -- Show alternate item hint if right-click alternate is enabled
+            local rcMode = DB().rightClickAlternate or "OFF"
+            if rcMode ~= "OFF" and self._alternateItemID then
+                local altName = GetItemInfo(self._alternateItemID) or ("id:" .. self._alternateItemID)
+                GameTooltip:AddLine(" ", 1, 1, 1, false)
+                GameTooltip:AddLine("|cff9966ffRight-click:|r " .. altName, 0.7, 0.7, 0.9, true)
+            end
             GameTooltip:Show()
         elseif DB().showEmptyButtons then
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -1643,26 +1728,54 @@ Apotheca.buttons["weaponoil"] = CreateApothecaButton(WEAPONOIL_BUTTON_CONFIG)
 Apotheca.buttons["bandage"]   = CreateApothecaButton(BANDAGE_BUTTON_CONFIG)
 
 -- ============================================================
--- WASTE PREVENTION — "ASK" MODE POPUP & OVERLAYS
--- StaticPopup for the "Are you sure?" confirmation.
--- Non-secure overlay frames that intercept clicks when the
--- button is in ASK-disabled state.
+-- WASTE PREVENTION & RIGHT-CLICK ALTERNATE — BYPASS SYSTEM
+-- Standard StaticPopup dialogs. On "Yes" they set a temporary
+-- bypass so the NEXT click on the real SecureActionButton works.
+-- This avoids trying to use items from popup callbacks (which
+-- doesn't work in Classic TBC).
 -- ============================================================
 
-StaticPopupDialogs["APOTHECA_WASTE_CONFIRM"] = {
+-- Per-button bypass flags. When set, waste prevention skips that button.
+-- Cleared after 5 seconds or on the next UpdateAllButtons cycle.
+local wasteBypass = {}   -- key → GetTime()
+
+local function SetWasteBypass(key)
+    wasteBypass[key] = GetTime()
+end
+
+local function IsWasteBypassed(key)
+    local t = wasteBypass[key]
+    if not t then return false end
+    if GetTime() - t > 5 then
+        wasteBypass[key] = nil
+        return false
+    end
+    return true
+end
+
+-- When a right-click alternate is confirmed, temporarily swap the
+-- button to the alternate item. Cleared on next update.
+local altSwap = {}  -- key → alternateItemID
+
+StaticPopupDialogs["APOTHECA_WASTE_ASK"] = {
     text    = "|cff9966ffApotheca|r\nYou are at full %s.\nUse %s anyway?",
     button1 = "Yes",
     button2 = "No",
-    OnAccept = function(self, data)
-        if data and data.itemID and not InCombatLockdown() then
-            -- Temporarily clear the ASK overlay so the button works,
-            -- then use the item directly (only safe out of combat).
-            local name = GetItemInfo(data.itemID)
+    OnAccept = function(self)
+        local data = self.data
+        if not data then return end
+        SetWasteBypass(data.btnKey)
+        local btn = Apotheca.buttons[data.btnKey]
+        if btn and btn.itemID and not InCombatLockdown() then
+            -- Use the item directly — the "Yes" click is a hardware event.
+            local name = GetItemInfo(btn.itemID)
             if name then
-                -- UseItemByName is a hardware-event-free alternative
-                -- that works outside of combat.
-                RunMacroText("/use " .. name)
+                UseItemByName(name)
             end
+            -- Also re-enable the button for subsequent clicks
+            Apotheca.ApplySecureItemAttributes(btn, btn.itemID)
+            btn.icon:SetDesaturated(false)
+            if btn._askOverlay then btn._askOverlay:Hide() end
         end
     end,
     timeout       = 0,
@@ -1671,34 +1784,86 @@ StaticPopupDialogs["APOTHECA_WASTE_CONFIRM"] = {
     preferredIndex = 3,
 }
 
--- Create a click-intercepting overlay for ASK mode.
--- When shown it sits above the secure button and swallows clicks
--- to present the confirmation popup instead.
+StaticPopupDialogs["APOTHECA_ALT_ASK"] = {
+    text    = "|cff9966ffApotheca|r\nUse %s instead?",
+    button1 = "Yes",
+    button2 = "No",
+    OnAccept = function(self)
+        local data = self.data
+        if not data then return end
+        local btn = Apotheca.buttons[data.btnKey]
+        if btn and data.altItemID and not InCombatLockdown() then
+            -- Use the alternate item directly.
+            local name = GetItemInfo(data.altItemID)
+            if name then
+                UseItemByName(name)
+            end
+            -- Also swap the button in case the direct use failed
+            SetWasteBypass(data.btnKey)
+            altSwap[data.btnKey] = data.altItemID
+            Apotheca.ApplySecureItemAttributes(btn, data.altItemID)
+            btn.icon:SetTexture(GetCachedTexture(data.altItemID) or FALLBACK_ICON)
+            btn.icon:SetDesaturated(false)
+            if btn._askOverlay then btn._askOverlay:Hide() end
+        end
+    end,
+    timeout       = 0,
+    whileDead     = false,
+    hideOnEscape  = true,
+    preferredIndex = 3,
+}
+
+-- Helper: show a StaticPopup and attach data via the dialog.data field
+-- (Classic TBC passes data as 4th arg to StaticPopup_Show).
+local function ShowPopupWithData(which, text1, text2, data)
+    local dialog = StaticPopup_Show(which, text1, text2)
+    if dialog then
+        dialog.data = data
+    end
+end
+
+-- ── ASK overlay for waste prevention ─────────────────────────
 local function CreateAskOverlay(btn)
     local overlay = CreateFrame("Button", nil, btn)
     overlay:SetAllPoints(btn)
     overlay:SetFrameLevel(btn:GetFrameLevel() + 10)
-    overlay:RegisterForClicks("AnyDown", "AnyUp")
+    overlay:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     overlay:Hide()
-    overlay:SetScript("OnClick", function()
+    overlay:SetScript("OnClick", function(self, button)
         if not btn.itemID then return end
-        local name = GetCachedItemName(btn.itemID) or ("item:" .. btn.itemID)
-        local resType = btn._wasteResource or "health/mana"
-        local dialog = StaticPopup_Show("APOTHECA_WASTE_CONFIRM", resType, name)
-        if dialog then
-            dialog.data = { itemID = btn.itemID }
+
+        -- Right-click: check for alternate item
+        if button == "RightButton" then
+            local altID  = btn._alternateItemID
+            local rcMode = DB().rightClickAlternate or "OFF"
+            if altID and rcMode ~= "OFF" then
+                local altName = GetCachedItemName(altID) or GetItemInfo(altID) or ("item:" .. altID)
+                ShowPopupWithData("APOTHECA_ALT_ASK", altName, nil,
+                    { btnKey = btn.cfg.key, altItemID = altID })
+                return
+            end
         end
+
+        -- Left-click (or right-click without alternate): waste confirm
+        local name    = GetCachedItemName(btn.itemID) or ("item:" .. btn.itemID)
+        local resType = btn._wasteResource or "health/mana"
+        ShowPopupWithData("APOTHECA_WASTE_ASK", resType, name,
+            { btnKey = btn.cfg.key })
     end)
-    -- Forward tooltip so hovering still works
     overlay:SetScript("OnEnter", function() btn:GetScript("OnEnter")(btn) end)
     overlay:SetScript("OnLeave", function() btn:GetScript("OnLeave")(btn) end)
     btn._askOverlay = overlay
 end
 
--- Create overlays for the recovery buttons that can be waste-blocked.
 for _, key in ipairs({ "recovery", "food", "drink" }) do
     CreateAskOverlay(Apotheca.buttons[key])
 end
+
+-- Note: Right-click alternate (ASK mode) only works when the waste
+-- prevention overlay is visible. When waste prevention is OFF or BLOCK,
+-- or the player is not at full health/mana, right-click uses the
+-- primary item (same as left-click). PostClick hooks on secure buttons
+-- introduce taint in Classic TBC that spreads to all sibling buttons.
 
 -- ============================================================
 -- BUTTON ORDER — DEFAULT KEY SEQUENCE
@@ -1861,6 +2026,10 @@ end
 -- ============================================================
 
 function Apotheca.UpdateAllButtons()
+    -- Secure buttons cannot be shown/hidden/moved/resized during combat.
+    -- The bar will refresh automatically when combat ends (PLAYER_REGEN_ENABLED).
+    if InCombatLockdown() then return end
+
     local db = DB()
 
     if db.enabled == false then
@@ -1966,8 +2135,12 @@ function Apotheca.UpdateAllButtons()
 
     -- ── Apply button contents ────────────────────────────────────
     if recovMode == "conjured" then
+        Apotheca.buttons["recovery"]._alternateItemID = nil
         ApplyItemToButton(Apotheca.buttons["recovery"], rec.conjuredID, rec.conjuredCount, rec.conjuredTexture)
     elseif recovMode == "split" then
+        -- Set alternate items BEFORE apply so secure attributes can bind type2/item2.
+        Apotheca.buttons["food"]._alternateItemID  = rec.foodAltID
+        Apotheca.buttons["drink"]._alternateItemID = rec.drinkAltID
         ApplyItemToButton(Apotheca.buttons["food"],  rec.foodID,  rec.foodCount,  rec.foodTexture)
         ApplyItemToButton(Apotheca.buttons["drink"], rec.drinkID, rec.drinkCount, rec.drinkTexture)
         -- Food and drink are always visible; ApplyItemToButton handles
@@ -2011,6 +2184,13 @@ function Apotheca.UpdateAllButtons()
         end
     end
 
+    -- ── Clear stale alt-swaps from right-click ──────────────────
+    -- If a button was temporarily swapped to an alternate, clear it
+    -- so this update puts the correct primary item back.
+    for k, _ in pairs(altSwap) do
+        altSwap[k] = nil
+    end
+
     -- ── Waste prevention ──────────────────────────────────────────
     -- Modes: "BLOCK"      — disable button entirely (old default)
     --        "ASK"        — show overlay that asks for confirmation
@@ -2023,14 +2203,17 @@ function Apotheca.UpdateAllButtons()
 
         local function DisableButton(btn, resource)
             if not btn or not btn.itemID then return end
+            -- If this button was recently bypassed via "Yes", skip prevention.
+            if IsWasteBypassed(btn.cfg.key) then
+                if btn._askOverlay then btn._askOverlay:Hide() end
+                return
+            end
             if wasteMode == "BLOCK" then
                 btn:SetAttribute("type", nil)
                 btn:SetAttribute("item", nil)
                 btn.icon:SetDesaturated(true)
                 if btn._askOverlay then btn._askOverlay:Hide() end
             elseif wasteMode == "ASK" then
-                -- Remove secure action so the click does nothing,
-                -- but show the ASK overlay to intercept the click.
                 btn:SetAttribute("type", nil)
                 btn:SetAttribute("item", nil)
                 btn._wasteResource = resource
@@ -2055,7 +2238,6 @@ function Apotheca.UpdateAllButtons()
             else             EnableButton(Apotheca.buttons["drink"]) end
         end
     else
-        -- Ensure overlays are hidden when waste prevention is off
         for _, key in ipairs({ "recovery", "food", "drink" }) do
             local btn = Apotheca.buttons[key]
             if btn and btn._askOverlay then btn._askOverlay:Hide() end
