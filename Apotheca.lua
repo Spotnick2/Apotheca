@@ -377,7 +377,7 @@ end
 local FOOD_ITEMS = {
     -- ── 7500 health (level 65+) ──
     { id = 29449, healthValue = 7500 },                     -- Talbuk Steak (vendor)
-    { id = 33662, healthValue = 7500 },                     -- Homemade Cherry Pie (daily quest, health+mana)
+    { id = 33662, healthValue = 7500, restoresMana = true }, -- Homemade Cherry Pie (daily quest, health+mana)
 
     -- ── 6966 health ──
     { id = 29450, healthValue = 6966 },                     -- Mag'har Grainbread (vendor)
@@ -696,7 +696,7 @@ function Apotheca.FindBestItem(list, bagMap)
     return nil, 0, nil
 end
 
--- Returns: primaryID, primaryCount, primaryTex, alternateID, alternateCount, alternateTex
+-- Returns: primaryID, primaryCount, primaryTex, alternateID, alternateCount, alternateTex, restoresMana
 function Apotheca.FindBestFood(bagMap, missingHP)
     missingHP = missingHP or 0
 
@@ -706,7 +706,8 @@ function Apotheca.FindBestFood(bagMap, missingHP)
         local count = bagMap[entry.id]
         if count and count > 0 then
             local e = { id = entry.id, healthValue = entry.healthValue,
-                        count = count, conjured = entry.conjured or false }
+                        count = count, conjured = entry.conjured or false,
+                        restoresMana = entry.restoresMana or false }
             if e.conjured then
                 if not bestConj or e.healthValue > bestConj.healthValue then
                     bestConj = e
@@ -719,28 +720,27 @@ function Apotheca.FindBestFood(bagMap, missingHP)
         end
     end
 
-    if not bestConj and not bestNonConj then return nil, 0, nil, nil, 0, nil end
+    if not bestConj and not bestNonConj then return nil, 0, nil, nil, 0, nil, false end
 
     -- Only one type available — no alternate.
     if not bestConj then
         return bestNonConj.id, bestNonConj.count, GetCachedTexture(bestNonConj.id),
-               nil, 0, nil
+               nil, 0, nil, bestNonConj.restoresMana
     end
     if not bestNonConj then
         return bestConj.id, bestConj.count, GetCachedTexture(bestConj.id),
-               nil, 0, nil
+               nil, 0, nil, bestConj.restoresMana
     end
 
-    -- Both available — apply 1.5x threshold.
-    -- Prefer conjured unless the non-conjured item restores >= 1.5× more.
+    -- Both available — apply threshold.
     if bestNonConj.healthValue >= bestConj.healthValue * GetConjuredThreshold() then
-        -- Non-conjured is significantly better → primary, conjured is alternate.
         return bestNonConj.id, bestNonConj.count, GetCachedTexture(bestNonConj.id),
-               bestConj.id, bestConj.count, GetCachedTexture(bestConj.id)
+               bestConj.id, bestConj.count, GetCachedTexture(bestConj.id),
+               bestNonConj.restoresMana
     else
-        -- Conjured preferred → primary, non-conjured is alternate.
         return bestConj.id, bestConj.count, GetCachedTexture(bestConj.id),
-               bestNonConj.id, bestNonConj.count, GetCachedTexture(bestNonConj.id)
+               bestNonConj.id, bestNonConj.count, GetCachedTexture(bestNonConj.id),
+               bestConj.restoresMana
     end
 end
 
@@ -1125,6 +1125,8 @@ local function ResolveRecovery(bagMap)
         -- Alternate items for right-click
         foodAltID  = nil, foodAltCount  = 0, foodAltTexture  = nil,
         drinkAltID = nil, drinkAltCount = 0, drinkAltTexture = nil,
+        -- True if the selected food also restores mana
+        foodRestoresMana = false,
     }
 
     local conjID, conjCount, conjTex = Apotheca.FindBestItem(CONJURED_ITEMS, bagMap)
@@ -1143,9 +1145,10 @@ local function ResolveRecovery(bagMap)
                       or ((UnitPowerMax("player") or 0) - (UnitPower("player") or 0)) > 0
 
     if showFood then
-        local id, cnt, tex, aID, aCnt, aTex = Apotheca.FindBestFood(bagMap, 0)
+        local id, cnt, tex, aID, aCnt, aTex, restoresMana = Apotheca.FindBestFood(bagMap, 0)
         result.foodID  = id  ; result.foodCount  = cnt  ; result.foodTexture  = tex
         result.foodAltID = aID ; result.foodAltCount = aCnt ; result.foodAltTexture = aTex
+        result.foodRestoresMana = restoresMana or false
     end
 
     if showDrink then
@@ -2022,6 +2025,34 @@ local function ApplyItemToButton(btn, itemID, count, texture)
 end
 
 -- ============================================================
+-- COMBAT-SAFE VISUAL REFRESH
+-- ============================================================
+-- Refreshes ONLY the cooldown swipe and count text on buttons that
+-- already have an itemID assigned. Does not touch secure attributes,
+-- layout, Show/Hide, or SetPoint, so it is safe to run during combat
+-- lockdown. Used on BAG_UPDATE_COOLDOWN (so the GCD swipe shows the
+-- moment an item is used) and alongside BAG_UPDATE_DELAYED (so the
+-- stack count ticks down live instead of after combat ends).
+function Apotheca.RefreshButtonVisuals(countsToo)
+    local bagMap
+    for _, btn in pairs(Apotheca.buttons) do
+        if btn.itemID then
+            local st, dur = SafeGetItemCooldown(btn.itemID)
+            if st and dur and dur > 0 then
+                btn.cooldown:SetCooldown(st, dur)
+            else
+                btn.cooldown:SetCooldown(0, 0)
+            end
+            if countsToo then
+                bagMap = bagMap or Apotheca.BuildBagMap()
+                local count = bagMap[btn.itemID] or 0
+                btn.countText:SetText(count > 1 and count or "")
+            end
+        end
+    end
+end
+
+-- ============================================================
 -- MAIN UPDATE
 -- ============================================================
 
@@ -2232,7 +2263,13 @@ function Apotheca.UpdateAllButtons()
                 EnableButton(Apotheca.buttons["recovery"])
             end
         elseif recovMode == "split" then
-            if hpFull   then DisableButton(Apotheca.buttons["food"],  "health")
+            -- If the food item also restores mana (e.g. Cherry Pie),
+            -- only block when BOTH health and mana are full.
+            local foodFull = rec.foodRestoresMana
+                             and (hpFull and manaFull)
+                             or  hpFull
+            if foodFull then DisableButton(Apotheca.buttons["food"],
+                              rec.foodRestoresMana and "health and mana" or "health")
             else             EnableButton(Apotheca.buttons["food"]) end
             if manaFull then DisableButton(Apotheca.buttons["drink"], "mana")
             else             EnableButton(Apotheca.buttons["drink"]) end
@@ -2318,6 +2355,7 @@ eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+eventFrame:RegisterEvent("BAG_UPDATE_COOLDOWN")
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 eventFrame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
@@ -2399,7 +2437,21 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         if playerReady then RequestUpdate() end
 
     elseif event == "BAG_UPDATE_DELAYED" then
-        if playerReady then RequestUpdate() end
+        if playerReady then
+            -- Tick the stack count down immediately, even during combat
+            -- lockdown. The full layout refresh is still deferred via
+            -- RequestUpdate() and will run when combat ends.
+            Apotheca.RefreshButtonVisuals(true)
+            RequestUpdate()
+        end
+
+    elseif event == "BAG_UPDATE_COOLDOWN" then
+        -- Fires on every item cooldown change, including the 1.5s GCD
+        -- that starts the moment you use any item. This is what draws
+        -- the swipe animation on mana/health pots etc. Safe in combat.
+        if playerReady then
+            Apotheca.RefreshButtonVisuals(false)
+        end
 
     elseif event == "GET_ITEM_INFO_RECEIVED" then
         if playerReady then
