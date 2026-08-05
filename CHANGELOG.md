@@ -1,10 +1,18 @@
-
-## `CHANGELOG.md`
-
-```md
 # Changelog
 
 All notable changes to this project will be documented in this file.
+
+## [Unreleased]
+
+### Added
+- Added live cooldown swipes on bar buttons, so the cooldown animation starts the moment an item is used instead of only after combat ends.
+- Added live stack counts, so item counts tick down during combat instead of waiting for combat to end.
+- Added mana-aware food handling: food that also restores mana (for example **Homemade Cherry Pie**) is now only blocked when both health **and** mana are full.
+
+### Fixed
+- Fixed the bar unlocking itself: the purple **Drag to move** overlay could get stuck on after a missed Alt key press, leaving the bar movable for a while. The overlay now follows the real Alt key state and clears itself automatically.
+- Fixed the bar staying attached to the cursor when a drag was interrupted.
+- Fixed the waste-prevention confirmation appearing for resources that were no longer full. The bar cannot refresh during combat, so a conjured mana biscuit blocked at full health and mana would keep asking for confirmation even after mana had been spent. Buttons now re-check current health and mana when clicked and use the item without prompting when nothing would be wasted.
 
 ## [1.0.4] - 2026-04-08
 
@@ -104,4 +112,4 @@ All notable changes to this project will be documented in this file.
 
 ### Notes
 - This release establishes the first complete configurable version of Apotheca
-- Future updates may expand item coverage, polish UI behavior, and refine category logic
+- Future updates may expand item coverage, polish UI behavior, and refine category logic
