@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Fixed the bar unlocking itself: the purple **Drag to move** overlay could get stuck on after a missed Alt key press, leaving the bar movable for a while. The overlay now follows the real Alt key state and clears itself automatically.
 - Fixed the bar staying attached to the cursor when a drag was interrupted.
+- Fixed bar buttons responding to both the press and the release of a click, which could use an item twice from a single click. Buttons now act on release, matching the default action bars.
 - Fixed the waste-prevention confirmation appearing for resources that were no longer full. The bar cannot refresh during combat, so a conjured mana biscuit blocked at full health and mana would keep asking for confirmation even after mana had been spent. Buttons now re-check current health and mana when clicked and use the item without prompting when nothing would be wasted.
 
 ## [1.0.4] - 2026-04-08

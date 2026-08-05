@@ -1677,7 +1677,12 @@ local function CreateApothecaButton(cfg)
     local btn = CreateFrame("Button", "ApothecaButton_" .. cfg.key, ApothecaFrame, "SecureActionButtonTemplate")
     btn:SetWidth(BUTTON_SIZE)
     btn:SetHeight(BUTTON_SIZE)
-    btn:RegisterForClicks("AnyDown", "AnyUp")
+    -- Register ONE click edge only. Registering both "AnyDown" and "AnyUp"
+    -- runs the secure handler twice for a single physical click, so the item
+    -- can be used twice. "AnyUp" matches WoW's default action button
+    -- behaviour and the ask overlay, which is up-only. Switch this to
+    -- "AnyDown" for press-to-use, but never register both.
+    btn:RegisterForClicks("AnyUp")
     -- Do NOT RegisterForDrag on secure buttons — that taints them.
     -- Do NOT SetScript("OnDragStart/Stop") on secure buttons — that taints them.
     -- Do NOT HookScript("OnClick") on secure buttons — that taints them.
