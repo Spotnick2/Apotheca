@@ -1570,42 +1570,80 @@ anchorText:SetPoint("CENTER")
 anchorText:SetTextColor(1, 1, 1, 0.9)
 anchorText:SetText("Drag to move")
 
+local anchorDragging = false
+
+-- The overlay state is derived from the *live* input state, never from a
+-- single MODIFIER_STATE_CHANGED edge. A missed key-up (alt-tab, a popup
+-- taking focus, a click swallowed mid-channel) used to leave the overlay
+-- stuck on, so the bar looked like it unlocked itself for a while.
+local function AnchorShouldShow()
+    return IsAltKeyDown()
+       and not InCombatLockdown()
+       and not DB().lockPosition
+       and ApothecaFrame:IsVisible()
+       and ApothecaFrame:IsMouseOver()
+end
+
+local function StopAnchorDrag()
+    ApothecaFrame:StopMovingOrSizing()
+    SavePosition()
+    anchorDragging = false
+end
+
+local function UpdateAnchorState()
+    if anchorDragging then
+        -- Mid-drag: only alt release, combat, or a lock ends the drag.
+        if not IsAltKeyDown() or InCombatLockdown() or DB().lockPosition then
+            StopAnchorDrag()
+            anchor:Hide()
+        end
+        return
+    end
+
+    if AnchorShouldShow() then
+        if not anchor:IsShown() then anchor:Show() end
+    elseif anchor:IsShown() then
+        anchor:Hide()
+    end
+end
+
 anchor:SetScript("OnDragStart", function()
     if not InCombatLockdown() and not DB().lockPosition then
         ApothecaFrame:StartMoving()
+        anchorDragging = true
     end
 end)
 anchor:SetScript("OnDragStop", function()
-    ApothecaFrame:StopMovingOrSizing()
-    SavePosition()
+    if anchorDragging then StopAnchorDrag() end
+    UpdateAnchorState()
 end)
 anchor:SetScript("OnMouseDown", function(self, button)
     -- Swallow clicks so they don't reach secure buttons below
 end)
-
-local anchorDragging = false
-anchor:HookScript("OnDragStart", function() anchorDragging = true end)
-anchor:HookScript("OnDragStop",  function() anchorDragging = false end)
+anchor:SetScript("OnHide", function()
+    -- Safety net: never leave the frame attached to the cursor.
+    if anchorDragging then StopAnchorDrag() end
+end)
 
 local modFrame = CreateFrame("Frame")
 modFrame:RegisterEvent("MODIFIER_STATE_CHANGED")
-modFrame:SetScript("OnEvent", function(_, _, key, down)
-    if key ~= "LALT" and key ~= "RALT" then return end
-    if down == 1 and not InCombatLockdown() and not DB().lockPosition
-       and ApothecaFrame:IsVisible() and ApothecaFrame:IsMouseOver() then
-        anchor:Show()
-    else
-        if not anchorDragging then
-            anchor:Hide()
-        end
-        -- If we're mid-drag and alt is released, finish the drag
-        if anchorDragging then
-            ApothecaFrame:StopMovingOrSizing()
-            SavePosition()
-            anchorDragging = false
-            anchor:Hide()
-        end
+modFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+modFrame:SetScript("OnEvent", function(_, event, key)
+    if event == "MODIFIER_STATE_CHANGED" and key ~= "LALT" and key ~= "RALT" then
+        return
     end
+    UpdateAnchorState()
+end)
+
+-- Poll as well, so the overlay self-corrects within a frame or two even if
+-- the matching key event never arrives.
+local anchorElapsed = 0
+modFrame:SetScript("OnUpdate", function(_, elapsed)
+    if not (anchor:IsShown() or anchorDragging or IsAltKeyDown()) then return end
+    anchorElapsed = anchorElapsed + elapsed
+    if anchorElapsed < 0.1 then return end
+    anchorElapsed = 0
+    UpdateAnchorState()
 end)
 
 -- ============================================================
@@ -1826,6 +1864,23 @@ local function ShowPopupWithData(which, text1, text2, data)
 end
 
 -- ── ASK overlay for waste prevention ─────────────────────────
+
+-- Would using this button's item actually waste it *right now*?
+-- The overlay is armed by UpdateAllButtons, which bails out during combat
+-- lockdown, so by the time it is clicked the stored state can be stale —
+-- e.g. a mana biscuit blocked at full health and mana, then clicked after
+-- mana has been spent. Re-read the live values instead of trusting it.
+local function IsStillWasteful(btn)
+    local hpFull   = (UnitHealth("player") or 0) >= (UnitHealthMax("player") or 1)
+    local manaFull = (UnitPower("player")  or 0) >= (UnitPowerMax("player")  or 1)
+    local res = btn._wasteResource
+    if res == "health" then return hpFull end
+    if res == "mana"   then return manaFull end
+    -- "health and mana" (conjured biscuits, mana-restoring food): both must
+    -- be full, since the item is still doing something useful otherwise.
+    return hpFull and manaFull
+end
+
 local function CreateAskOverlay(btn)
     local overlay = CreateFrame("Button", nil, btn)
     overlay:SetAllPoints(btn)
@@ -1834,6 +1889,21 @@ local function CreateAskOverlay(btn)
     overlay:Hide()
     overlay:SetScript("OnClick", function(self, button)
         if not btn.itemID then return end
+
+        -- Nothing is being wasted any more — behave exactly like an
+        -- unblocked button: use the primary item, no confirmation.
+        if not IsStillWasteful(btn) then
+            local name = GetCachedItemName(btn.itemID) or GetItemInfo(btn.itemID)
+            if name then UseItemByName(name) end
+            -- Out of combat, hand the button back to the secure path so
+            -- later clicks skip this overlay entirely.
+            if not InCombatLockdown() then
+                Apotheca.ApplySecureItemAttributes(btn, btn.itemID)
+                btn.icon:SetDesaturated(false)
+                overlay:Hide()
+            end
+            return
+        end
 
         -- Right-click: check for alternate item
         if button == "RightButton" then
