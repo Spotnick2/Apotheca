@@ -131,6 +131,12 @@ function Apotheca.SetProfile(key)
     if not ApothecaDB then return end
     if not ApothecaDB.profiles[key] then
         ApothecaDB.profiles[key] = DeepCopy(PROFILE_DEFAULTS)
+    else
+        -- InitDB only backfills the profile that was active at load, so a
+        -- profile last touched by an older version is still missing every
+        -- setting added since. Fill it in on the way in, or the code that
+        -- reads those keys sees nil and disagrees about what is enabled.
+        ApplyDefaults(ApothecaDB.profiles[key], PROFILE_DEFAULTS)
     end
     ApothecaDB.activeProfile = key
     Apotheca.ResetLayout()
@@ -976,8 +982,11 @@ function Apotheca.FindBestHealthConsumable(bagMap)
     -- Healthstones are conjured — prefer them over potions, unless the
     -- dedicated Healthstone button is on (it owns them then) or the
     -- player has turned the preference off.
+    -- Both tests must read a missing table as enabled, exactly as the
+    -- dedicated scan in UpdateAllButtons does. Reading nil as disabled
+    -- here would put the same stone on both buttons.
     local db      = DB()
-    local hsOwned = db.healthstone and db.healthstone.enabled ~= false
+    local hsOwned = (not db.healthstone) or db.healthstone.enabled ~= false
     local prefer  = (not db.health) or db.health.preferHealthstone ~= false
     if prefer and not hsOwned then
         local id, count = Apotheca.FindBestHealthstone(bagMap)
@@ -2039,15 +2048,24 @@ local function CreateAskOverlay(btn)
         -- Nothing is being wasted any more — behave exactly like an
         -- unblocked button: use the primary item, no confirmation.
         if not IsStillWasteful(btn) then
+            -- UseItemByName is protected. This OnClick is an insecure path,
+            -- so calling it during lockdown raises ADDON_ACTION_BLOCKED
+            -- instead of using the item — and because the overlay can only
+            -- be hidden out of combat, every further click repeats the
+            -- error. Every button carrying an overlay holds food or drink,
+            -- which cannot be consumed in combat anyway, so say so instead.
+            if InCombatLockdown() then
+                local name = GetCachedItemName(btn.itemID) or ("item:" .. btn.itemID)
+                print("|cff9966ffApotheca:|r " .. name .. " cannot be used in combat.")
+                return
+            end
             local name = GetCachedItemName(btn.itemID) or GetItemInfo(btn.itemID)
             if name then UseItemByName(name) end
-            -- Out of combat, hand the button back to the secure path so
-            -- later clicks skip this overlay entirely.
-            if not InCombatLockdown() then
-                Apotheca.ApplySecureItemAttributes(btn, btn.itemID)
-                btn.icon:SetDesaturated(false)
-                overlay:Hide()
-            end
+            -- Hand the button back to the secure path so later clicks skip
+            -- this overlay entirely.
+            Apotheca.ApplySecureItemAttributes(btn, btn.itemID)
+            btn.icon:SetDesaturated(false)
+            overlay:Hide()
             return
         end
 
