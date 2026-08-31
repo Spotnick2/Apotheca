@@ -489,6 +489,26 @@ function Apotheca.BuildOptionsPanelContent(panel)
         function() return DBGet("bandage", "enabled") ~= false end,
         function(v) DBSet(v, "bandage", "enabled") end)
     SmallLabel("|cff888888Disabled while Recently Bandaged debuff is active.|r")
+
+    SectionHeader("Healthstone")
+    SmallLabel("Dedicated button for healthstones, all ranks.")
+    Gap(4)
+    Checkbox("Enable Healthstone button",
+        function() return DBGet("healthstone", "enabled") ~= false end,
+        function(v)
+            DBSet(v, "healthstone", "enabled")
+            Apotheca.ResetLayout()
+        end)
+    Checkbox("Suggest the stone that fits your missing health",
+        function() return DBGet("healthstone", "smartRank") ~= false end,
+        function(v) DBSet(v, "healthstone", "smartRank") end)
+    SmallLabel("|cff888888All healthstone ranks share one cooldown, so this offers the\n"
+        .. "smallest stone that still tops you off. Off = always the strongest.|r")
+    Gap(4)
+    Checkbox("Health button falls back to healthstones",
+        function() return DBGet("health", "preferHealthstone") ~= false end,
+        function(v) DBSet(v, "health", "preferHealthstone") end)
+    SmallLabel("|cff888888Only applies while the Healthstone button above is disabled.|r")
     FinalizeTarget()
 
     -- ════════════════════════════════════════════════════════════
@@ -501,7 +521,8 @@ function Apotheca.BuildOptionsPanelContent(panel)
     Gap(6)
 
     local BUTTON_LABELS = {
-        mana = "Mana Potion", health = "Health / Healthstone", rune = "Rune / Battle Res",
+        mana = "Mana Potion", health = "Health Potion", healthstone = "Healthstone",
+        rune = "Rune / Battle Res",
         recovery = "Recovery (Conjured)", food = "Food", drink = "Drink",
         flask = "Flask", battle = "Battle Elixir", guardian = "Guardian Elixir",
         bufffood = "Buff Food", spiritscroll = "Spirit Scroll",
