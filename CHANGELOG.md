@@ -9,8 +9,11 @@ All notable changes to this project will be documented in this file.
 - Added live stack counts, so item counts tick down during combat instead of waiting for combat to end.
 - Added mana-aware food handling: food that also restores mana (for example **Homemade Cherry Pie**) is now only blocked when both health **and** mana are full.
 - Added `/apo status`, which prints why each visible button is or isn't clickable (debug mode, waste prevention, missing item, combat).
+- Added a dedicated **Healthstone** button covering every rank from Minor through Master, in all three Improved Healthstone variants. Because all healthstone ranks share one cooldown, the button offers the smallest stone that still covers your missing health rather than burning the biggest one on a scratch; the tooltip shows how much it restores and why that stone was chosen. Smart ranking can be turned off in the options to always offer the strongest stone.
 
 ### Fixed
+- Fixed instance-restricted potions being offered outside the instances they work in. **Cenarion Mana Salve**, **Auchenai Mana Potion**, and the matching healing versions showed up on the bar anywhere, even though they can only be drunk inside Coilfang Reservoir and Auchindoun respectively. All six restricted potions — Cenarion, Auchenai, and Bottled Nethergon — are now offered only while you are inside their own instances, and the bar rescans on zone change so they appear the moment you zone in.
+- Fixed the Health button missing **Bottled Nethergon Vapor** and **Cenarion Healing Salve** entirely, and mislabelling **Auchenai Healing Potion** as a Tempest Keep item.
 - Fixed waste-prevention **Block** giving no feedback. A blocked button — most often a conjured mana biscuit at full health and mana — simply did nothing when clicked. The tooltip now says why the button is blocked, and clicking it prints an explanation instead of silently ignoring the click.
 - Fixed the bar unlocking itself: the purple **Drag to move** overlay could get stuck on after a missed Alt key press, leaving the bar movable for a while. The overlay now follows the real Alt key state and clears itself automatically.
 - Fixed the bar staying attached to the cursor when a drag was interrupted.

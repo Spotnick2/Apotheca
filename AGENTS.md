@@ -49,11 +49,15 @@ ApothecaDB = {
 
 ### Button Keys
 The canonical set of button keys (also `Apotheca.DEFAULT_BUTTON_ORDER`):
-`"mana"`, `"health"`, `"rune"`, `"recovery"`, `"food"`, `"drink"`, `"flask"`, `"battle"`, `"guardian"`, `"bufffood"`, `"spiritscroll"`, `"protectionscroll"`, `"weaponoil"`, `"bandage"`
+`"mana"`, `"health"`, `"healthstone"`, `"rune"`, `"recovery"`, `"food"`, `"drink"`, `"flask"`, `"battle"`, `"guardian"`, `"bufffood"`, `"spiritscroll"`, `"protectionscroll"`, `"weaponoil"`, `"bandage"`
 
 ### Item Data
 All item lists are plain Lua arrays at the top of `Apotheca.lua`:
 `MANA_ITEMS`, `HEALTH_ITEMS`, `RUNE_ITEMS`, `HEALTHSTONE_ITEMS`, `BANDAGE_ITEMS`, `CONJURED_ITEMS`, `FOOD_ITEMS`, `DRINK_ITEMS`, `BUFF_FOOD_BY_STAT`, `SPIRIT_SCROLL_ITEMS`, `PROTECTION_SCROLL_ITEMS`, `MANA_OIL_ITEMS`, `WIZARD_OIL_ITEMS`, `WEAPON_COATING_ITEMS`, `ELIXIRS`. Items are ordered highest-rank → lowest so `FindBestItem` returns the strongest available.
+
+`HEALTHSTONE_ITEMS` is a list of `{ id, healValue }` ordered strongest → weakest. `FindBestHealthstone` returns `itemID, count, texture, healValue, isSmartPick`; with `db.healthstone.smartRank` on it picks the *smallest* stone covering the missing health (all ranks share one cooldown), falling back to the strongest when nothing covers it or health is full. The pick can only change out of combat — it is a secure `item` attribute write.
+
+`ZONE_RESTRICTED_ITEMS` maps the six reputation-quartermaster potions (Cenarion / Auchenai / Bottled Nethergon) to their instance cluster, matched by `instanceMapID` with a localized-name fallback. `Apotheca.IsItemUsableHere(id)` gates them and is applied inside `FindBestItem`, so any new zone-locked consumable only needs an entry in that table. `ZONE_CHANGED_NEW_AREA` triggers the rescan.
 
 Food entries may carry `restoresMana = true` (e.g. Homemade Cherry Pie). `FindBestFood` returns that flag and `ResolveRecovery` exposes it as `rec.foodRestoresMana`, which waste prevention uses to require *both* health and mana to be full before blocking.
 

@@ -68,6 +68,12 @@ local PROFILE_DEFAULTS = {
     health = {
         preferHealthstone = true,
     },
+    healthstone = {
+        enabled   = true,
+        -- Pick the smallest stone that covers the missing health instead
+        -- of always offering the strongest one.
+        smartRank = true,
+    },
     bandage = {
         enabled = true,
     },
@@ -338,11 +344,26 @@ end
 -- ITEM DATA
 -- ============================================================
 
-local MANA_ITEMS     = { 32902, 32903, 32948, 22832, 33093, 13444, 6149 }
+local MANA_ITEMS     = {
+    -- Instance-restricted (see ZONE_RESTRICTED_ITEMS) — filtered out of
+    -- FindBestItem unless the player is actually in the matching instance.
+    32902,  -- Bottled Nethergon Energy  (Tempest Keep only)
+    32903,  -- Cenarion Mana Salve       (Coilfang Reservoir only)
+    32948,  -- Auchenai Mana Potion      (Auchindoun only)
+    -- Unrestricted
+    22832,  -- Super Mana Potion
+    33093,  -- Mana Potion Injector
+    13444,  -- Major Mana Potion
+    6149,   -- Greater Mana Potion
+}
 local HEALTH_ITEMS   = {
     -- Potions only — healthstones are scanned separately in
     -- FindBestHealthConsumable via HEALTHSTONE_ITEMS.
-    32947,  -- Bottled Nethergon Vapor
+    -- Instance-restricted (see ZONE_RESTRICTED_ITEMS).
+    32905,  -- Bottled Nethergon Vapor   (Tempest Keep only)
+    32904,  -- Cenarion Healing Salve    (Coilfang Reservoir only)
+    32947,  -- Auchenai Healing Potion   (Auchindoun only)
+    -- Unrestricted
     22829,  -- Super Healing Potion
     22795,  -- Fel Regeneration Potion
     22797,  -- Super Rejuvenation Potion
@@ -451,40 +472,88 @@ local BUFF_FOOD_BY_STAT = {
     },
 }
 
-local NETHERGON_ENERGY_ID = 32902
-local TEMPEST_KEEP_INSTANCES = {
-    ["The Eye"] = true, ["The Mechanar"] = true,
-    ["The Botanica"] = true, ["The Arcatraz"] = true,
+-- ============================================================
+-- ZONE-RESTRICTED CONSUMABLES
+-- ============================================================
+-- The three reputation-quartermaster potion pairs may only be used
+-- inside their own instance cluster. Carrying them elsewhere is normal
+-- (you stock up before a run), so they must be filtered out of the
+-- button scan whenever the player is not standing in a matching
+-- instance — otherwise the bar offers a potion that cannot be drunk.
+--
+-- Matching is by instanceMapID first (locale-proof); the localized
+-- name from GetInstanceInfo() is kept as a fallback for clients where
+-- the map ID is unavailable.
+
+local COILFANG_INSTANCES = {
+    [545] = true, [546] = true, [547] = true, [548] = true,
+    ["The Steamvault"]       = true, ["The Underbog"] = true,
+    ["The Slave Pens"]       = true, ["Serpentshrine Cavern"] = true,
 }
+local AUCHINDOUN_INSTANCES = {
+    [555] = true, [556] = true, [557] = true, [558] = true,
+    ["Shadow Labyrinth"]     = true, ["Sethekk Halls"] = true,
+    ["Mana-Tombs"]           = true, ["Auchenai Crypts"] = true,
+}
+local TEMPEST_KEEP_INSTANCES = {
+    [550] = true, [552] = true, [553] = true, [554] = true,
+    ["The Eye"]              = true, ["The Arcatraz"] = true,
+    ["The Botanica"]         = true, ["The Mechanar"] = true,
+}
+
+local ZONE_RESTRICTED_ITEMS = {
+    [32902] = TEMPEST_KEEP_INSTANCES,    -- Bottled Nethergon Energy
+    [32905] = TEMPEST_KEEP_INSTANCES,    -- Bottled Nethergon Vapor
+    [32903] = COILFANG_INSTANCES,        -- Cenarion Mana Salve
+    [32904] = COILFANG_INSTANCES,        -- Cenarion Healing Salve
+    [32948] = AUCHINDOUN_INSTANCES,      -- Auchenai Mana Potion
+    [32947] = AUCHINDOUN_INSTANCES,      -- Auchenai Healing Potion
+}
+
+-- True unless the item is instance-restricted and we are somewhere else.
+function Apotheca.IsItemUsableHere(itemID)
+    local group = ZONE_RESTRICTED_ITEMS[itemID]
+    if not group then return true end
+    local name, instanceType, _, _, _, _, _, mapID = GetInstanceInfo()
+    if instanceType ~= "party" and instanceType ~= "raid" then return false end
+    if mapID and group[mapID] then return true end
+    return name ~= nil and group[name] == true
+end
 
 -- ============================================================
 -- HEALTHSTONE ITEMS  (highest rank → lowest)
 -- ============================================================
+-- Every Create Healthstone rank, in all three Improved Healthstone
+-- variants, ordered strongest → weakest by the health each restores.
+-- A raider commonly ends up holding several of these at once: the ranks
+-- are distinct items, so a stone from a 0/2 lock and a stone from a 2/2
+-- lock both fit in the bags. healValue drives the smart-rank pick in
+-- FindBestHealthstone.
 local HEALTHSTONE_ITEMS = {
     -- Master Healthstone (Create Healthstone rank 6, TBC)
-    22105,  -- Master Healthstone (Improved rank 2)
-    22104,  -- Master Healthstone (Improved rank 1)
-    22103,  -- Master Healthstone (base)
+    { id = 22105, healValue = 2496 },  -- Improved rank 2
+    { id = 22104, healValue = 2288 },  -- Improved rank 1
+    { id = 22103, healValue = 2080 },  -- base
     -- Major Healthstone (rank 5)
-    19013,  -- Major Healthstone (Improved rank 2)
-    19012,  -- Major Healthstone (Improved rank 1)
-    9421,   -- Major Healthstone (base)
+    { id = 19013, healValue = 1440 },  -- Improved rank 2
+    { id = 19012, healValue = 1320 },  -- Improved rank 1
+    { id = 9421,  healValue = 1200 },  -- base
     -- Greater Healthstone (rank 4)
-    19011,  -- Greater Healthstone (Improved rank 2)
-    19010,  -- Greater Healthstone (Improved rank 1)
-    5510,   -- Greater Healthstone (base)
+    { id = 19011, healValue =  960 },  -- Improved rank 2
+    { id = 19010, healValue =  880 },  -- Improved rank 1
+    { id = 5510,  healValue =  800 },  -- base
     -- Healthstone (rank 3)
-    19009,  -- Healthstone (Improved rank 2)
-    19008,  -- Healthstone (Improved rank 1)
-    5509,   -- Healthstone (base)
+    { id = 19009, healValue =  600 },  -- Improved rank 2
+    { id = 19008, healValue =  550 },  -- Improved rank 1
+    { id = 5509,  healValue =  500 },  -- base
     -- Lesser Healthstone (rank 2)
-    19007,  -- Lesser Healthstone (Improved rank 2)
-    19006,  -- Lesser Healthstone (Improved rank 1)
-    5511,   -- Lesser Healthstone (base)
+    { id = 19007, healValue =  300 },  -- Improved rank 2
+    { id = 19006, healValue =  275 },  -- Improved rank 1
+    { id = 5511,  healValue =  250 },  -- base
     -- Minor Healthstone (rank 1)
-    19005,  -- Minor Healthstone (Improved rank 2)
-    19004,  -- Minor Healthstone (Improved rank 1)
-    5512,   -- Minor Healthstone (base)
+    { id = 19005, healValue =  120 },  -- Improved rank 2
+    { id = 19004, healValue =  110 },  -- Improved rank 1
+    { id = 5512,  healValue =  100 },  -- base
 }
 
 -- ============================================================
@@ -626,7 +695,7 @@ local STATIC_BUTTON_CONFIG = {
     { key = "mana",   label = "Mana",   list = MANA_ITEMS,   emptyIcon = "Interface\\Icons\\INV_Potion_76",
       emptyTooltip = "No mana potion in bags" },
     { key = "health", label = "Health", list = HEALTH_ITEMS, emptyIcon = "Interface\\Icons\\INV_Potion_54",
-      emptyTooltip = "No health potion or healthstone in bags" },
+      emptyTooltip = "No health potion in bags" },
     { key = "rune",   label = "Rune",   list = RUNE_ITEMS,   emptyIcon = "Interface\\Icons\\INV_Misc_Rune_01",
       emptyTooltip = "Rune of Portals / Battle Resurrect — none in bags" },
 }
@@ -661,6 +730,11 @@ local BANDAGE_BUTTON_CONFIG = {
     emptyTooltip = "No bandage in bags",
 }
 
+local HEALTHSTONE_BUTTON_CONFIG = {
+    key = "healthstone", label = "Healthstone", emptyIcon = "Interface\\Icons\\INV_Stone_04",
+    emptyTooltip = "No healthstone in bags",
+}
+
 -- ============================================================
 -- RESOLUTION FUNCTIONS
 -- ============================================================
@@ -684,13 +758,10 @@ function Apotheca.BuildBagMap()
 end
 
 function Apotheca.FindBestItem(list, bagMap)
-    local inTK = TEMPEST_KEEP_INSTANCES[GetInstanceInfo()] == true
     for _, id in ipairs(list) do
-        if id ~= NETHERGON_ENERGY_ID or inTK then
-            local count = bagMap[id]
-            if count and count > 0 then
-                return id, count, GetCachedTexture(id)
-            end
+        local count = bagMap[id]
+        if count and count > 0 and Apotheca.IsItemUsableHere(id) then
+            return id, count, GetCachedTexture(id)
         end
     end
     return nil, 0, nil
@@ -860,13 +931,57 @@ end
 -- HEALTH CONSUMABLE — healthstone priority over potions
 -- ============================================================
 
-function Apotheca.FindBestHealthConsumable(bagMap)
-    -- Healthstones are conjured — always prefer them over potions
-    for _, id in ipairs(HEALTHSTONE_ITEMS) do
-        local count = bagMap[id]
+-- Picks the healthstone to put on the Healthstone button.
+--
+-- With smart ranking on, this is the *smallest* stone that still covers
+-- the health currently missing, so a big stone is not burned to heal a
+-- scratch — all healthstone ranks share one cooldown, so spending the
+-- Master stone at 300 missing throws away the whole two minutes. When
+-- nothing in the bags covers the deficit (or health is full, or smart
+-- ranking is off) the strongest available stone wins.
+--
+-- The pick can only change out of combat, because swapping it means
+-- writing the `item` secure attribute. Entering a fight at or near full
+-- health therefore arms the strongest stone, which is the safe default;
+-- the smaller-stone pick is what you get between pulls, topping off.
+--
+-- Returns: itemID, count, texture, healValue, isSmartPick
+function Apotheca.FindBestHealthstone(bagMap)
+    local best, bestCount           -- strongest stone held
+    local pick, pickCount           -- smallest stone that covers the deficit
+
+    local db      = DB()
+    local hsDB    = db.healthstone
+    local smart   = (not hsDB) or hsDB.smartRank ~= false
+    local missing = (UnitHealthMax("player") or 0) - (UnitHealth("player") or 0)
+
+    -- List is strongest → weakest, so the first hit is the strongest held
+    -- and the last stone that still covers `missing` is the smallest one.
+    for _, entry in ipairs(HEALTHSTONE_ITEMS) do
+        local count = bagMap[entry.id]
         if count and count > 0 then
-            return id, count, GetCachedTexture(id)
+            if not best then best, bestCount = entry, count end
+            if entry.healValue >= missing then pick, pickCount = entry, count end
         end
+    end
+
+    if not best then return nil, 0, nil, nil, false end
+    if not smart or missing <= 0 or not pick then
+        return best.id, bestCount, GetCachedTexture(best.id), best.healValue, false
+    end
+    return pick.id, pickCount, GetCachedTexture(pick.id), pick.healValue, pick ~= best
+end
+
+function Apotheca.FindBestHealthConsumable(bagMap)
+    -- Healthstones are conjured — prefer them over potions, unless the
+    -- dedicated Healthstone button is on (it owns them then) or the
+    -- player has turned the preference off.
+    local db      = DB()
+    local hsOwned = db.healthstone and db.healthstone.enabled ~= false
+    local prefer  = (not db.health) or db.health.preferHealthstone ~= false
+    if prefer and not hsOwned then
+        local id, count = Apotheca.FindBestHealthstone(bagMap)
+        if id then return id, count, GetCachedTexture(id) end
     end
     -- Fall back to healing potions
     return Apotheca.FindBestItem(HEALTH_ITEMS, bagMap)
@@ -1734,6 +1849,18 @@ local function CreateApothecaButton(cfg)
                 local name = GetItemInfo(self.itemID) or ("id:" .. self.itemID)
                 GameTooltip:AddLine("|cff9966ffWould use:|r " .. name, 1, 1, 1, true)
             end
+            -- Explain the smart-rank healthstone pick, so a player who
+            -- expects the Master stone can see why a smaller one is up.
+            if self._healValue then
+                GameTooltip:AddLine(" ", 1, 1, 1, false)
+                GameTooltip:AddLine("|cff9966ffRestores:|r " .. self._healValue .. " health",
+                    0.7, 0.7, 0.9, true)
+                if self._smartRankPick then
+                    GameTooltip:AddLine("|cff888888Smallest stone that covers your missing health.|r",
+                        0.6, 0.6, 0.6, true)
+                end
+            end
+
             -- Explain a waste-blocked button. Without this the only clue
             -- that the click will do nothing is a desaturated icon.
             if self._wasteBlocked then
@@ -1782,9 +1909,10 @@ end
 for _, cfg in ipairs(SCROLL_BUTTON_CONFIG) do
     Apotheca.buttons[cfg.key] = CreateApothecaButton(cfg)
 end
-Apotheca.buttons["bufffood"]  = CreateApothecaButton(BUFFFOOD_BUTTON_CONFIG)
-Apotheca.buttons["weaponoil"] = CreateApothecaButton(WEAPONOIL_BUTTON_CONFIG)
-Apotheca.buttons["bandage"]   = CreateApothecaButton(BANDAGE_BUTTON_CONFIG)
+Apotheca.buttons["bufffood"]    = CreateApothecaButton(BUFFFOOD_BUTTON_CONFIG)
+Apotheca.buttons["weaponoil"]   = CreateApothecaButton(WEAPONOIL_BUTTON_CONFIG)
+Apotheca.buttons["bandage"]     = CreateApothecaButton(BANDAGE_BUTTON_CONFIG)
+Apotheca.buttons["healthstone"] = CreateApothecaButton(HEALTHSTONE_BUTTON_CONFIG)
 
 -- ============================================================
 -- WASTE PREVENTION & RIGHT-CLICK ALTERNATE — BYPASS SYSTEM
@@ -1974,7 +2102,7 @@ end
 -- ============================================================
 
 Apotheca.DEFAULT_BUTTON_ORDER = {
-    "mana", "health", "rune",
+    "mana", "health", "healthstone", "rune",
     "recovery", "food", "drink",
     "flask", "battle", "guardian",
     "bufffood",
@@ -2056,6 +2184,7 @@ local function RefreshLayout(recoveryMode, elixirMode, staticFlags, scrollFlags)
     if scrollFlags and scrollFlags.protection then shouldShow["protectionscroll"] = true end
     if scrollFlags and scrollFlags.oil        then shouldShow["weaponoil"]        = true end
     if scrollFlags and scrollFlags.bandage    then shouldShow["bandage"]          = true end
+    if scrollFlags and scrollFlags.healthstone then shouldShow["healthstone"]      = true end
 
     -- 2. Build the active list in the user's custom order.
     local order  = Apotheca.GetButtonOrder()
@@ -2078,7 +2207,7 @@ local function RefreshLayout(recoveryMode, elixirMode, staticFlags, scrollFlags)
     -- Dynamic buttons
     for _, k in ipairs({ "recovery", "food", "drink", "flask", "battle", "guardian",
                          "bufffood", "spiritscroll", "protectionscroll", "weaponoil",
-                         "bandage" }) do
+                         "bandage", "healthstone" }) do
         if not activeSet[k] then Apotheca.buttons[k]:Hide() end
     end
 end
@@ -2252,6 +2381,12 @@ function Apotheca.UpdateAllButtons()
         bandageID, bandageCnt, bandageTex = Apotheca.FindBestBandage(bagMap)
     end
 
+    -- ── Healthstone ──────────────────────────────────────────────
+    local hsID, hsCnt, hsTex, hsHeal, hsSmart
+    if not db.healthstone or db.healthstone.enabled ~= false then
+        hsID, hsCnt, hsTex, hsHeal, hsSmart = Apotheca.FindBestHealthstone(bagMap)
+    end
+
     -- ── Build layout flags — only include a slot if it has content (or showEmpty) ──
     local flags = {
         food        = (buffFoodID ~= nil)          or (db.buffFood and db.buffFood.enabled and showEmpty),
@@ -2259,6 +2394,7 @@ function Apotheca.UpdateAllButtons()
         protection  = (protID     ~= nil)          or (scrollsOn   and (not scrollsDB or scrollsDB.protection) and showEmpty),
         oil         = (oilID      ~= nil)          or ((not db.weaponOil or db.weaponOil.enabled) and showEmpty),
         bandage     = (bandageID  ~= nil)          or ((not db.bandage or db.bandage.enabled) and showEmpty),
+        healthstone = (hsID       ~= nil)          or ((not db.healthstone or db.healthstone.enabled ~= false) and showEmpty),
     }
 
     RefreshLayout(recovMode, elixMode, staticFlags, flags)
@@ -2300,6 +2436,13 @@ function Apotheca.UpdateAllButtons()
     end
     if flags.bandage then
         ApplyItemToButton(Apotheca.buttons["bandage"], bandageID, bandageCnt, bandageTex)
+    end
+    if flags.healthstone then
+        local hsBtn = Apotheca.buttons["healthstone"]
+        -- Stashed for the tooltip so it can explain the smart-rank pick.
+        hsBtn._healValue    = hsHeal
+        hsBtn._smartRankPick = hsSmart
+        ApplyItemToButton(hsBtn, hsID, hsCnt, hsTex)
     end
 
     -- ── Bandage usability ─────────────────────────────────────────
@@ -2498,6 +2641,10 @@ eventFrame:RegisterEvent("PLAYER_LOGOUT")
 eventFrame:RegisterEvent("PLAYER_TALENT_UPDATE")
 eventFrame:RegisterEvent("READY_CHECK")
 eventFrame:RegisterEvent("READY_CHECK_FINISHED")
+-- Instance-restricted potions (Cenarion / Auchenai / Nethergon) become
+-- usable or unusable purely by where you are standing, so the bar has to
+-- rescan on zone change, not just on bag change.
+eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 
 if eventFrame.RegisterUnitEvent then
     eventFrame:RegisterUnitEvent("UNIT_HEALTH",       "player")
@@ -2568,7 +2715,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         RestorePosition()
         RequestUpdate()
 
-    elseif event == "PLAYER_TALENT_UPDATE" then
+    elseif event == "PLAYER_TALENT_UPDATE" or event == "ZONE_CHANGED_NEW_AREA" then
         if playerReady then RequestUpdate() end
 
     elseif event == "BAG_UPDATE_DELAYED" then
