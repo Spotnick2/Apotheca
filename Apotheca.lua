@@ -1677,12 +1677,14 @@ local function CreateApothecaButton(cfg)
     local btn = CreateFrame("Button", "ApothecaButton_" .. cfg.key, ApothecaFrame, "SecureActionButtonTemplate")
     btn:SetWidth(BUTTON_SIZE)
     btn:SetHeight(BUTTON_SIZE)
-    -- Register ONE click edge only. Registering both "AnyDown" and "AnyUp"
-    -- runs the secure handler twice for a single physical click, so the item
-    -- can be used twice. "AnyUp" matches WoW's default action button
-    -- behaviour and the ask overlay, which is up-only. Switch this to
-    -- "AnyDown" for press-to-use, but never register both.
-    btn:RegisterForClicks("AnyUp")
+    -- Register ONE click edge, and it must be the DOWN edge.
+    -- This client's SecureActionButton_OnClick reads the "type" attribute on
+    -- the press and "typerelease" on the release. We only ever set "type"
+    -- (see ApplySecureItemAttributes), so registering "AnyUp" alone makes
+    -- every button dead — the release edge looks for an attribute that is
+    -- never set. Registering both edges instead runs the handler twice for
+    -- one physical click. Do not change this to "AnyUp" or to both.
+    btn:RegisterForClicks("AnyDown")
     -- Do NOT RegisterForDrag on secure buttons — that taints them.
     -- Do NOT SetScript("OnDragStart/Stop") on secure buttons — that taints them.
     -- Do NOT HookScript("OnClick") on secure buttons — that taints them.
@@ -1731,6 +1733,17 @@ local function CreateApothecaButton(cfg)
                 GameTooltip:AddLine("|cffff6600[Debug: will not consume]|r", 1, 1, 1, true)
                 local name = GetItemInfo(self.itemID) or ("id:" .. self.itemID)
                 GameTooltip:AddLine("|cff9966ffWould use:|r " .. name, 1, 1, 1, true)
+            end
+            -- Explain a waste-blocked button. Without this the only clue
+            -- that the click will do nothing is a desaturated icon.
+            if self._wasteBlocked then
+                local mode = DB().preventWasteMode or "BLOCK"
+                GameTooltip:AddLine(" ", 1, 1, 1, false)
+                GameTooltip:AddLine("|cffff6600Waste prevention:|r you are at full "
+                    .. (self._wasteResource or "health/mana") .. ".", 1, 0.6, 0.2, true)
+                GameTooltip:AddLine(mode == "BLOCK"
+                    and "|cff888888Clicking does nothing. Change Prevent waste in /apo.|r"
+                    or  "|cff888888Click to confirm using it anyway.|r", 0.6, 0.6, 0.6, true)
             end
             -- Show alternate item hint if right-click alternate is enabled
             local rcMode = DB().rightClickAlternate or "OFF"
@@ -1907,6 +1920,17 @@ local function CreateAskOverlay(btn)
                 btn.icon:SetDesaturated(false)
                 overlay:Hide()
             end
+            return
+        end
+
+        -- BLOCK mode: the overlay exists purely so the click has a voice.
+        -- Without it the button is silently dead and the only clue is a
+        -- slightly desaturated icon.
+        if (DB().preventWasteMode or "BLOCK") == "BLOCK" then
+            local name = GetCachedItemName(btn.itemID) or ("item:" .. btn.itemID)
+            print("|cff9966ffApotheca:|r " .. name .. " not used — you are at full "
+                  .. (btn._wasteResource or "health/mana")
+                  .. ". Change this under Prevent waste in /apo.")
             return
         end
 
@@ -2311,24 +2335,30 @@ function Apotheca.UpdateAllButtons()
             if not btn or not btn.itemID then return end
             -- If this button was recently bypassed via "Yes", skip prevention.
             if IsWasteBypassed(btn.cfg.key) then
+                btn._wasteBlocked = false
                 if btn._askOverlay then btn._askOverlay:Hide() end
                 return
             end
+            btn._wasteResource = resource
+            btn._wasteBlocked  = true
             if wasteMode == "BLOCK" then
                 btn:SetAttribute("type", nil)
                 btn:SetAttribute("item", nil)
                 btn.icon:SetDesaturated(true)
-                if btn._askOverlay then btn._askOverlay:Hide() end
+                -- Overlay is shown in BLOCK mode too — it does not confirm
+                -- anything here, it just explains why the click did nothing.
+                if btn._askOverlay then btn._askOverlay:Show() end
             elseif wasteMode == "ASK" then
                 btn:SetAttribute("type", nil)
                 btn:SetAttribute("item", nil)
-                btn._wasteResource = resource
                 if btn._askOverlay then btn._askOverlay:Show() end
             end
         end
 
         local function EnableButton(btn)
-            if btn and btn._askOverlay then btn._askOverlay:Hide() end
+            if not btn then return end
+            btn._wasteBlocked = false
+            if btn._askOverlay then btn._askOverlay:Hide() end
         end
 
         if recovMode == "conjured" then
@@ -2352,7 +2382,10 @@ function Apotheca.UpdateAllButtons()
     else
         for _, key in ipairs({ "recovery", "food", "drink" }) do
             local btn = Apotheca.buttons[key]
-            if btn and btn._askOverlay then btn._askOverlay:Hide() end
+            if btn then
+                btn._wasteBlocked = false
+                if btn._askOverlay then btn._askOverlay:Hide() end
+            end
         end
     end
 
@@ -2405,6 +2438,32 @@ SlashCmdList["APOTHECA"] = function(msg)
     local cmd = msg and msg:lower():match("^%s*(.-)%s*$") or ""
     if cmd == "debug" then
         Apotheca.SetDebug(not DB().debug)
+    elseif cmd == "status" then
+        -- Diagnostic for "I click a button and nothing happens".
+        local db = DB()
+        local hpFull   = (UnitHealth("player") or 0) >= (UnitHealthMax("player") or 1)
+        local manaFull = (UnitPower("player")  or 0) >= (UnitPowerMax("player")  or 1)
+        print("|cff9966ffApotheca:|r debug=" .. tostring(db.debug and true or false)
+              .. "  preventWaste=" .. (db.preventWasteMode or "BLOCK")
+              .. "  combat=" .. tostring(InCombatLockdown() and true or false)
+              .. "  healthFull=" .. tostring(hpFull)
+              .. "  manaFull=" .. tostring(manaFull))
+        for _, key in ipairs(Apotheca.GetButtonOrder()) do
+            local btn = Apotheca.buttons[key]
+            if btn and btn:IsShown() then
+                local name = btn.itemID and (GetItemInfo(btn.itemID) or ("id:" .. btn.itemID))
+                              or "(empty)"
+                local why
+                if not btn.itemID then                  why = "no item in bags"
+                elseif db.debug then                    why = "|cffff6600debug mode — will not consume|r"
+                elseif btn._wasteBlocked then           why = "|cffff6600blocked: full "
+                                                              .. (btn._wasteResource or "health/mana") .. "|r"
+                elseif btn:GetAttribute("type") then    why = "|cff66ff66clickable|r"
+                else                                    why = "|cffff6600no click action set|r"
+                end
+                print(string.format("|cff9966ff  %s:|r %s — %s", btn.cfg.label, name, why))
+            end
+        end
     else
         local panel = Apotheca.optionsPanel
         if Settings and Settings.OpenToCategory and panel and panel._category then
@@ -2415,6 +2474,7 @@ SlashCmdList["APOTHECA"] = function(msg)
         else
             print("|cff9966ffApotheca:|r Options panel not ready. Try again after login.")
             print("|cff9966ffApotheca:|r /apo debug — toggle debug mode")
+            print("|cff9966ffApotheca:|r /apo status — why a button is or isn't clickable")
         end
     end
 end

@@ -97,7 +97,7 @@ There is **no local build step**. The addon runs directly in the WoW client.
    - New item lists must be ordered highest-rank → lowest.
    - New button keys must be added to `Apotheca.DEFAULT_BUTTON_ORDER` and `Apotheca.ALL_BUTTON_KEYS`.
    - Secure button attribute writes must be guarded with `if not InCombatLockdown() then`.
-   - Secure buttons must register a single click edge (`RegisterForClicks("AnyUp")`). Registering both edges runs the secure handler twice per click and can use the item twice.
+   - Secure buttons must register exactly one click edge, and it must be the down edge (`RegisterForClicks("AnyDown")`). This client's secure handler reads `type` on the press and `typerelease` on the release; the addon only ever sets `type`, so `"AnyUp"` alone makes every button dead, and registering both edges runs the handler twice per click.
    - Never call WoW Container globals directly — use the shim functions.
 
 ### Local Deploy
