@@ -387,6 +387,7 @@ local DRINK_ITEMS = {
     { id = 27860, manaValue = 7200 },                   -- Purified Draenic Water (req 65)
     { id = 30703, manaValue = 5100, conjured = true },  -- Conjured Mountain Spring Water (mage rank 8, req 60)
     { id = 28399, manaValue = 5100 },                   -- Filtered Draenic Water (req 60)
+    { id = 29454, manaValue = 5100 },                   -- Silverwine (vendor, req 60)
     { id = 8079,  manaValue = 4200, conjured = true },  -- Conjured Crystal Water (mage rank 7, req 55)
     { id = 8078,  manaValue = 2934, conjured = true },  -- Conjured Sparkling Water (mage rank 6, req 45)
     { id = 8766,  manaValue = 2934 },                   -- Morning Glory Dew (req 45)
@@ -405,34 +406,40 @@ end
 -- BUFF_FOOD_BY_STAT. These are vendor, drop, quest, and conjured foods
 -- that restore health without granting a stat buff.
 -- Values are the TBC 2.4.3 tooltip totals ("Restores N health over 30 sec").
+-- Note: some item databases render these totals 6 too high, because they
+-- multiply the displayed per-tick value (basePoints + 1) by the 6 ticks.
 local FOOD_ITEMS = {
-    -- ── 7506 health (req 65) ──
-    { id = 22019, healthValue = 7506, conjured = true },    -- Conjured Croissant (mage rank 8)
-    { id = 29449, healthValue = 7506 },                     -- Bladespire Bagel (vendor)
-    { id = 29450, healthValue = 7506 },                     -- Telaari Grapes (vendor)
-    { id = 29451, healthValue = 7506 },                     -- Clefthoof Ribs (vendor)
-    { id = 29453, healthValue = 7506 },                     -- Sporeggar Mushroom (vendor Sporeggar)
-    { id = 30355, healthValue = 7506 },                     -- Grilled Shadowmoon Tuber (vendor)
-    { id = 32685, healthValue = 7506 },                     -- Ogri'la Chicken Fingers (vendor Ogri'la)
+    -- ── 7500 health (req 65) ──
+    { id = 22019, healthValue = 7500, conjured = true },    -- Conjured Croissant (mage rank 8)
+    { id = 29449, healthValue = 7500 },                     -- Bladespire Bagel (vendor)
+    { id = 29448, healthValue = 7500 },                     -- Mag'har Mild Cheese (vendor)
+    { id = 29450, healthValue = 7500 },                     -- Telaari Grapes (vendor)
+    { id = 29451, healthValue = 7500 },                     -- Clefthoof Ribs (vendor)
+    { id = 29452, healthValue = 7500 },                     -- Zangar Trout (vendor)
+    { id = 29453, healthValue = 7500 },                     -- Sporeggar Mushroom (vendor Sporeggar)
+    { id = 30355, healthValue = 7500 },                     -- Grilled Shadowmoon Tuber (vendor)
+    { id = 32685, healthValue = 7500 },                     -- Ogri'la Chicken Fingers (vendor Ogri'la)
 
-    -- ── 4326 health (req 55) ──
-    { id = 22895, healthValue = 4326, conjured = true },    -- Conjured Cinnamon Roll (mage rank 7)
-    { id = 27854, healthValue = 4326 },                     -- Smoked Talbuk Venison (vendor)
-    { id = 27855, healthValue = 4326 },                     -- Mag'har Grainbread (vendor)
-    { id = 27856, healthValue = 4326 },                     -- Skethyl Berries (vendor/drop)
-    { id = 27859, healthValue = 4326 },                     -- Zangar Caps (vendor/drop)
+    -- ── 4320 health (req 55) ──
+    { id = 22895, healthValue = 4320, conjured = true },    -- Conjured Cinnamon Roll (mage rank 7)
+    { id = 27854, healthValue = 4320 },                     -- Smoked Talbuk Venison (vendor)
+    { id = 27855, healthValue = 4320 },                     -- Mag'har Grainbread (vendor)
+    { id = 27856, healthValue = 4320 },                     -- Skethyl Berries (vendor/drop)
+    { id = 27857, healthValue = 4320 },                     -- Garadar Sharp (vendor)
+    { id = 27858, healthValue = 4320 },                     -- Sunspring Carp (vendor)
+    { id = 27859, healthValue = 4320 },                     -- Zangar Caps (vendor/drop)
 
-    -- ── 2154 health (req 45–55) ──
-    { id = 8076,  healthValue = 2154, conjured = true },    -- Conjured Sweet Roll (mage rank 6, req 45)
-    { id = 24338, healthValue = 2154 },                     -- Hellfire Spineleaf (drop, req 55)
-    { id = 8950,  healthValue = 2154 },                     -- Homemade Cherry Pie (vendor, req 45)
-    { id = 8952,  healthValue = 2154 },                     -- Roasted Quail (vendor, req 45)
-    { id = 8953,  healthValue = 2154 },                     -- Deep Fried Plantains (vendor, req 45)
+    -- ── 2148 health (req 45–55) ──
+    { id = 8076,  healthValue = 2148, conjured = true },    -- Conjured Sweet Roll (mage rank 6, req 45)
+    { id = 24338, healthValue = 2148 },                     -- Hellfire Spineleaf (drop, req 55)
+    { id = 8950,  healthValue = 2148 },                     -- Homemade Cherry Pie (vendor, req 45)
+    { id = 8952,  healthValue = 2148 },                     -- Roasted Quail (vendor, req 45)
+    { id = 8953,  healthValue = 2148 },                     -- Deep Fried Plantains (vendor, req 45)
 
-    -- ── 1398 health (req 35) ──
-    { id = 8075,  healthValue = 1398, conjured = true },    -- Conjured Sourdough (mage rank 5)
-    { id = 3927,  healthValue = 1398 },                     -- Fine Aged Cheddar (vendor)
-    { id = 4601,  healthValue = 1398 },                     -- Soft Banana Bread (vendor)
+    -- ── 1392 health (req 35) ──
+    { id = 8075,  healthValue = 1392, conjured = true },    -- Conjured Sourdough (mage rank 5)
+    { id = 3927,  healthValue = 1392 },                     -- Fine Aged Cheddar (vendor)
+    { id = 4601,  healthValue = 1392 },                     -- Soft Banana Bread (vendor)
 }
 
 local BUFF_FOOD_BY_STAT = {
