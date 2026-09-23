@@ -63,6 +63,29 @@ WoW.aurasThrow = true
 H.eq(Apotheca.HasFoodBuff(), nil, "a refused aura read is unknown (nil), not false")
 WoW.aurasThrow = false
 
+-- A ready check running when combat starts must not glow a scroll whose
+-- buff it simply cannot see: unknown is not missing. ShowGlow creates
+-- btn.__apothecaGlow, so its absence proves no glow was ever requested.
+WoW.AddItem(1, 1, 10306, 3, "Scroll of Spirit V")
+Apotheca.UpdateAllButtons()
+local spirit = Apotheca.buttons.spiritscroll
+H.check(spirit and spirit.itemID == 10306, "the spirit scroll button holds the scroll")
+
+-- Positive control: out of combat, buff genuinely missing -> it glows.
+WoW.fire("READY_CHECK")
+H.check(spirit.__apothecaGlow ~= nil, "a missing spirit buff glows during a ready check")
+WoW.fire("READY_CHECK_FINISHED")
+
+-- Now: buff present, but combat hides it.
+spirit.__apothecaGlow = nil
+WoW.SetAura("HELPFUL", "Scroll of Spirit", 12177)
+WoW.fire("READY_CHECK")
+H.eq(spirit.__apothecaGlow, nil, "no glow when the buff is visibly present")
+WoW.enterCombat()                       -- PLAYER_REGEN_DISABLED re-evaluates the glows
+H.eq(spirit.__apothecaGlow, nil, "no glow in combat when the aura read is refused")
+WoW.leaveCombat()
+WoW.fire("READY_CHECK_FINISHED")
+
 ------------------------------------------------------------
 -- Events: a rejected registration is reported, not swallowed
 ------------------------------------------------------------

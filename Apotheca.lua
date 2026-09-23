@@ -1444,7 +1444,7 @@ local function UpdateBuffFoodGlow()
     if not btn then return end
     local db  = DB()
     local glowEnabled = db.buffFood and db.buffFood.glowOnMissingBuff
-    if readyCheckActive and glowEnabled and btn.itemID and not Apotheca.HasFoodBuff() then
+    if readyCheckActive and glowEnabled and btn.itemID and Apotheca.HasFoodBuff() == false then
         ShowBuffFoodGlow()
     else
         HideBuffFoodGlow()
@@ -1496,7 +1496,7 @@ local function UpdateScrollGlow()
 
     local spiritBtn = Apotheca.buttons["spiritscroll"]
     if spiritBtn then
-        if readyCheckActive and glowEnabled and spiritBtn.itemID and not Apotheca.HasSpiritBuff() then
+        if readyCheckActive and glowEnabled and spiritBtn.itemID and Apotheca.HasSpiritBuff() == false then
             ShowGlow(spiritBtn)
         else
             HideGlow(spiritBtn)
@@ -1505,7 +1505,7 @@ local function UpdateScrollGlow()
 
     local protBtn = Apotheca.buttons["protectionscroll"]
     if protBtn then
-        if readyCheckActive and glowEnabled and protBtn.itemID and not Apotheca.HasProtectionScrollBuff() then
+        if readyCheckActive and glowEnabled and protBtn.itemID and Apotheca.HasProtectionScrollBuff() == false then
             ShowGlow(protBtn)
         else
             HideGlow(protBtn)

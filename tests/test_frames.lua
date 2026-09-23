@@ -30,6 +30,11 @@ H.check(true, "every event runs out of combat")
 WoW.enterCombat()
 fireAll()
 H.check(true, "every event runs in combat, with auras throwing and health secret")
+-- Worst case, not yet measured: cooldowns and stack counts secret too.
+WoW.combatSecret = true
+fireAll()
+H.check(true, "bag and cooldown refreshes survive secret cooldowns and counts")
+WoW.combatSecret = false
 WoW.leaveCombat()
 fireAll()
 

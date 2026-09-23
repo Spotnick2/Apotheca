@@ -56,6 +56,7 @@ function WoW.reset()
     WoW.power,  WoW.powerMax  = 1000, 1000
     WoW.healthSecret = true      -- measured: secret at rest on 69977
     WoW.aurasThrow   = false     -- combat: index reads throw
+    WoW.combatSecret = false     -- cooldowns and stack counts secret (unmeasured; worst case)
     WoW.auras        = { HELPFUL = {}, HARMFUL = {} }
     WoW.bags         = {}        -- [bag] = { [slot] = { itemID=, stackCount= } }
     WoW.cooldowns    = {}        -- [itemID] = { start, duration }
@@ -280,9 +281,11 @@ end
 function C_Container.GetContainerItemInfo(bag, slot)
     local s = WoW.bags[bag] and WoW.bags[bag][slot]
     if not s then return nil end
-    return { itemID = s.itemID, stackCount = s.stackCount, hyperlink = "item:" .. s.itemID }
+    local count = WoW.combatSecret and Secret() or s.stackCount
+    return { itemID = s.itemID, stackCount = count, hyperlink = "item:" .. s.itemID }
 end
 function C_Container.GetItemCooldown(itemID)
+    if WoW.combatSecret then return Secret(), Secret(), 1 end
     local c = WoW.cooldowns[itemID]
     if c then return c[1], c[2], 1 end
     return 0, 0, 1
