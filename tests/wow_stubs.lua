@@ -319,6 +319,13 @@ function C_Item.GetItemSpell(itemID)
     if WoW.items[itemID] then return "Food", 433 end
 end
 
+C_Spell = C_Spell or {}
+function C_Spell.RequestLoadSpellData() end
+function C_Spell.GetSpellDescription(spellID)
+    if spellID == 433 then return "Restores 61 health over 18 sec." end
+    return ""
+end
+
 C_TooltipInfo = {}
 function C_TooltipInfo.GetItemByID(itemID)
     local name = WoW.items[itemID]

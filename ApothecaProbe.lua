@@ -168,6 +168,77 @@ function Apotheca.RunItemScan()
     end)
 end
 
+-- /apo scan2: second pass. Item tooltips come back without their "Use:"
+-- line until the item's SPELL is loaded, and on the first run most
+-- potions, elixirs, flasks, scrolls and bandages had none. For the
+-- healer-relevant categories, load each item's spell and read its
+-- description directly. Results merge into ApothecaDB.itemScan (as `d`).
+local RELEVANT_SUB = { [1] = true, [2] = true, [3] = true, [4] = true, [5] = true, [7] = true }
+local DESC_TRIES   = 40         -- 0.5 s apart: ~20 s
+
+local function HasUseLine(lines)
+    for _, l in ipairs(lines or {}) do
+        if l:find("^Use:") then return true end
+    end
+    return false
+end
+
+function Apotheca.RunSpellScan()
+    if Apotheca._scanRunning then print(PREFIX .. "scan already running") return end
+    local scan = ApothecaDB and ApothecaDB.itemScan
+    if not scan then print(PREFIX .. "run /apo scan first") return end
+    Apotheca._scanRunning = true
+
+    local queue = {}
+    for id, e in pairs(scan.items) do
+        local oil = e.n and e.n:find("Oil")
+        if (RELEVANT_SUB[e.s] or oil) and e.sp and not HasUseLine(e.t) and not e.d then
+            queue[#queue + 1] = id
+            C_Spell.RequestLoadSpellData(e.sp)
+            C_Item.RequestLoadItemDataByID(id)
+        end
+    end
+    print(PREFIX .. #queue .. " items need their spell text; loading...")
+
+    local head, tries = 1, {}
+    local f = CreateFrame("Frame")
+    f:SetScript("OnUpdate", function(self)
+        local done = 0
+        while done < TIP_PER_FRAME and head <= #queue do
+            local id = queue[head]
+            local e = scan.items[id]
+            if e.retryAt and e.retryAt > GetTime() then break end
+            local okD, desc = pcall(C_Spell.GetSpellDescription, e.sp)
+            local lines = TooltipLines(id)
+            tries[id] = (tries[id] or 0) + 1
+            local got = (okD and desc and desc ~= "") or HasUseLine(lines)
+            if got or tries[id] >= DESC_TRIES then
+                if okD and desc and desc ~= "" then e.d = desc end
+                if lines and HasUseLine(lines) then e.t = lines end
+                e.retryAt = nil
+                head = head + 1
+            else
+                C_Spell.RequestLoadSpellData(e.sp)
+                e.retryAt = GetTime() + 0.5
+                table.remove(queue, head)
+                queue[#queue + 1] = id
+            end
+            done = done + 1
+        end
+        if head > #queue then
+            self:SetScript("OnUpdate", nil)
+            Apotheca._scanRunning = false
+            local still = 0
+            for _, id in ipairs(queue) do
+                local e = scan.items[id]
+                if not e.d and not HasUseLine(e.t) then still = still + 1 end
+            end
+            print(PREFIX .. "spell scan done: " .. #queue .. " items, " .. still
+                  .. " still without text. /reload to write the file.")
+        end
+    end)
+end
+
 function Apotheca.RunProbe()
     log = {}
     local API = Apotheca.API
