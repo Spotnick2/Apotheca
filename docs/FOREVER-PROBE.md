@@ -67,9 +67,20 @@ On specs: the Priest also has one spec (`1487, "Priest", ..., "DAMAGER"`). The r
 - The bar renders with four empty-slot icons (mana, health, food, drink) and no Lua errors.
 - **Forest Mushroom Cap (4604)** has a tooltip reading *"Restores 58 health over 18 sec."* That's 61 in Vanilla, so **Forever's restore values differ from Vanilla's** and can't be copied from a 1.12 database. Issue #4 reads them from the client's tooltip data instead.
 
+## Run 4: 2026-09-23, IN combat (Priest)
+
+| Question | Result |
+|---|---|
+| `ShouldAurasBeSecret` | **true**. `GetAuraDataByIndex` throws *"Auras cannot be accessed when secret while tainted by 'Apotheca'"*, and `API.PlayerAuras` returns nil, as designed. |
+| `ShouldCooldownsBeSecret` | **true**. Item cooldowns are secret in combat. The swipe hands them straight to `SetCooldown` without comparing them (the `/code-review` fix on #7). |
+| Health / power | secret, the same as at rest. `API.PlayerMissing` = `nil, nil`. |
+| **StatusBar readback** | `bar:SetValue(UnitHealth("player"))`, then `bar:GetValue()`, gives `<secret>`. **There is no readback loophole.** Unit frame addons can *display* health, but no addon can *decide* on it. |
+| Stack counts | readable in combat (`stackCount = 8`) |
+| `GetWeaponEnchantInfo` | readable in combat (plain `false`, 12 returns) |
+| `C_Item.UseItemByName("<bogus>")` in combat | no error, and no blocked event. Still inconclusive: a real item is needed. |
+
 ## Still to measure
 
-- **Run 3, in combat:** aura secrecy, cooldown and stack-count secrecy, and `GetWeaponEnchantInfo`.
 - **`C_Item.UseItemByName` on a real item** from the right-click alternate "Use X instead?" popup.
 - **Clicks, on a healer-class character:** one use per click, on left and right click, in and out of combat. This needs an item the bar knows, so it moves to #4.
 - **Elixir and flask stacking.** This needs a character high enough to use them, and waits on issue #4.

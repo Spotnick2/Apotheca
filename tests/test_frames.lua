@@ -52,6 +52,13 @@ SlashCmdList["APOTHECA"]("probe")
 WoW.leaveCombat()
 H.check(true, "every slash command runs, in and out of combat")
 
+-- /apo scan walks the whole item-ID range over many frames.
+SlashCmdList["APOTHECA"]("scan")
+for _ = 1, 200 do WoW.tick(1) end
+local scan = ApothecaDB.itemScan
+H.check(scan and scan.items[13444] and scan.items[13444].t, "the scan records a known consumable with its tooltip")
+H.eq(scan and scan.items[13444].t[2], "Use: Restores 61 health over 18 sec.", "tooltip text is kept verbatim")
+
 -- Every button's scripts.
 for key, btn in pairs(Apotheca.buttons) do
     for _, script in ipairs({ "OnEnter", "OnLeave", "PreClick", "PostClick" }) do

@@ -71,6 +71,103 @@ local TEMPLATES = {
     { "Cooldown",    "CooldownFrameTemplate", nil },
 }
 
+-- ============================================================
+-- /apo scan: the client's own consumable database (issue #4)
+--
+-- Wowhead's Forever database lists names, but Forever changed restore
+-- values, and a database can miss items. So walk every item ID with
+-- C_Item.GetItemInfoInstant (it reads the client's item DB, no cache
+-- needed), keep the consumables (classID 0), then read each one's tooltip
+-- text and item spell. The result lands in ApothecaDB.itemScan, which the
+-- client writes to disk at logout even though it never reads it back;
+-- the item tables are built from that file.
+-- ============================================================
+
+local SCAN_MAX_ID    = 300000   -- Wowhead's highest Forever consumable is ~286k
+local SCAN_PER_FRAME = 3000
+local TIP_PER_FRAME  = 20
+local TIP_TRIES      = 20       -- 0.5 s apart: ~10 s for a slow item load
+
+local function TooltipLines(id)
+    local ok, lines = pcall(function()
+        local data = C_TooltipInfo.GetItemByID(id)
+        if not data or not data.lines then return nil end
+        local out = {}
+        for _, line in ipairs(data.lines) do
+            if line.leftText and line.leftText ~= "" then out[#out + 1] = line.leftText end
+            if line.rightText and line.rightText ~= "" then out[#out + 1] = "  >" .. line.rightText end
+        end
+        return #out > 1 and out or nil   -- a name-only tooltip is not loaded yet
+    end)
+    return ok and lines or nil
+end
+
+function Apotheca.RunItemScan()
+    if Apotheca._scanRunning then
+        print(PREFIX .. "scan already running")
+        return
+    end
+    Apotheca._scanRunning = true
+    local found, order = {}, {}
+    local nextID = 1
+    print(PREFIX .. "scanning item IDs 1-" .. SCAN_MAX_ID .. " for consumables...")
+
+    local f = CreateFrame("Frame")
+    local phase, tipIndex, tries = "ids", 1, {}
+    f:SetScript("OnUpdate", function(self)
+        if phase == "ids" then
+            local last = math.min(nextID + SCAN_PER_FRAME - 1, SCAN_MAX_ID)
+            for id = nextID, last do
+                local itemID, _, subType, _, _, classID, subClassID = C_Item.GetItemInfoInstant(id)
+                if itemID and classID == 0 then
+                    found[id] = { c = classID, s = subClassID, st = subType }
+                    order[#order + 1] = id
+                    C_Item.RequestLoadItemDataByID(id)
+                end
+            end
+            nextID = last + 1
+            if nextID > SCAN_MAX_ID then
+                phase = "tips"
+                print(PREFIX .. #order .. " consumables found; reading tooltips...")
+            end
+        elseif phase == "tips" then
+            local done = 0
+            while done < TIP_PER_FRAME and tipIndex <= #order do
+                local id = order[tipIndex]
+                local e = found[id]
+                -- The queue is FIFO, so if the head was retried too
+                -- recently, everything behind it was too: wait a frame.
+                if e.retryAt and e.retryAt > GetTime() then break end
+                local lines = TooltipLines(id)
+                tries[id] = (tries[id] or 0) + 1
+                if lines or tries[id] >= TIP_TRIES then
+                    e.t, e.retryAt = lines, nil
+                    e.n = C_Item.GetItemInfo(id)
+                    local okSpell, spellName, spellID = pcall(C_Item.GetItemSpell, id)
+                    if okSpell then e.sp, e.spn = spellID, spellName end
+                    tipIndex = tipIndex + 1
+                else
+                    -- Not loaded yet: ask again and move it to the back.
+                    C_Item.RequestLoadItemDataByID(id)
+                    e.retryAt = GetTime() + 0.5
+                    table.remove(order, tipIndex)
+                    order[#order + 1] = id
+                end
+                done = done + 1
+            end
+            if tipIndex > #order then
+                self:SetScript("OnUpdate", nil)
+                Apotheca._scanRunning = false
+                local missing = 0
+                for _, e in pairs(found) do if not e.t then missing = missing + 1 end end
+                ApothecaDB.itemScan = { build = select(2, GetBuildInfo()), items = found }
+                print(PREFIX .. "scan done: " .. #order .. " consumables, " .. missing
+                      .. " without tooltip text. /reload or log out to write the file.")
+            end
+        end
+    end)
+end
+
 function Apotheca.RunProbe()
     log = {}
     local API = Apotheca.API

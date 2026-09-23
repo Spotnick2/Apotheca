@@ -309,6 +309,22 @@ end
 function C_Item.GetItemIconByID(itemID) return WoW.items[itemID] and 134400 or nil end
 function C_Item.GetItemCount(itemID) return 0 end
 function C_Item.UseItemByName(name) WoW.itemsUsed[#WoW.itemsUsed + 1] = name end
+-- Reads the client's item DB: answers for any known ID, cache or not.
+function C_Item.GetItemInfoInstant(itemID)
+    if not WoW.items[itemID] then return nil end
+    return itemID, "Consumable", "Food & Drink", "", 134400, 0, 5
+end
+function C_Item.RequestLoadItemDataByID() end
+function C_Item.GetItemSpell(itemID)
+    if WoW.items[itemID] then return "Food", 433 end
+end
+
+C_TooltipInfo = {}
+function C_TooltipInfo.GetItemByID(itemID)
+    local name = WoW.items[itemID]
+    if not name then return nil end
+    return { lines = { { leftText = name }, { leftText = "Use: Restores 61 health over 18 sec." } } }
+end
 
 C_UnitAuras = {}
 function C_UnitAuras.GetAuraDataByIndex(unit, index, filter)
