@@ -90,7 +90,7 @@ There is **no local build step**. The addon runs directly in the WoW client.
 
 1. **Lua syntax check** — the only validation available outside the game:
    ```
-   luac -p Apotheca.lua Apotheca_Options.lua
+   pwsh tests/run.ps1    # luac -p on every TOC file, then the strict-globals unit tests
    ```
    WoW globals are undefined outside the client, so syntax errors are the only reliable catch.
 2. **In-game testing**: deploy to the client's AddOns folder and log in. Use `/apo debug` to enable debug mode (items are not consumed on click).
@@ -101,7 +101,7 @@ There is **no local build step**. The addon runs directly in the WoW client.
    - New item lists must be ordered highest-rank → lowest.
    - New button keys must be added to `Apotheca.DEFAULT_BUTTON_ORDER` and `Apotheca.ALL_BUTTON_KEYS`.
    - Secure button attribute writes must be guarded with `if not InCombatLockdown() then`.
-   - Secure buttons must register exactly one click edge, and it must be the down edge (`RegisterForClicks("AnyDown")`). This client's secure handler reads `type` on the press and `typerelease` on the release; the addon only ever sets `type`, so `"AnyUp"` alone makes every button dead, and registering both edges runs the handler twice per click.
+   - Secure buttons register **both** mouse edges: `RegisterForClicks(Apotheca.API.ClickEdges())`, which returns `"AnyUp", "AnyDown"`. On WoW: Forever the client's secure handler acts only on the edge where `down == useOnKeyDown`, so one click uses the item once (measured). A single edge is a dead button for anyone on the other `ActionButtonUseKeyDown` setting. Never set `typerelease`: the hold-release path reads it and would use the item twice.
    - Never call WoW Container globals directly — use the shim functions.
 
 ### Local Deploy
@@ -109,7 +109,7 @@ There is **no local build step**. The addon runs directly in the WoW client.
 The live install on this machine is:
 
 ```
-C:\Program Files (x86)\World of Warcraft\_anniversary_\Interface\AddOns\Apotheca\
+C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns\Apotheca\
 ```
 
 Only `Apotheca.lua`, `Apotheca_Options.lua`, and `Apotheca.toc` are deployed there. Two things to watch:

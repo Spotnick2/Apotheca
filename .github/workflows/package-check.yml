@@ -1,0 +1,58 @@
+name: Package check
+
+# Dry run only. -d is the real no-upload switch: merely leaving CF_API_KEY out
+# still lets the packager cut a GitHub release. Publishing is CurseForge's own
+# packager, triggered by the repository webhook on a tag (AGENTS.md).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Syntax-check the Lua
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lua5.1
+          files=$(grep -v '^#' Apotheca.toc | tr -d '\r' | sed '/^$/d')
+          luac5.1 -p $files
+
+      - name: Unit tests
+        run: |
+          for f in tests/test_*.lua; do
+            echo "-- $f"
+            lua5.1 "$f" || exit 1
+          done
+
+      # Same packager SHA as Priestly, which carries Forever flavor support.
+      - name: Package (dry run)
+        uses: BigWigsMods/packager@e50a250f8705041e40f2fa1ddcb280a686d65aa0
+        with:
+          args: -d
+
+      # The zip must hold the TOC and the Lua it lists, and nothing else.
+      - name: The package ships only the addon files
+        run: |
+          zip=$(ls .release/*.zip | head -1)
+          rm -rf unpacked && mkdir unpacked && unzip -q "$zip" -d unpacked
+          { echo Apotheca.toc; grep -v '^#' Apotheca.toc | tr -d '\r' | sed '/^$/d'; } | sort > expected.txt
+          (cd unpacked/Apotheca && find . -type f | sed 's|^\./||' | sort) > actual.txt
+          diff -u expected.txt actual.txt
+
+      # .release is hidden; upload-artifact skips hidden content by default.
+      - name: Keep the zip for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: apotheca-package
+          path: .release/*.zip
+          include-hidden-files: true
+          if-no-files-found: error

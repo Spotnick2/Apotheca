@@ -165,9 +165,25 @@ function Apotheca.BuildOptionsPanelContent(panel)
         curH = curH + fs:GetStringHeight() + 4
     end
 
+    -- Greys out widgets for a feature this client cannot support.
+    local function DisableWidgets(widgets)
+        for _, w in ipairs(widgets) do
+            w:Disable()
+            if w.label then w.label:SetTextColor(0.5, 0.5, 0.5) end
+        end
+    end
+
     local function Checkbox(labelText, getter, setter, indent)
         local cb = CreateFrame("CheckButton", nil, curContent, "InterfaceOptionsCheckButtonTemplate")
         cb:SetPoint("TOPLEFT", curContent, "TOPLEFT", PAD + (indent or 0), Y())
+        -- A missing template does not throw on this client; it returns a bare
+        -- frame. The template is measured present, but give the label a
+        -- home anyway so a future client cannot block the whole panel.
+        if not cb.Text then
+            cb.Text = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            cb.Text:SetPoint("LEFT", cb, "RIGHT", 2, 0)
+        end
+        cb.label = cb.Text
         cb.Text:SetText(labelText)
         local function Sync() cb:SetChecked(getter() == true) end
         Sync()
@@ -179,6 +195,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
         end)
         refreshCallbacks[#refreshCallbacks + 1] = Sync
         curH = curH + 24
+        return cb
     end
 
     local function RadioGroup(options, getter, setter)
@@ -191,6 +208,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
             local lbl = rb:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
             lbl:SetPoint("LEFT", rb, "RIGHT", 4, 0)
             lbl:SetText(opt.label)
+            rb.label = lbl
             rb:SetScript("OnClick", function(self)
                 setter(self.value)
                 for _, r in ipairs(radios) do r:SetChecked(r.value == self.value) end
@@ -206,6 +224,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
         Sync()
         refreshCallbacks[#refreshCallbacks + 1] = Sync
         Gap(4)
+        return radios
     end
 
     local sliderN = 0
@@ -314,7 +333,9 @@ function Apotheca.BuildOptionsPanelContent(panel)
     Checkbox("Enable Apotheca",
         function() return DBGet("enabled") ~= false end,
         function(v) DBSet(v, "enabled") end)
-    Checkbox("Only show in healing spec",
+    -- Forever has one spec per class and no talent trees, so "healer"
+    -- can only mean the class.
+    Checkbox("Only show on healer classes  |cff888888(Priest, Paladin, Shaman, Druid)|r",
         function() return DBGet("showOnlyHealingSpec") ~= false end,
         function(v) DBSet(v, "showOnlyHealingSpec") end)
     Checkbox("Always show empty buttons  |cff888888(show all slots even if bag is empty)|r",
@@ -324,9 +345,18 @@ function Apotheca.BuildOptionsPanelContent(panel)
         function() return DBGet("lockPosition") == true end,
         function(v) DBSet(v, "lockPosition") end)
 
+    -- WoW: Forever hides the player's current health and mana from addons,
+    -- even out of combat (docs/FOREVER-PROBE.md). Features that need to know
+    -- whether you are full stay in the code but are greyed out, and come
+    -- back by themselves if the client ever allows the read.
+    local healthReadable = Apotheca.API.PlayerMissing() ~= nil
+    local UNAVAILABLE = "|cffff6666Unavailable on this client: WoW: Forever does not let "
+        .. "addons read your current health or mana.|r"
+
     SectionHeader("Waste Prevention")
     SmallLabel("When at full health/mana, recovery buttons:")
-    RadioGroup(
+    if not healthReadable then SmallLabel(UNAVAILABLE) end
+    local wasteRadios = RadioGroup(
         {
             { value = "BLOCK",      label = "Block usage  |cff888888(silently disable button)|r" },
             { value = "ASK",        label = "Ask first  |cff888888(confirmation dialog)|r" },
@@ -334,16 +364,19 @@ function Apotheca.BuildOptionsPanelContent(panel)
         },
         function() return DBGet("preventWasteMode") or "BLOCK" end,
         function(v) DBSet(v, "preventWasteMode") end)
+    if not healthReadable then DisableWidgets(wasteRadios) end
 
     SectionHeader("Right-Click Alternate")
     SmallLabel("When waste prevention shows a popup, right-clicking food/drink uses the alternate item instead:")
-    RadioGroup(
+    if not healthReadable then SmallLabel(UNAVAILABLE) end
+    local altRadios = RadioGroup(
         {
             { value = "OFF",    label = "Off  |cff888888(right-click uses same item)|r" },
             { value = "ASK",    label = "Ask first  |cff888888(confirmation dialog for alternate)|r" },
         },
         function() return DBGet("rightClickAlternate") or "OFF" end,
         function(v) DBSet(v, "rightClickAlternate") end)
+    if not healthReadable then DisableWidgets(altRadios) end
     Gap(4)
     Slider("Conjured preference threshold", 1.0, 3.0, 0.1,
         function() return DBGet("conjuredThreshold") or 1.5 end,
@@ -499,9 +532,13 @@ function Apotheca.BuildOptionsPanelContent(panel)
             DBSet(v, "healthstone", "enabled")
             Apotheca.ResetLayout()
         end)
-    Checkbox("Suggest the stone that fits your missing health",
+    local smartCB = Checkbox("Suggest the stone that fits your missing health",
         function() return DBGet("healthstone", "smartRank") ~= false end,
         function(v) DBSet(v, "healthstone", "smartRank") end)
+    if not healthReadable then
+        DisableWidgets({ smartCB })
+        SmallLabel(UNAVAILABLE)
+    end
     SmallLabel("|cff888888All healthstone ranks share one cooldown, so this offers the\n"
         .. "smallest stone that still tops you off. Off = always the strongest.|r")
     Gap(4)

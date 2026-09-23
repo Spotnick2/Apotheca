@@ -151,7 +151,15 @@ end
 
 -- Initialize ApothecaDB on ADDON_LOADED.
 -- Wrapped in pcall so a corrupted SavedVariables file never crashes the addon.
+-- SavedVariables are written but never read back on this client
+-- (PORTING-TBC-TO-FOREVER.md section 1). svLoadCheck is written every
+-- session and is never in PROFILE_DEFAULTS, so finding it at load means
+-- the client really read the file, which makes it the "is it fixed yet" check.
+-- It must never be given a default.
+local svLoaded = false
+
 local function InitDB()
+    svLoaded = type(ApothecaDB) == "table" and ApothecaDB.svLoadCheck ~= nil
     local ok, err = pcall(function()
         if type(ApothecaDB) ~= "table" then ApothecaDB = {} end
 
@@ -2641,6 +2649,21 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         -- Safe to build the options panel here — no loading-screen crash risk.
         -- DB is already initialised by ADDON_LOADED above.
         Apotheca.CreateOptionsPanel()
+
+        if not svLoaded then
+            print("|cff9966ffApotheca:|r WoW: Forever does not load addon settings yet, "
+                  .. "so your Apotheca settings are back to defaults this session.")
+        end
+        ApothecaDB.svLoadCheck = time()
+
+        -- The adapters were measured on one client build. On any other,
+        -- say so: the findings behind them may be stale.
+        local build = Apotheca.API.ClientBuild()
+        if build and build ~= Apotheca.API.MEASURED_ON_BUILD then
+            print("|cff9966ffApotheca:|r this client build (" .. build .. ") is different from "
+                  .. "the one Apotheca was tested on (" .. Apotheca.API.MEASURED_ON_BUILD
+                  .. "). If something looks wrong, please report it.")
+        end
 
     elseif event == "PLAYER_ENTERING_WORLD" then
         playerReady = true

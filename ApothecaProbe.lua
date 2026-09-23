@@ -90,6 +90,17 @@ function Apotheca.RunProbe()
     try("UnitPowerPercent", function() return UnitPowerPercent("player") end)
     try("compare UnitHealthMissing == 0", function() return UnitHealthMissing("player") == 0 end)
     try("API.PlayerMissing", function() return API.PlayerMissing() end)
+    -- Unit frame addons DISPLAY secret health by handing it to a widget.
+    -- Does the widget hand back a plain number? If so, that is a readback.
+    try("StatusBar readback of UnitHealth", function()
+        local bar = Apotheca._probeBar or CreateFrame("StatusBar", nil, UIParent)
+        Apotheca._probeBar = bar
+        bar:Hide()
+        bar:SetMinMaxValues(0, UnitHealthMax("player"))
+        bar:SetValue(UnitHealth("player"))
+        local v = bar:GetValue()
+        return v, issecretvalue and issecretvalue(v)
+    end)
     try("API.PlayerAuras is nil (blocked)", function() return API.PlayerAuras("HELPFUL") == nil end)
     try("GetWeaponEnchantInfo", function() return GetWeaponEnchantInfo() end)
 
