@@ -38,13 +38,18 @@ local function describe(...)
     return table.concat(parts, ", ")
 end
 
-local function try(key, fn)
-    local packed = { pcall(fn) }
-    if packed[1] then
-        out(key, describe(unpack(packed, 2, table.maxn(packed))))
+-- select("#") keeps trailing nils, so "returned nil" and "returned
+-- nothing" stay distinct: C_Item.GetItemInfo's cache miss is the latter.
+local function report(key, ok, ...)
+    if ok then
+        out(key, describe(...))
     else
-        out(key, "ERROR: " .. tostring(packed[2]))
+        out(key, "ERROR: " .. tostring((...)))
     end
+end
+
+local function try(key, fn)
+    report(key, pcall(fn))
 end
 
 -- ADDON_ACTION_BLOCKED / FORBIDDEN are how the client reports a protected

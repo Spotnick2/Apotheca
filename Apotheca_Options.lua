@@ -163,14 +163,28 @@ function Apotheca.BuildOptionsPanelContent(panel)
         fs:SetWidth(CONTENT_W - PAD * 2)
         fs:SetJustifyH("LEFT")
         curH = curH + fs:GetStringHeight() + 4
+        return fs
     end
 
-    -- Greys out widgets for a feature this client cannot support.
-    local function DisableWidgets(widgets)
-        for _, w in ipairs(widgets) do
-            w:Disable()
-            if w.label then w.label:SetTextColor(0.5, 0.5, 0.5) end
+    -- Ties widgets to a feature the client may not support. `readable` is
+    -- asked again every time the panel is shown, so the widgets come back by
+    -- themselves if the client ever allows the read, and a panel first opened
+    -- at a bad moment is corrected on the next open.
+    local UNAVAILABLE = "|cffff6666Unavailable on this client: WoW: Forever does not let "
+        .. "addons read your current health or mana.|r"
+    local function RequireReadable(widgets, readable, note)
+        local function Sync()
+            local ok = readable()
+            for _, w in ipairs(widgets) do
+                if ok then w:Enable() else w:Disable() end
+                if w.label then
+                    if ok then w.label:SetTextColor(1, 1, 1) else w.label:SetTextColor(0.5, 0.5, 0.5) end
+                end
+            end
+            note:SetText(ok and "" or UNAVAILABLE)
         end
+        Sync()
+        refreshCallbacks[#refreshCallbacks + 1] = Sync
     end
 
     local function Checkbox(labelText, getter, setter, indent)
@@ -347,15 +361,18 @@ function Apotheca.BuildOptionsPanelContent(panel)
 
     -- WoW: Forever hides the player's current health and mana from addons,
     -- even out of combat (docs/FOREVER-PROBE.md). Features that need to know
-    -- whether you are full stay in the code but are greyed out, and come
-    -- back by themselves if the client ever allows the read.
-    local healthReadable = Apotheca.API.PlayerMissing() ~= nil
-    local UNAVAILABLE = "|cffff6666Unavailable on this client: WoW: Forever does not let "
-        .. "addons read your current health or mana.|r"
+    -- whether you are full stay in the code but are greyed out.
+    local function HealthReadable()
+        return (Apotheca.API.PlayerMissing()) ~= nil
+    end
+    local function EitherReadable()
+        local h, m = Apotheca.API.PlayerMissing()
+        return h ~= nil or m ~= nil
+    end
 
     SectionHeader("Waste Prevention")
     SmallLabel("When at full health/mana, recovery buttons:")
-    if not healthReadable then SmallLabel(UNAVAILABLE) end
+    local wasteNote = SmallLabel(UNAVAILABLE)
     local wasteRadios = RadioGroup(
         {
             { value = "BLOCK",      label = "Block usage  |cff888888(silently disable button)|r" },
@@ -364,11 +381,11 @@ function Apotheca.BuildOptionsPanelContent(panel)
         },
         function() return DBGet("preventWasteMode") or "BLOCK" end,
         function(v) DBSet(v, "preventWasteMode") end)
-    if not healthReadable then DisableWidgets(wasteRadios) end
+    RequireReadable(wasteRadios, EitherReadable, wasteNote)
 
     SectionHeader("Right-Click Alternate")
     SmallLabel("When waste prevention shows a popup, right-clicking food/drink uses the alternate item instead:")
-    if not healthReadable then SmallLabel(UNAVAILABLE) end
+    local altNote = SmallLabel(UNAVAILABLE)
     local altRadios = RadioGroup(
         {
             { value = "OFF",    label = "Off  |cff888888(right-click uses same item)|r" },
@@ -376,7 +393,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
         },
         function() return DBGet("rightClickAlternate") or "OFF" end,
         function(v) DBSet(v, "rightClickAlternate") end)
-    if not healthReadable then DisableWidgets(altRadios) end
+    RequireReadable(altRadios, EitherReadable, altNote)
     Gap(4)
     Slider("Conjured preference threshold", 1.0, 3.0, 0.1,
         function() return DBGet("conjuredThreshold") or 1.5 end,
@@ -535,10 +552,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
     local smartCB = Checkbox("Suggest the stone that fits your missing health",
         function() return DBGet("healthstone", "smartRank") ~= false end,
         function(v) DBSet(v, "healthstone", "smartRank") end)
-    if not healthReadable then
-        DisableWidgets({ smartCB })
-        SmallLabel(UNAVAILABLE)
-    end
+    RequireReadable({ smartCB }, HealthReadable, SmallLabel(UNAVAILABLE))
     SmallLabel("|cff888888All healthstone ranks share one cooldown, so this offers the\n"
         .. "smallest stone that still tops you off. Off = always the strongest.|r")
     Gap(4)

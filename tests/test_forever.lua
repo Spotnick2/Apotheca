@@ -86,6 +86,28 @@ H.eq(spirit.__apothecaGlow, nil, "no glow in combat when the aura read is refuse
 WoW.leaveCombat()
 WoW.fire("READY_CHECK_FINISHED")
 
+-- A ready check called mid-fight glows once the fight ends, if the check
+-- is still open.
+WoW.auras.HELPFUL = {}
+spirit.__apothecaGlow = nil
+WoW.enterCombat()
+WoW.fire("READY_CHECK")
+H.eq(spirit.__apothecaGlow, nil, "nothing glows while the check starts in combat")
+WoW.leaveCombat()
+WoW.tick(1) ; WoW.tick(1)
+H.check(spirit.__apothecaGlow ~= nil, "the missing buff glows after combat, check still open")
+WoW.fire("READY_CHECK_FINISHED")
+
+------------------------------------------------------------
+-- Health and mana are unknown independently
+------------------------------------------------------------
+WoW.healthSecret = false
+WoW.health, WoW.power = 900, 1000
+local mh, mm = Apotheca.API.PlayerMissing()
+H.eq(mh, 100, "readable health, 100 missing")
+H.eq(mm, 0, "readable mana, full")
+WoW.healthSecret = true
+
 ------------------------------------------------------------
 -- Events: a rejected registration is reported, not swallowed
 ------------------------------------------------------------
@@ -96,11 +118,15 @@ local ok, failed = Apotheca.API.RegisterEvents(f, "BAG_UPDATE", "NOT_AN_EVENT", 
 H.eq(ok, false, "RegisterEvents reports failure")
 H.eq(#failed, 2, "both a throw and a false return count as failures")
 H.check(H.messagesMatching("NOT_AN_EVENT") > 0, "the rejected event is printed")
+WoW.badEvents.UNIT_BOGUS = true
+local uok, ufailed = Apotheca.API.RegisterUnitEvents(f, "player", "UNIT_HEALTH", "UNIT_BOGUS")
+H.eq(uok, false, "RegisterUnitEvents reports a rejected unit event")
+H.eq(ufailed[1], "UNIT_BOGUS", "and names it")
 
 ------------------------------------------------------------
 -- SavedVariables: sentinel detection
 ------------------------------------------------------------
-H.check(H.messagesMatching("does not load addon settings") == 1,
+H.check(H.messagesMatching("no saved settings were loaded") == 1,
     "players are told settings reset when nothing loaded")
 
 H.done("test_forever")

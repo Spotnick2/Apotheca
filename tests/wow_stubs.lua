@@ -29,8 +29,16 @@ WoW.events = {}       -- [frame] = { [event] = true }
 --
 -- On Forever, the player's current health and power are secret even out
 -- of combat (docs/FOREVER-PROBE.md). A secret here is a table whose
--- arithmetic yields another secret and whose comparison with a number
--- throws, which Lua 5.1 does by itself for table < number.
+-- arithmetic yields another secret and whose ORDERING comparison with a
+-- number throws, which Lua 5.1 does by itself for table < number.
+--
+-- KNOWN GAP: the real client also throws on `secret == x` and on truth
+-- tests (`if secret`, `secret or 0`). Lua 5.1 cannot model either: __eq is
+-- ignored between a table and a number, and a table is always truthy. So
+-- these tests cannot catch an equality or truth test on a secret. Review
+-- for that by hand: every read of health, power, cooldowns, counts, auras
+-- or GetWeaponEnchantInfo belongs inside a pcall together with every
+-- comparison made on it.
 ------------------------------------------------------------
 
 local secretMT = {}

@@ -2,28 +2,40 @@
 
 ## What This Repository Is
 
-**Apotheca** is a World of Warcraft addon targeting **TBC Classic / Classic Anniversary** (interface version `20505`). It displays a smart consumable action bar for healers that automatically scans bags and presents the best available potions, food, drink, buff food, scrolls, weapon oils, elixirs/flasks, and bandages as clickable buttons. There is no build system, no compiler, and no test runner — this is pure Lua executed directly by the WoW game client.
+**Apotheca** is a World of Warcraft addon targeting **WoW: Forever 1.60.1** (interface `16001`): Vanilla content running on Blizzard's Retail (Mainline) API. It displays a smart consumable action bar for healers that automatically scans bags and presents the best available potions, food, drink, buff food, scrolls, weapon oils, elixirs/flasks, and bandages as clickable buttons. There is no build system and no compiler: it is pure Lua executed by the game client, with an offline Lua 5.1 test suite in `tests/`.
+
+**TBC Classic Anniversary is no longer supported.** v1.0.5 was the final TBC release; it stays on CurseForge for Anniversary players, and the code is archived on the `tbc-anniversary` branch / `v1.0.5` tag. Do not add flavor branching for it.
+
+Read `C:\Projects\References\PORTING-TBC-TO-FOREVER.md` before touching an unfamiliar API, and `docs/FOREVER-PROBE.md` for what was measured in game for this addon. The full declared API surface is `C:\Projects\References\forever-api-1.60.1.69977.md`.
 
 ## Repository Layout
 
 ```
 Apotheca.toc           — WoW addon manifest (interface version, files list, SavedVariables)
-Apotheca.lua           — Main addon (~2600 lines): all logic, item data, frame creation, events
-Apotheca_Options.lua   — In-game options panel (~620 lines): tabbed UI, DB read/write helpers
+ApothecaCompat.lua     — Apotheca.API: every moved or removed API; loads first
+Apotheca.lua           — Main addon: all logic, item data, frame creation, events
+Apotheca_Options.lua   — In-game options panel: tabbed UI, DB read/write helpers
+ApothecaProbe.lua      — throwaway /apo probe measurement tool (remove before release, #5)
 .pkgmeta               — BigWigs packager config (release packaging only, not used locally)
+tests/                 — Lua 5.1 unit tests against a strict-globals stub; tests/run.ps1
+Tools/deploy.ps1       — deploy to the local Forever AddOns folder
+docs/FOREVER-PROBE.md  — in-game measurements this addon depends on
+.github/workflows/     — package-check: luac, tests, dry-run package, zip contents
 CHANGELOG.md           — Version history
 README.md              — Feature overview and slash command docs
 AGENTS.md              — This file
 CLAUDE.md              — Pointer to this file
 ```
 
-No subdirectories. No external libraries. No generated files.
+No external libraries. No generated files.
 
 ## Language & Runtime
 
 - **Language**: Lua 5.1 (WoW's embedded Lua engine)
-- **WoW API target**: TBC Classic Anniversary (`Interface: 20505`)
-- **Container API shims**: Both `C_Container.*` (newer) and legacy globals (`GetContainerNumSlots`, etc.) are supported via shims at the top of `Apotheca.lua` — always use the shim functions (`ContainerGetNumSlots`, `ContainerGetItemLink`, `ContainerGetCount`, `SafeGetItemCooldown`), never call WoW globals directly in new code.
+- **WoW API target**: WoW: Forever, Retail/Mainline API (`Interface: 16001`; the format is `%d%02d%02d`, and `11601` is a transposed-digit bug)
+- **Compat layer**: every moved API goes through `Apotheca.API` in `ApothecaCompat.lua` (item info/icon, container reads, item cooldown, auras, health/mana, event registration, click edges). Call through the table at call time; `Apotheca.lua` keeps thin local wrappers (`ContainerGetNumSlots`, `ContainerGetItemID`, `ContainerGetCount`, `SafeGetItemCooldown`, `GetItemInfo`) that do exactly that. Never call a removed global, and never call a WoW container or item global directly in new code.
+- **Secret values**: the player's current health and mana are secret **even out of combat** on build 69977, and comparing one throws. Auras throw in combat. `API.PlayerMissing()` and `API.PlayerAuras()` return nil for "unknown"; callers must treat nil as unknown, never as missing or full (`== false`, not `not`). Health-dependent features (waste prevention, right-click alternate, smart healthstone) stay in the code but are dormant and greyed out while the read is refused.
+- **SavedVariables do not load back on this client.** Everything resets at login. `ApothecaDB.svLoadCheck` is written every session and must never be given a default: finding it at load is how the fix will be noticed.
 - **No external dependencies**: No LibStub, no AceDB, no Ace3 libraries.
 
 ## Architecture
@@ -92,7 +104,7 @@ There is **no local build step**. The addon runs directly in the WoW client.
    ```
    pwsh tests/run.ps1    # luac -p on every TOC file, then the strict-globals unit tests
    ```
-   WoW globals are undefined outside the client, so syntax errors are the only reliable catch.
+   `tests/wow_stubs.lua` fails the run on the read of any global it does not stub: it is the list of APIs verified present on this client. Stub a new global only after confirming it in the API dump, and list removed names in `KNOWN_ABSENT`. Known gap: Lua 5.1 cannot make `secret == x` or a truth test throw, so review those by hand.
 2. **In-game testing**: deploy to the client's AddOns folder and log in. Use `/apo debug` to enable debug mode (items are not consumed on click).
 3. **Checklist for any change**:
    - New settings must be added to `PROFILE_DEFAULTS` with a default value.
@@ -102,7 +114,8 @@ There is **no local build step**. The addon runs directly in the WoW client.
    - New button keys must be added to `Apotheca.DEFAULT_BUTTON_ORDER` and `Apotheca.ALL_BUTTON_KEYS`.
    - Secure button attribute writes must be guarded with `if not InCombatLockdown() then`.
    - Secure buttons register **both** mouse edges: `RegisterForClicks(Apotheca.API.ClickEdges())`, which returns `"AnyUp", "AnyDown"`. On WoW: Forever the client's secure handler acts only on the edge where `down == useOnKeyDown`, so one click uses the item once (measured). A single edge is a dead button for anyone on the other `ActionButtonUseKeyDown` setting. Never set `typerelease`: the hold-release path reads it and would use the item twice.
-   - Never call WoW Container globals directly — use the shim functions.
+   - Never call WoW container or item globals directly: go through `Apotheca.API`.
+   - Register events through `Apotheca.API.RegisterEvents` / `RegisterUnitEvents`, which report a rejected event instead of throwing or failing silently.
 
 ### Local Deploy
 
@@ -112,10 +125,9 @@ The live install on this machine is:
 C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns\Apotheca\
 ```
 
-Only `Apotheca.lua`, `Apotheca_Options.lua`, and `Apotheca.toc` are deployed there. Two things to watch:
+Deploy with `pwsh Tools/deploy.ps1`. It copies the TOC and every Lua file it lists, and writes `## Version: dev` into the installed TOC only.
 
-- The installed `.toc` needs a real version string in place of `@project-version@`, or the raw token shows in the addon list.
-- Check the installed files against the repo before overwriting. They have diverged before — local edits were made directly in the AddOns folder and existed nowhere in git.
+Installed files have diverged from the repo before (local edits made in the AddOns folder that existed nowhere in git). The script records a hash of everything it writes and refuses to overwrite a file changed since. Bring such edits into git first; `-Force` overrides.
 
 ## Key Conventions
 
@@ -123,6 +135,6 @@ Only `Apotheca.lua`, `Apotheca_Options.lua`, and `Apotheca.toc` are deployed the
 - **Fallback icon**: `"Interface\\Icons\\INV_Misc_QuestionMark"`
 - **Options panel**: Built lazily on first `OnShow` in `Apotheca_Options.lua`. DB helpers `DBGet(...)` and `DBSet(value, ...)` accept vararg key paths into the active profile.
 - **No libraries**: Do not introduce LibStub, Ace3, or any other library dependencies.
-- **Healer classes**: `PRIEST`, `PALADIN`, `SHAMAN`, `DRUID` — defined in `HEALER_SPEC` and `HEALER_CLASSES`.
+- **Healer classes**: `PRIEST`, `PALADIN`, `SHAMAN`, `DRUID`, in `HEALER_CLASSES`. Forever has one spec per class and no talent trees, so the class is the only healer signal.
 
 Trust these instructions. Only search the codebase if the information here is incomplete or appears to be incorrect for the specific change you are making.

@@ -108,29 +108,32 @@ end
 -- ------------------------------------------------------------
 -- Secret values
 --
--- Health, power and cooldowns may be secret in combat on this client.
--- Run the whole calculation through Safe(): it returns ok, results...
--- and never lets a secret-value error escape.
+-- The player's current health and power are secret on this client, even
+-- out of combat (docs/FOREVER-PROBE.md); cooldowns and counts may be in
+-- combat. A secret must never reach a comparison outside a pcall.
 -- ------------------------------------------------------------
 
-function API.Safe(fn, ...)
-    return pcall(fn, ...)
+-- Missing health and missing MANA as plain numbers, each nil when the
+-- client would not hand it over. Read separately: the two secrecy switches
+-- are independent (measured), and mana is asked for by power type so a
+-- shapeshifted druid's energy or rage is never mistaken for it.
+local function missing(cur, max)
+    local ok, m = pcall(function()
+        local v = (max() or 0) - (cur() or 0)
+        -- Comparing a secret is what throws; do it here, inside the pcall.
+        local _ = v > 0
+        return v
+    end)
+    if ok then return m end
+    return nil
 end
 
--- Missing health and mana as plain numbers, or nil, nil when the client
--- would not hand them over. Callers decide what "unknown" means.
 function API.PlayerMissing()
-    local ok, hp, mana = pcall(function()
-        local h = (UnitHealthMax("player") or 0) - (UnitHealth("player") or 0)
-        local m = (UnitPowerMax("player") or 0) - (UnitPower("player") or 0)
-        -- Arithmetic on a secret may still yield a secret; comparing one
-        -- is what throws. Compare here, inside the pcall, so a secret can
-        -- never reach a caller's comparison.
-        local _ = (h > 0), (m > 0)
-        return h, m
-    end)
-    if not ok then return nil, nil end
-    return hp, mana
+    local mana = Enum and Enum.PowerType and Enum.PowerType.Mana or 0
+    return missing(function() return UnitHealth("player") end,
+                   function() return UnitHealthMax("player") end),
+           missing(function() return UnitPower("player", mana) end,
+                   function() return UnitPowerMax("player", mana) end)
 end
 
 -- ------------------------------------------------------------
@@ -155,8 +158,6 @@ end
 -- a missing handler must not ship silently.
 -- ------------------------------------------------------------
 
-API.eventFailures = {}
-
 function API.RegisterEvents(frame, ...)
     local failed = {}
     for i = 1, select("#", ...) do
@@ -164,8 +165,21 @@ function API.RegisterEvents(frame, ...)
         local ok, registered = pcall(frame.RegisterEvent, frame, event)
         if not ok or registered == false then
             failed[#failed + 1] = event
-            API.eventFailures[#API.eventFailures + 1] = event
         end
+    end
+    if #failed > 0 then
+        print(PREFIX .. "this client rejected event(s): " .. table.concat(failed, ", "))
+    end
+    return #failed == 0, failed
+end
+
+-- Same, for events registered to one unit.
+function API.RegisterUnitEvents(frame, unit, ...)
+    local failed = {}
+    for i = 1, select("#", ...) do
+        local event = select(i, ...)
+        local ok, registered = pcall(frame.RegisterUnitEvent, frame, event, unit)
+        if not ok or registered == false then failed[#failed + 1] = event end
     end
     if #failed > 0 then
         print(PREFIX .. "this client rejected event(s): " .. table.concat(failed, ", "))
@@ -194,9 +208,4 @@ end
 
 function API.ClientBuild()
     return tonumber((select(2, GetBuildInfo())))
-end
-
-function API.AddonVersion()
-    local fn = C_AddOns and C_AddOns.GetAddOnMetadata
-    return fn and fn("Apotheca", "Version") or "?"
 end
