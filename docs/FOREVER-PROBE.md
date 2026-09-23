@@ -62,9 +62,14 @@ UnitHealthMissing("player") == 0
 
 On specs: the Priest also has one spec (`1487, "Priest", ..., "DAMAGER"`). The role reads `DAMAGER` even for a Priest, so neither the spec nor the role says who heals.
 
+## Run 3: 2026-09-23, the bar itself (Priest, level 3)
+
+- The bar renders with four empty-slot icons (mana, health, food, drink) and no Lua errors.
+- **Forest Mushroom Cap (4604)** has a tooltip reading *"Restores 58 health over 18 sec."* That's 61 in Vanilla, so **Forever's restore values differ from Vanilla's** and can't be copied from a 1.12 database. Issue #4 reads them from the client's tooltip data instead.
+
 ## Still to measure
 
 - **Run 3, in combat:** aura secrecy, cooldown and stack-count secrecy, and `GetWeaponEnchantInfo`.
 - **`C_Item.UseItemByName` on a real item** from the right-click alternate "Use X instead?" popup.
-- **Clicks, on a healer-class character:** one use per click, on left and right click, in and out of combat.
+- **Clicks, on a healer-class character:** one use per click, on left and right click, in and out of combat. This needs an item the bar knows, so it moves to #4.
 - **Elixir and flask stacking.** This needs a character high enough to use them, and waits on issue #4.
