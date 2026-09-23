@@ -36,24 +36,18 @@ local PROFILE_DEFAULTS = {
         allowSubstitutions = true,
         strictBestOnly     = false,
     },
+    -- Buff food stat categories considered at all (keys as in
+    -- ApothecaItems.lua BUFF_FOOD_BY_STAT).
     categories = {
-        healing = true,
-        mp5     = true,
-        crit    = true,
-        stamina = true,
+        healing = true, spellDmg = true, intellect = true, spirit = true,
+        stamina = true, strength = true, agility = true, attackPower = true,
+        crit = true, armor = true,
     },
-    -- Ordered stat priority per class (indices 1-4 = slot order)
-    buffFoodPriority = {
-        PRIEST  = { "healing", "mp5",  "crit", "stamina" },
-        PALADIN = { "healing", "crit", "mp5",  "stamina" },
-        SHAMAN  = { "healing", "mp5",  "crit", "stamina" },
-        DRUID   = { "healing", "mp5",  "crit", "stamina" },
-    },
+    -- Ordered stat priority per class (indices 1-4 = slot order). Empty:
+    -- the class's role profile decides (Apotheca.GetRoleProfile).
+    buffFoodPriority = {},
     elixirs = {
         enabled        = true,
-        mode           = "AUTO",
-        allowLower     = true,
-        allowMageblood = true,
     },
     scrolls = {
         enabled           = true,
@@ -296,7 +290,7 @@ function Apotheca.GetStatPriority()
     local db = DB()
     local p  = db.buffFoodPriority
     if p and p[className] then return p[className] end
-    return PROFILE_DEFAULTS.buffFoodPriority[className]
+    return Apotheca.GetRoleProfile().buffFood
 end
 
 function Apotheca.IsVisible()
@@ -309,51 +303,21 @@ end
 
 -- ============================================================
 -- ITEM DATA
+-- Generated from the client's own tooltips into ApothecaItems.lua
+-- (Tools/build_item_tables.py). Edit the generator, not the data.
 -- ============================================================
 
-local MANA_ITEMS     = {
-    -- Instance-restricted (see ZONE_RESTRICTED_ITEMS) — filtered out of
-    -- FindBestItem unless the player is actually in the matching instance.
-    32902,  -- Bottled Nethergon Energy  (Tempest Keep only)
-    32903,  -- Cenarion Mana Salve       (Coilfang Reservoir only)
-    32948,  -- Auchenai Mana Potion      (Auchindoun only)
-    -- Unrestricted
-    22832,  -- Super Mana Potion
-    33093,  -- Mana Potion Injector
-    13444,  -- Major Mana Potion
-    6149,   -- Greater Mana Potion
-}
-local HEALTH_ITEMS   = {
-    -- Potions only — healthstones are scanned separately in
-    -- FindBestHealthConsumable via HEALTHSTONE_ITEMS.
-    -- Instance-restricted (see ZONE_RESTRICTED_ITEMS).
-    32905,  -- Bottled Nethergon Vapor   (Tempest Keep only)
-    32904,  -- Cenarion Healing Salve    (Coilfang Reservoir only)
-    32947,  -- Auchenai Healing Potion   (Auchindoun only)
-    -- Unrestricted
-    22829,  -- Super Healing Potion
-    22795,  -- Fel Regeneration Potion
-    22797,  -- Super Rejuvenation Potion
-    13446,  -- Major Healing Potion
-    3928,   -- Superior Healing Potion
-    1710,   -- Greater Healing Potion
-}
-local RUNE_ITEMS     = { 12662, 20520 }
--- Combined food+drink items only (restore health AND mana). Conjured Cinnamon
--- Roll (22895) restores health only, so it lives in FOOD_ITEMS instead.
-local CONJURED_ITEMS = { 34062 }  -- Conjured Manna Biscuit (mage, req 65)
+local DATA = Apotheca.DATA
 
-local DRINK_ITEMS = {
-    { id = 22018, manaValue = 7200, conjured = true },  -- Conjured Glacier Water (mage rank 9, req 65)
-    { id = 27860, manaValue = 7200 },                   -- Purified Draenic Water (req 65)
-    { id = 30703, manaValue = 5100, conjured = true },  -- Conjured Mountain Spring Water (mage rank 8, req 60)
-    { id = 28399, manaValue = 5100 },                   -- Filtered Draenic Water (req 60)
-    { id = 29454, manaValue = 5100 },                   -- Silverwine (vendor, req 60)
-    { id = 8079,  manaValue = 4200, conjured = true },  -- Conjured Crystal Water (mage rank 7, req 55)
-    { id = 8078,  manaValue = 2934, conjured = true },  -- Conjured Sparkling Water (mage rank 6, req 45)
-    { id = 8766,  manaValue = 2934 },                   -- Morning Glory Dew (req 45)
-    { id = 8077,  manaValue = 1992, conjured = true },  -- Conjured Mineral Water (mage rank 5, req 35)
-}
+local MANA_ITEMS        = DATA.MANA_ITEMS
+local HEALTH_ITEMS      = DATA.HEALTH_ITEMS
+local RUNE_ITEMS        = DATA.RUNE_ITEMS
+local CONJURED_ITEMS    = DATA.CONJURED_ITEMS
+local DRINK_ITEMS       = DATA.DRINK_ITEMS
+local FOOD_ITEMS        = DATA.FOOD_ITEMS
+local BUFF_FOOD_BY_STAT = DATA.BUFF_FOOD_BY_STAT
+local HEALTHSTONE_ITEMS = DATA.HEALTHSTONE_ITEMS
+local BANDAGE_ITEMS     = DATA.BANDAGE_ITEMS
 
 -- Threshold: prefer conjured over non-conjured UNLESS the non-conjured
 -- item restores at least this multiplier more mana/health.
@@ -363,294 +327,124 @@ local function GetConjuredThreshold()
     return db.conjuredThreshold or 1.5
 end
 
--- Recovery food ONLY — no Well Fed buff items. Buff food belongs in
--- BUFF_FOOD_BY_STAT. These are vendor, drop, quest, and conjured foods
--- that restore health without granting a stat buff.
--- Values are the TBC 2.4.3 tooltip totals ("Restores N health over 30 sec").
--- Note: some item databases render these totals 6 too high, because they
--- multiply the displayed per-tick value (basePoints + 1) by the 6 ticks.
-local FOOD_ITEMS = {
-    -- ── 7500 health (req 65) ──
-    { id = 22019, healthValue = 7500, conjured = true },    -- Conjured Croissant (mage rank 8)
-    { id = 29449, healthValue = 7500 },                     -- Bladespire Bagel (vendor)
-    { id = 29448, healthValue = 7500 },                     -- Mag'har Mild Cheese (vendor)
-    { id = 29450, healthValue = 7500 },                     -- Telaari Grapes (vendor)
-    { id = 29451, healthValue = 7500 },                     -- Clefthoof Ribs (vendor)
-    { id = 29452, healthValue = 7500 },                     -- Zangar Trout (vendor)
-    { id = 29453, healthValue = 7500 },                     -- Sporeggar Mushroom (vendor Sporeggar)
-    { id = 30355, healthValue = 7500 },                     -- Grilled Shadowmoon Tuber (vendor)
-    { id = 32685, healthValue = 7500 },                     -- Ogri'la Chicken Fingers (vendor Ogri'la)
+-- Scrolls: item IDs strongest first, plus the buff spell IDs they apply so
+-- an active scroll buff is recognised on any client language.
+local function IDs(list)
+    local ids, spells = {}, {}
+    for _, e in ipairs(list or {}) do
+        ids[#ids + 1] = e.id
+        if e.spell then spells[e.spell] = true end
+    end
+    return ids, spells
+end
+local SPIRIT_SCROLL_ITEMS,     SPIRIT_SCROLL_SPELLS     = IDs(DATA.SCROLLS_BY_STAT.spirit)
+local PROTECTION_SCROLL_ITEMS, PROTECTION_SCROLL_SPELLS = IDs(DATA.SCROLLS_BY_STAT.armor)
 
-    -- ── 4320 health (req 55) ──
-    { id = 22895, healthValue = 4320, conjured = true },    -- Conjured Cinnamon Roll (mage rank 7)
-    { id = 27854, healthValue = 4320 },                     -- Smoked Talbuk Venison (vendor)
-    { id = 27855, healthValue = 4320 },                     -- Mag'har Grainbread (vendor)
-    { id = 27856, healthValue = 4320 },                     -- Skethyl Berries (vendor/drop)
-    { id = 27857, healthValue = 4320 },                     -- Garadar Sharp (vendor)
-    { id = 27858, healthValue = 4320 },                     -- Sunspring Carp (vendor)
-    { id = 27859, healthValue = 4320 },                     -- Zangar Caps (vendor/drop)
+-- Weapon oils, strongest first by kind. WEAPON_COATING_ITEMS always wins
+-- when present; nothing on Forever is healer-relevant for it yet.
+local WEAPON_COATING_ITEMS = {}
+local MANA_OIL_ITEMS, WIZARD_OIL_ITEMS = {}, {}
+for _, oil in ipairs(DATA.OILS) do
+    local list = oil.kind == "mana" and MANA_OIL_ITEMS or WIZARD_OIL_ITEMS
+    list[#list + 1] = oil.id
+end
 
-    -- ── 2148 health (req 45–55) ──
-    { id = 8076,  healthValue = 2148, conjured = true },    -- Conjured Sweet Roll (mage rank 6, req 45)
-    { id = 24338, healthValue = 2148 },                     -- Hellfire Spineleaf (drop, req 55)
-    { id = 8950,  healthValue = 2148 },                     -- Homemade Cherry Pie (vendor, req 45)
-    { id = 8952,  healthValue = 2148 },                     -- Roasted Quail (vendor, req 45)
-    { id = 8953,  healthValue = 2148 },                     -- Deep Fried Plantains (vendor, req 45)
+-- Battleground-only items: "pvp" means any battleground, otherwise the
+-- battleground's name.
+local ZONE_RESTRICTED_ITEMS = DATA.ZONE_RESTRICTED_ITEMS
 
-    -- ── 1392 health (req 35) ──
-    { id = 8075,  healthValue = 1392, conjured = true },    -- Conjured Sourdough (mage rank 5)
-    { id = 3927,  healthValue = 1392 },                     -- Fine Aged Cheddar (vendor)
-    { id = 4601,  healthValue = 1392 },                     -- Soft Banana Bread (vendor)
-}
-
-local BUFF_FOOD_BY_STAT = {
-    healing = {
-        { id = 33052, value = 30 },
-        { id = 27666, value = 44 },
-        { id = 30357, value = 44 },
-        { id = 35565, value = 14 },
-    },
-    mp5 = {
-        { id = 27663, value = 8 },
-        { id = 33867, value = 8 },
-    },
-    crit = {
-        { id = 33825, value = 20 },
-    },
-    spellDmg = {
-        { id = 31673, value = 23 },
-        { id = 27657, value = 23 },
-        { id = 27665, value = 23 },
-        { id = 35565, value = 14 },
-    },
-    stamina = {
-        { id = 27667, value = 30 },
-        { id = 31672, value = 20 },
-        { id = 27660, value = 20 },
-        { id = 33053, value = 20 },
-        { id = 27663, value = 20 },
-    },
-    spirit   = {},
-    intellect = {},
-    hit = {
-        { id = 33872, value = 20 },
-    },
-}
-
--- ============================================================
--- ZONE-RESTRICTED CONSUMABLES
--- ============================================================
--- The three reputation-quartermaster potion pairs may only be used
--- inside their own instance cluster. Carrying them elsewhere is normal
--- (you stock up before a run), so they must be filtered out of the
--- button scan whenever the player is not standing in a matching
--- instance — otherwise the bar offers a potion that cannot be drunk.
---
--- Matching is by instanceMapID first (locale-proof); the localized
--- name from GetInstanceInfo() is kept as a fallback for clients where
--- the map ID is unavailable.
-
-local COILFANG_INSTANCES = {
-    [545] = true, [546] = true, [547] = true, [548] = true,
-    ["The Steamvault"]       = true, ["The Underbog"] = true,
-    ["The Slave Pens"]       = true, ["Serpentshrine Cavern"] = true,
-}
-local AUCHINDOUN_INSTANCES = {
-    [555] = true, [556] = true, [557] = true, [558] = true,
-    ["Shadow Labyrinth"]     = true, ["Sethekk Halls"] = true,
-    ["Mana-Tombs"]           = true, ["Auchenai Crypts"] = true,
-}
-local TEMPEST_KEEP_INSTANCES = {
-    [550] = true, [552] = true, [553] = true, [554] = true,
-    ["The Eye"]              = true, ["The Arcatraz"] = true,
-    ["The Botanica"]         = true, ["The Mechanar"] = true,
-}
-
-local ZONE_RESTRICTED_ITEMS = {
-    [32902] = TEMPEST_KEEP_INSTANCES,    -- Bottled Nethergon Energy
-    [32905] = TEMPEST_KEEP_INSTANCES,    -- Bottled Nethergon Vapor
-    [32903] = COILFANG_INSTANCES,        -- Cenarion Mana Salve
-    [32904] = COILFANG_INSTANCES,        -- Cenarion Healing Salve
-    [32948] = AUCHINDOUN_INSTANCES,      -- Auchenai Mana Potion
-    [32947] = AUCHINDOUN_INSTANCES,      -- Auchenai Healing Potion
-}
-
--- True unless the item is instance-restricted and we are somewhere else.
+-- True unless the item is battleground-only and we are somewhere else.
+-- GetInstanceInfo returns the CONTINENT outdoors on this client, so the
+-- gate is instanceType, never the name alone.
 function Apotheca.IsItemUsableHere(itemID)
-    local group = ZONE_RESTRICTED_ITEMS[itemID]
-    if not group then return true end
-    local name, instanceType, _, _, _, _, _, mapID = GetInstanceInfo()
-    if instanceType ~= "party" and instanceType ~= "raid" then return false end
-    if mapID and group[mapID] then return true end
-    return name ~= nil and group[name] == true
+    local where = ZONE_RESTRICTED_ITEMS[itemID]
+    if not where then return true end
+    local name, instanceType = GetInstanceInfo()
+    if instanceType ~= "pvp" then return false end
+    return where == "pvp" or name == where
 end
 
 -- ============================================================
--- HEALTHSTONE ITEMS  (highest rank → lowest)
--- ============================================================
--- Every Create Healthstone rank, in all three Improved Healthstone
--- variants, ordered strongest → weakest by the health each restores.
--- A raider commonly ends up holding several of these at once: the ranks
--- are distinct items, so a stone from a 0/2 lock and a stone from a 2/2
--- lock both fit in the bags. healValue drives the smart-rank pick in
--- FindBestHealthstone.
-local HEALTHSTONE_ITEMS = {
-    -- Master Healthstone (Create Healthstone rank 6, TBC)
-    { id = 22105, healValue = 2496 },  -- Improved rank 2
-    { id = 22104, healValue = 2288 },  -- Improved rank 1
-    { id = 22103, healValue = 2080 },  -- base
-    -- Major Healthstone (rank 5)
-    { id = 19013, healValue = 1440 },  -- Improved rank 2
-    { id = 19012, healValue = 1320 },  -- Improved rank 1
-    { id = 9421,  healValue = 1200 },  -- base
-    -- Greater Healthstone (rank 4)
-    { id = 19011, healValue =  960 },  -- Improved rank 2
-    { id = 19010, healValue =  880 },  -- Improved rank 1
-    { id = 5510,  healValue =  800 },  -- base
-    -- Healthstone (rank 3)
-    { id = 19009, healValue =  600 },  -- Improved rank 2
-    { id = 19008, healValue =  550 },  -- Improved rank 1
-    { id = 5509,  healValue =  500 },  -- base
-    -- Lesser Healthstone (rank 2)
-    { id = 19007, healValue =  300 },  -- Improved rank 2
-    { id = 19006, healValue =  275 },  -- Improved rank 1
-    { id = 5511,  healValue =  250 },  -- base
-    -- Minor Healthstone (rank 1)
-    { id = 19005, healValue =  120 },  -- Improved rank 2
-    { id = 19004, healValue =  110 },  -- Improved rank 1
-    { id = 5512,  healValue =  100 },  -- base
-}
-
--- ============================================================
--- BANDAGE ITEMS  (highest heal → lowest)
--- Only standard First Aid bandages. Ordered by total heal amount
--- so FindBestItem picks the strongest available.
--- ============================================================
-local BANDAGE_ITEMS = {
-    21991,  -- Heavy Netherweave Bandage  (3400 over 8 s, req 350 First Aid)
-    21990,  -- Netherweave Bandage        (2800 over 8 s, req 330 First Aid)
-    14530,  -- Heavy Runecloth Bandage    (2000 over 8 s, req 290 First Aid)
-    14529,  -- Runecloth Bandage          (1360 over 8 s, req 260 First Aid)
-    8545,   -- Heavy Mageweave Bandage    (1104 over 8 s)
-    8544,   -- Mageweave Bandage          (800 over 8 s)
-    6451,   -- Heavy Silk Bandage         (640 over 8 s)
-    6450,   -- Silk Bandage               (400 over 8 s)
-    3531,   -- Heavy Wool Bandage         (301 over 7 s)
-    3530,   -- Wool Bandage               (161 over 7 s)
-    2581,   -- Heavy Linen Bandage        (114 over 6 s)
-    1251,   -- Linen Bandage              (66 over 6 s)
-}
-
--- ============================================================
--- SCROLL ITEMS  (highest rank → lowest)
+-- ROLE PROFILES
+-- What a role wants from buff food and from each elixir slot, as ordered
+-- stat lists (stat keys are the ones Tools/build_item_tables.py emits).
+-- Only healers are shown the bar by default; the other profiles are the
+-- starting point for widening Apotheca to casters and other roles.
 -- ============================================================
 
--- Scroll of Spirit — buff name "Spirit" (applied buff)
-local SPIRIT_SCROLL_ITEMS = {
-    27498,  -- Scroll of Spirit VI   (TBC, +30 Spirit)
-    10306,  -- Scroll of Spirit V    (+20 Spirit)
-    6662,   -- Scroll of Spirit IV   (+16 Spirit)
-    1712,   -- Scroll of Spirit III  (+12 Spirit)
-    1180,   -- Scroll of Spirit II   (+8 Spirit)
-    955,    -- Scroll of Spirit I    (+3 Spirit)
-}
-
--- Scroll of Protection — buff name "Scroll of Protection"
-local PROTECTION_SCROLL_ITEMS = {
-    27492,  -- Scroll of Protection VI   (TBC, +300 Armor)
-    10305,  -- Scroll of Protection V    (+240 Armor)
-    6661,   -- Scroll of Protection IV   (+180 Armor)
-    1711,   -- Scroll of Protection III  (+120 Armor)
-    1179,   -- Scroll of Protection II   (+60 Armor)
-    954,    -- Scroll of Protection I    (+30 Armor)
-}
-
--- ============================================================
--- WEAPON OIL / COATING ITEMS
--- Blessed Weapon Coating is always top priority.
--- Mana oils are the default set; wizard oils are opt-in.
--- ============================================================
-local WEAPON_COATING_ITEMS = {
-    23122,  -- Blessed Weapon Coating (Aldor — +60 spell dmg vs undead/demons)
-}
-
-local MANA_OIL_ITEMS = {
-    22521,  -- Brilliant Mana Oil    (TBC — +12 mp5, +25 healing)
-    18628,  -- Brilliant Mana Oil    (Classic version)
-    18256,  -- Superior Mana Oil     (+12 mp5)
-    20748,  -- Lesser Mana Oil       (+8 mp5)
-}
-
-local WIZARD_OIL_ITEMS = {
-    22522,  -- Superior Wizard Oil   (TBC — +42 spell power)
-    20750,  -- Wizard Oil            (+24 spell power)
-    20749,  -- Minor Mana Oil        (+8 mp5)
-    20746,  -- Lesser Wizard Oil     (+16 spell power)
-}
-
--- ============================================================
--- ELIXIR / FLASK DATA
--- Each entry: { id = itemID, value = statValue, buff = "Buff Name" }
--- buff is the exact UnitBuff() name — no tooltip parsing.
--- Flask replaces both elixir slots.
--- ============================================================
-
-local ELIXIRS = {
-    PRIEST = {
-        flask = {
-            { id = 22861, value = 25, buff = "Mighty Restoration" },  -- Flask of Mighty Restoration (+25 mp5)
-            { id = 13512, value = 10, buff = "Distilled Wisdom"   },  -- Flask of Distilled Wisdom (classic fallback)
-        },
-        battle = {
-            { id = 22825, value = 50, buff = "Healing Power"      },  -- Elixir of Healing Power (+50 healing)
-            { id = 28103, value = 24, buff = "Adept's Elixir"     },  -- Adept's Elixir (+24 spell/heal)
-        },
-        guardian = {
-            { id = 32067, value = 30, buff = "Draenic Wisdom"     },  -- Elixir of Draenic Wisdom (+30 int+spi)
-            { id = 22840, value = 16, buff = "Major Mageblood"    },  -- Elixir of Major Mageblood (+16 mp5)
-        },
+local ROLE_PROFILES = {
+    HEALER = {
+        buffFood = { "healing", "intellect", "spirit", "stamina" },
+        flask    = { "maxMana", "healing" },
+        battle   = { "healing", "intellect" },    -- first elixir slot
+        guardian = { "mp5", "spirit" },           -- second elixir slot
     },
-    PALADIN = {
-        flask = {
-            { id = 22861, value = 25, buff = "Mighty Restoration" },
-            { id = 13512, value = 10, buff = "Distilled Wisdom"   },
-        },
-        battle = {
-            { id = 22825, value = 50, buff = "Healing Power"      },
-            { id = 28103, value = 24, buff = "Adept's Elixir"     },
-        },
-        guardian = {
-            { id = 32067, value = 30, buff = "Draenic Wisdom"     },
-            { id = 22840, value = 16, buff = "Major Mageblood"    },
-        },
+    CASTER = {
+        buffFood = { "spellDmg", "intellect", "spirit", "stamina" },
+        flask    = { "spellDmg", "maxMana" },
+        battle   = { "spellDmg", "intellect" },
+        guardian = { "mp5", "spirit" },
     },
-    SHAMAN = {
-        flask = {
-            { id = 22861, value = 25, buff = "Mighty Restoration" },
-        },
-        battle = {
-            { id = 22825, value = 50, buff = "Healing Power"      },
-            { id = 28103, value = 24, buff = "Adept's Elixir"     },
-        },
-        guardian = {
-            { id = 32067, value = 30, buff = "Draenic Wisdom"     },
-            { id = 22840, value = 16, buff = "Major Mageblood"    },
-        },
+    MELEE = {
+        buffFood = { "strength", "agility", "attackPower", "stamina" },
+        flask    = { "maxHealth" },
+        battle   = { "strength", "agility", "attackPower" },
+        guardian = { "crit", "stamina", "armor" },
     },
-    DRUID = {
-        flask = {
-            { id = 22861, value = 25, buff = "Mighty Restoration" },
-        },
-        battle = {
-            { id = 22825, value = 50, buff = "Healing Power"      },
-            { id = 28103, value = 24, buff = "Adept's Elixir"     },
-        },
-        guardian = {
-            { id = 32067, value = 30, buff = "Draenic Wisdom"     },
-            { id = 22840, value = 16, buff = "Major Mageblood"    },
-        },
+    AGILITY = {
+        buffFood = { "agility", "attackPower", "crit", "stamina" },
+        flask    = { "maxHealth" },
+        battle   = { "agility", "attackPower" },
+        guardian = { "crit", "stamina" },
     },
 }
+
+local CLASS_ROLE = {
+    PRIEST = "HEALER", PALADIN = "HEALER", SHAMAN = "HEALER", DRUID = "HEALER",
+    MAGE = "CASTER", WARLOCK = "CASTER",
+    WARRIOR = "MELEE", ROGUE = "AGILITY", HUNTER = "AGILITY",
+}
+
+function Apotheca.GetRoleProfile()
+    local _, className = UnitClass("player")
+    return ROLE_PROFILES[CLASS_ROLE[className] or "HEALER"]
+end
+Apotheca.ROLE_PROFILES = ROLE_PROFILES
+
+-- Elixir slot lists for a profile, built from the catalog: every elixir
+-- (or flask) that grants one of the slot's stats, best first. Earlier
+-- stats in the slot's list win over later ones; within a stat, the bigger
+-- value wins. `value` keeps BestElixirItem's "highest wins" contract.
+local function ElixirSlot(stats, wantFlask)
+    local picked = {}
+    for _, e in ipairs(DATA.ELIXIR_CATALOG) do
+        if e.flask == wantFlask then
+            for rank, stat in ipairs(stats) do
+                local v = e.stats[stat]
+                if v then
+                    picked[#picked + 1] = { id = e.id, spell = e.spell,
+                        value = (#stats - rank + 1) * 100000 + v }
+                    break
+                end
+            end
+        end
+    end
+    table.sort(picked, function(x, y) return x.value > y.value end)
+    return picked
+end
+
+local elixirCache = {}
+local function GetPlayerElixirData()
+    local profile = Apotheca.GetRoleProfile()
+    if not elixirCache[profile] then
+        elixirCache[profile] = {
+            flask    = ElixirSlot(profile.flask, true),
+            battle   = ElixirSlot(profile.battle, false),
+            guardian = ElixirSlot(profile.guardian, false),
+        }
+    end
+    return elixirCache[profile]
+end
 
 -- ============================================================
 -- BUTTON CONFIGS
@@ -677,8 +471,8 @@ local BUFFFOOD_BUTTON_CONFIG = {
 
 local ELIXIR_BUTTON_CONFIG = {
     { key = "flask",    label = "Flask",    emptyIcon = "Interface\\Icons\\INV_Potion_97"  },
-    { key = "battle",   label = "Battle",   emptyIcon = "Interface\\Icons\\INV_Potion_51"  },
-    { key = "guardian", label = "Guardian", emptyIcon = "Interface\\Icons\\INV_Potion_Forsaken_01" },
+    { key = "battle",   label = "Elixir",   emptyIcon = "Interface\\Icons\\INV_Potion_51"  },
+    { key = "guardian", label = "Elixir (regen)", emptyIcon = "Interface\\Icons\\INV_Potion_Forsaken_01" },
 }
 
 local SCROLL_BUTTON_CONFIG = {
@@ -787,7 +581,8 @@ function Apotheca.FindBestDrink(bagMap)
         local count = bagMap[entry.id]
         if count and count > 0 then
             local e = { id = entry.id, manaValue = entry.manaValue,
-                        count = count, conjured = entry.conjured or false }
+                        count = count, conjured = entry.conjured or false,
+                        restoresHealth = entry.restoresHealth or false }
             if e.conjured then
                 if not bestConj or e.manaValue > bestConj.manaValue then
                     bestConj = e
@@ -802,22 +597,25 @@ function Apotheca.FindBestDrink(bagMap)
 
     if not bestConj and not bestNonConj then return nil, 0, nil, nil, 0, nil end
 
+    -- 7th return: the chosen drink also restores health.
     if not bestConj then
         return bestNonConj.id, bestNonConj.count, GetCachedTexture(bestNonConj.id),
-               nil, 0, nil
+               nil, 0, nil, bestNonConj.restoresHealth
     end
     if not bestNonConj then
         return bestConj.id, bestConj.count, GetCachedTexture(bestConj.id),
-               nil, 0, nil
+               nil, 0, nil, bestConj.restoresHealth
     end
 
     -- Both available — apply 1.5x threshold.
     if bestNonConj.manaValue >= bestConj.manaValue * GetConjuredThreshold() then
         return bestNonConj.id, bestNonConj.count, GetCachedTexture(bestNonConj.id),
-               bestConj.id, bestConj.count, GetCachedTexture(bestConj.id)
+               bestConj.id, bestConj.count, GetCachedTexture(bestConj.id),
+               bestNonConj.restoresHealth
     else
         return bestConj.id, bestConj.count, GetCachedTexture(bestConj.id),
-               bestNonConj.id, bestNonConj.count, GetCachedTexture(bestNonConj.id)
+               bestNonConj.id, bestNonConj.count, GetCachedTexture(bestNonConj.id),
+               bestConj.restoresHealth
     end
 end
 
@@ -977,14 +775,25 @@ end
 
 -- Check if the player has a Spirit buff (Divine Spirit or scroll-applied spirit).
 -- We check for both the priest spell buff and the scroll buff name.
+-- A scroll buff, matched by the scroll's own spell IDs. Divine Spirit and
+-- Prayer of Spirit (priest) also block a spirit scroll, matched by name.
+local function HasSpellOrName(spells, ...)
+    local names, ids = Apotheca.API.PlayerAuras("HELPFUL")
+    if not names then return nil end
+    for id in pairs(ids) do if spells[id] then return true end end
+    for i = 1, select("#", ...) do
+        if names[select(i, ...)] then return true end
+    end
+    return false
+end
+
 function Apotheca.HasSpiritBuff()
-    return PlayerHasAnyAura("HELPFUL", "Divine Spirit", "Prayer of Spirit",
-                            "Scroll of Spirit", "Spirit")
+    return HasSpellOrName(SPIRIT_SCROLL_SPELLS, "Divine Spirit", "Prayer of Spirit")
 end
 
 -- Check if the player has the Devotion Aura or a protection scroll buff.
 function Apotheca.HasProtectionScrollBuff()
-    return PlayerHasAnyAura("HELPFUL", "Scroll of Protection", "Armor")
+    return HasSpellOrName(PROTECTION_SCROLL_SPELLS)
 end
 
 -- ============================================================
@@ -1059,16 +868,12 @@ end
 -- glow system can highlight individual missing slots.
 -- ============================================================
 
-local function GetPlayerElixirData()
-    local _, className = UnitClass("player")
-    return ELIXIRS[className]
-end
-
--- Set of active buff names, or nil when the client refused the read.
+-- Set of active buff spell IDs, or nil when the client refused the read.
 -- Aura secrecy and combat lockdown are separate switches, so this can be
 -- nil even out of combat.
 local function GetActiveBoneSet()
-    return Apotheca.API.PlayerAuras("HELPFUL")
+    local _, spellIDs = Apotheca.API.PlayerAuras("HELPFUL")
+    return spellIDs
 end
 
 -- Check if any entry's buff is active.  Tries the stored name first,
@@ -1078,11 +883,7 @@ end
 local function HasBuffFromList(list, active)
     if not active then return nil end     -- unknown, not missing
     for _, entry in ipairs(list) do
-        if active[entry.buff]
-        or active["Elixir of " .. entry.buff]
-        or active["Flask of "  .. entry.buff] then
-            return true
-        end
+        if entry.spell and active[entry.spell] then return true end
     end
     return false
 end
@@ -1124,7 +925,7 @@ end
 
 -- Resolve which elixir buttons to show.
 -- Returns: {
---   mode         = "flask" | "elixirs" | "none"
+--   mode         = "all" | "none"
 --   flaskID, flaskCount, flaskTex
 --   battleID, battleCount, battleTex
 --   guardianID, guardianCount, guardianTex
@@ -1149,29 +950,15 @@ function Apotheca.ResolveElixirs(bagMap)
     -- known answer rather than offering a flask that may already be running.
     if result.hasFlask == nil then return Apotheca._lastElixRes or result end
 
-    -- If flask buff is active, nothing to suggest
-    if result.hasFlask then return result end
-
-    -- Check what's available in bags
+    -- Forever has no battle/guardian limit: a flask and elixirs stack, so
+    -- every slot is offered on its own.
     local fID, fCnt, fTex = BestElixirItem(data.flask,   bagMap)
     local bID, bCnt, bTex = BestElixirItem(data.battle,  bagMap)
     local gID, gCnt, gTex = BestElixirItem(data.guardian, bagMap)
-
-    -- Prefer flask if available and no individual elixir buffs are active
-    if fID and not result.hasBattle and not result.hasGuardian then
-        result.mode      = "flask"
-        result.flaskID   = fID
-        result.flaskCount = fCnt
-        result.flaskTex  = fTex
-        return result
-    end
-
-    -- Otherwise show individual elixir slots
-    if bID or gID then
-        result.mode        = "elixirs"
-        result.battleID    = bID  ; result.battleCount   = bCnt  ; result.battleTex   = bTex
-        result.guardianID  = gID  ; result.guardianCount = gCnt  ; result.guardianTex = gTex
-    end
+    result.flaskID    = fID ; result.flaskCount    = fCnt ; result.flaskTex    = fTex
+    result.battleID   = bID ; result.battleCount   = bCnt ; result.battleTex   = bTex
+    result.guardianID = gID ; result.guardianCount = gCnt ; result.guardianTex = gTex
+    if fID or bID or gID then result.mode = "all" end
 
     return result
 end
@@ -1221,9 +1008,10 @@ local function ResolveRecovery(bagMap)
     end
 
     if showDrink then
-        local id, cnt, tex, aID, aCnt, aTex = Apotheca.FindBestDrink(bagMap)
+        local id, cnt, tex, aID, aCnt, aTex, restoresHealth = Apotheca.FindBestDrink(bagMap)
         result.drinkID  = id  ; result.drinkCount  = cnt  ; result.drinkTexture  = tex
         result.drinkAltID = aID ; result.drinkAltCount = aCnt ; result.drinkAltTexture = aTex
+        result.drinkRestoresHealth = restoresHealth or false
     end
 
     return result
@@ -1471,32 +1259,13 @@ local function UpdateElixirGlow(elixRes)
         return
     end
 
-    if elixRes.mode == "flask" then
-        -- Glow flask button if we have one but the flask buff isn't active
-        if elixRes.flaskID and not elixRes.hasFlask then
-            ShowGlow(Apotheca.buttons["flask"])
-        else
-            HideGlow(Apotheca.buttons["flask"])
-        end
-        HideGlow(Apotheca.buttons["battle"])
-        HideGlow(Apotheca.buttons["guardian"])
-    elseif elixRes.mode == "elixirs" then
-        HideGlow(Apotheca.buttons["flask"])
-        -- Glow each slot independently if buff missing and item available
-        if elixRes.battleID and not elixRes.hasBattle then
-            ShowGlow(Apotheca.buttons["battle"])
-        else
-            HideGlow(Apotheca.buttons["battle"])
-        end
-        if elixRes.guardianID and not elixRes.hasGuardian then
-            ShowGlow(Apotheca.buttons["guardian"])
-        else
-            HideGlow(Apotheca.buttons["guardian"])
-        end
-    else
-        HideGlow(Apotheca.buttons["flask"])
-        HideGlow(Apotheca.buttons["battle"])
-        HideGlow(Apotheca.buttons["guardian"])
+    -- Each slot glows on its own: an item is in the bags and its buff is
+    -- confirmed missing (unknown does not glow).
+    for _, slot in ipairs({ { "flask", "flaskID", "hasFlask" },
+                            { "battle", "battleID", "hasBattle" },
+                            { "guardian", "guardianID", "hasGuardian" } }) do
+        local btn = Apotheca.buttons[slot[1]]
+        if elixRes[slot[2]] and elixRes[slot[3]] == false then ShowGlow(btn) else HideGlow(btn) end
     end
 end
 
@@ -2138,9 +1907,8 @@ local function RefreshLayout(recoveryMode, elixirMode, staticFlags, scrollFlags)
         shouldShow["drink"] = true
     end
 
-    if elixirMode == "flask" then
-        shouldShow["flask"] = true
-    elseif elixirMode == "elixirs" then
+    if elixirMode == "all" then
+        shouldShow["flask"]    = true
         shouldShow["battle"]   = true
         shouldShow["guardian"] = true
     end
@@ -2301,14 +2069,7 @@ function Apotheca.UpdateAllButtons()
         recovMode = "split"
     end
 
-    local elixMode
-    if elixRes.mode == "flask" then
-        elixMode = "flask"
-    elseif elixRes.battleID or elixRes.guardianID or showEmpty then
-        elixMode = "elixirs"
-    else
-        elixMode = "none"
-    end
+    local elixMode = (elixRes.mode == "all" or showEmpty) and "all" or "none"
 
     -- ── Scrolls ──────────────────────────────────────────────────
     local scrollsDB  = db.scrolls
@@ -2374,11 +2135,11 @@ function Apotheca.UpdateAllButtons()
         -- greyed-out display when itemID is nil.
     end
 
-    if elixMode == "flask" then
-        ApplyItemToButton(Apotheca.buttons["flask"], elixRes.flaskID, elixRes.flaskCount, elixRes.flaskTex)
-    elseif elixMode == "elixirs" then
+    if elixMode == "all" then
+        ApplyItemToButton(Apotheca.buttons["flask"],    elixRes.flaskID,    elixRes.flaskCount,    elixRes.flaskTex)
         ApplyItemToButton(Apotheca.buttons["battle"],   elixRes.battleID,   elixRes.battleCount,   elixRes.battleTex)
         ApplyItemToButton(Apotheca.buttons["guardian"], elixRes.guardianID, elixRes.guardianCount, elixRes.guardianTex)
+        if not (elixRes.flaskID    or showEmpty) then Apotheca.buttons["flask"]:Hide()    end
         if not (elixRes.battleID   or showEmpty) then Apotheca.buttons["battle"]:Hide()   end
         if not (elixRes.guardianID or showEmpty) then Apotheca.buttons["guardian"]:Hide() end
     end
@@ -2473,15 +2234,20 @@ function Apotheca.UpdateAllButtons()
                 EnableButton(Apotheca.buttons["recovery"])
             end
         elseif recovMode == "split" then
-            -- If the food item also restores mana (e.g. Cherry Pie),
-            -- only block when BOTH health and mana are full.
-            local foodFull = rec.foodRestoresMana
-                             and (hpFull and manaFull)
-                             or  hpFull
+            -- Food that also restores mana (Enriched Manna Biscuit), or a
+            -- drink that also restores health, is only wasted when BOTH are
+            -- full. Written as plain ifs: `a and (b and c) or b` falls
+            -- through to b whenever (b and c) is false, which blocked a
+            -- mana-restoring food at full health with mana missing.
+            local foodFull = hpFull
+            if rec.foodRestoresMana then foodFull = hpFull and manaFull end
+            local drinkFull = manaFull
+            if rec.drinkRestoresHealth then drinkFull = hpFull and manaFull end
             if foodFull then DisableButton(Apotheca.buttons["food"],
                               rec.foodRestoresMana and "health and mana" or "health")
             else             EnableButton(Apotheca.buttons["food"]) end
-            if manaFull then DisableButton(Apotheca.buttons["drink"], "mana")
+            if drinkFull then DisableButton(Apotheca.buttons["drink"],
+                              rec.drinkRestoresHealth and "health and mana" or "mana")
             else             EnableButton(Apotheca.buttons["drink"]) end
         end
     else

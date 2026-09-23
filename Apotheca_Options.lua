@@ -453,17 +453,26 @@ function Apotheca.BuildOptionsPanelContent(panel)
     SectionHeader("Buff Food Priority")
     SmallLabel("Priority order for stat categories (1 = most preferred).")
     Gap(4)
+    -- Forever buff food, by the stat it grants (ApothecaItems.lua).
     local STAT_OPTIONS = {
-        { value = "healing", label = "Healing" }, { value = "mp5", label = "MP5" },
-        { value = "crit", label = "Crit" }, { value = "stamina", label = "Stamina" },
+        { value = "healing",     label = "Healing Power" },
+        { value = "spellDmg",    label = "Spell Damage" },
+        { value = "intellect",   label = "Intellect" },
+        { value = "spirit",      label = "Spirit" },
+        { value = "stamina",     label = "Stamina" },
+        { value = "strength",    label = "Strength" },
+        { value = "agility",     label = "Agility" },
+        { value = "attackPower", label = "Attack Power" },
+        { value = "crit",        label = "Crit" },
+        { value = "armor",       label = "Armor" },
     }
-    local DEFAULT_PRIO = { "healing", "mp5", "crit", "stamina" }
+    local function DefaultPrio() return Apotheca.GetRoleProfile().buffFood end
     for slot = 1, 4 do
         Dropdown("Priority " .. slot .. ":", STAT_OPTIONS,
             function()
                 local _, cls = UnitClass("player")
                 local p = DBGet("buffFoodPriority", cls or "PRIEST")
-                return (p and p[slot]) or DEFAULT_PRIO[slot]
+                return (p and p[slot]) or DefaultPrio()[slot]
             end,
             function(v)
                 local _, cls = UnitClass("player")
@@ -471,7 +480,9 @@ function Apotheca.BuildOptionsPanelContent(panel)
                 local db = DB()
                 if type(db.buffFoodPriority) ~= "table" then db.buffFoodPriority = {} end
                 if type(db.buffFoodPriority[cls]) ~= "table" then
-                    db.buffFoodPriority[cls] = { "healing", "mp5", "crit", "stamina" }
+                    local copy = {}
+                    for i, k in ipairs(DefaultPrio()) do copy[i] = k end
+                    db.buffFoodPriority[cls] = copy
                 end
                 db.buffFoodPriority[cls][slot] = v
             end)
@@ -481,10 +492,16 @@ function Apotheca.BuildOptionsPanelContent(panel)
     SmallLabel("Which stat categories are considered when scanning bags:")
     Gap(2)
     for _, cat in ipairs({
-        { key = "healing", label = "Healing  |cff888888(e.g. Golden Fish Sticks)|r" },
-        { key = "mp5",     label = "MP5      |cff888888(e.g. Blackened Sporefish)|r" },
-        { key = "crit",    label = "Crit     |cff888888(e.g. Skullfish Soup)|r" },
-        { key = "stamina", label = "Stamina  |cff888888(e.g. Spicy Crawdad)|r" },
+        { key = "healing",     label = "Healing Power  |cff888888(e.g. Sage's Tea)|r" },
+        { key = "spellDmg",    label = "Spell Damage   |cff888888(e.g. Nightfin Soup)|r" },
+        { key = "intellect",   label = "Intellect      |cff888888(e.g. Runn Tum Tuber Surprise)|r" },
+        { key = "spirit",      label = "Spirit         |cff888888(e.g. Wicked Smoothie)|r" },
+        { key = "stamina",     label = "Stamina        |cff888888(e.g. Dirge's Kickin' Chimaerok Chops)|r" },
+        { key = "strength",    label = "Strength       |cff888888(e.g. Smoked Desert Dumplings)|r" },
+        { key = "agility",     label = "Agility        |cff888888(e.g. Flank au Poivre)|r" },
+        { key = "attackPower", label = "Attack Power   |cff888888(e.g. Mightfish Steak)|r" },
+        { key = "crit",        label = "Crit           |cff888888(e.g. Grilled Squid)|r" },
+        { key = "armor",       label = "Armor          |cff888888(e.g. Plated Armorfish)|r" },
     }) do
         Checkbox(cat.label,
             function() return DBGet("categories", cat.key) ~= false end,
@@ -496,19 +513,8 @@ function Apotheca.BuildOptionsPanelContent(panel)
         function() return DBGet("elixirs", "enabled") ~= false end,
         function(v) DBSet(v, "elixirs", "enabled") end)
     Gap(4)
-    SmallLabel("Mode:")
-    RadioGroup(
-        {
-            { value = "AUTO",    label = "Auto  |cff888888(flask if available, otherwise separate elixirs)|r" },
-            { value = "FLASK",   label = "Prefer Flask" },
-            { value = "ELIXIRS", label = "Prefer Elixirs" },
-        },
-        function() return DBGet("elixirs", "mode") or "AUTO" end,
-        function(v) DBSet(v, "elixirs", "mode") end)
-    Divider()
-    Checkbox("Allow lower-tier elixirs as fallback",
-        function() return DBGet("elixirs", "allowLower") ~= false end,
-        function(v) DBSet(v, "elixirs", "allowLower") end, 8)
+    SmallLabel("On WoW: Forever a flask and elixirs all stack, so each slot offers\n"
+        .. "the best item you carry for your role: Flask, Elixir, and Elixir (regen).")
 
     SectionHeader("Scrolls & Weapon Oil")
     Gap(4)

@@ -60,6 +60,7 @@ function WoW.reset()
     WoW.inCombat     = false
     WoW.build        = "69977"
     WoW.class        = "PRIEST"
+    WoW.instanceName, WoW.instanceType = "Kalimdor", "none"
     WoW.health, WoW.healthMax = 1000, 1000
     WoW.power,  WoW.powerMax  = 1000, 1000
     WoW.healthSecret = true      -- measured: secret at rest on 69977
@@ -261,7 +262,8 @@ function GetBuildInfo() return "1.60.1", WoW.build, "Sep 22 2026", 16001 end
 function GetRealmName() return "ClassicBetaPvE" end
 function UnitName() return "Testcase Surname", nil end
 function UnitClass() return WoW.class:sub(1, 1) .. WoW.class:sub(2):lower(), WoW.class, 5 end
-function GetInstanceInfo() return "Kalimdor", "none", 0, "", 0, 0, false, 1 end
+-- Outdoors this client returns the CONTINENT, not an empty name.
+function GetInstanceInfo() return WoW.instanceName, WoW.instanceType, 0, "", 0, 0, false, 1 end
 function GetWeaponEnchantInfo() return false, nil, nil, nil, false, nil, nil, nil, false end
 
 local function maybeSecret(v) if WoW.healthSecret then return Secret() end return v end

@@ -20,6 +20,7 @@
 ## X-Curse-Project-ID: 1498195
 
 ApothecaCompat.lua
+ApothecaItems.lua
 Apotheca.lua
 Apotheca_Options.lua
 ApothecaProbe.lua
