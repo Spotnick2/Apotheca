@@ -60,7 +60,7 @@ function WoW.reset()
     WoW.inCombat     = false
     WoW.build        = "69977"
     WoW.class        = "PRIEST"
-    WoW.instanceName, WoW.instanceType = "Kalimdor", "none"
+    WoW.instanceName, WoW.instanceType, WoW.instanceMap = "Kalimdor", "none", 1
     WoW.health, WoW.healthMax = 1000, 1000
     WoW.power,  WoW.powerMax  = 1000, 1000
     WoW.healthSecret = true      -- measured: secret at rest on 69977
@@ -263,7 +263,7 @@ function GetRealmName() return "ClassicBetaPvE" end
 function UnitName() return "Testcase Surname", nil end
 function UnitClass() return WoW.class:sub(1, 1) .. WoW.class:sub(2):lower(), WoW.class, 5 end
 -- Outdoors this client returns the CONTINENT, not an empty name.
-function GetInstanceInfo() return WoW.instanceName, WoW.instanceType, 0, "", 0, 0, false, 1 end
+function GetInstanceInfo() return WoW.instanceName, WoW.instanceType, 0, "", 0, 0, false, WoW.instanceMap end
 function GetWeaponEnchantInfo() return false, nil, nil, nil, false, nil, nil, nil, false end
 
 local function maybeSecret(v) if WoW.healthSecret then return Secret() end return v end
@@ -323,6 +323,10 @@ end
 
 C_Spell = C_Spell or {}
 function C_Spell.RequestLoadSpellData() end
+-- Localized buff names by spell ID; tests install entries to simulate a
+-- buff whose aura spell ID differs from the item's spell.
+WoW.spellNames = {}
+function C_Spell.GetSpellName(spellID) return WoW.spellNames[spellID] end
 function C_Spell.GetSpellDescription(spellID)
     if spellID == 433 then return "Restores 61 health over 18 sec." end
     return ""

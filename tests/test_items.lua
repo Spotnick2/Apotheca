@@ -39,34 +39,41 @@ end
 ------------------------------------------------------------
 -- Measured on the client
 ------------------------------------------------------------
-H.eq(D.DRINK_ITEMS[1].id, 231778, "the best drink is Mountain Spring Water (Forever conjured, 4903 mana)")
-H.eq(D.DRINK_ITEMS[1].conjured, true, "conjured comes from the 'Conjured Item' tooltip line, not the name")
-H.eq(D.HEALTHSTONE_ITEMS[1].healValue, 1440, "Major Healthstone restores 1440 on Forever")
-H.eq(#D.CONJURED_ITEMS, 0, "nothing collapses Food and Drink into one button")
-
 local function find(list, id)
     for _, e in ipairs(list) do if (type(e) == "table" and e.id or e) == id then return e end end
 end
+H.eq(find(D.DRINK_ITEMS, 231778).conjured, true,
+    "Mountain Spring Water is conjured: from the 'Conjured Item' tooltip line, not the name")
+H.eq(D.HEALTHSTONE_ITEMS[1].healValue, 1440, "Major Healthstone restores 1440 on Forever")
+H.eq(#D.CONJURED_ITEMS, 0, "nothing collapses Food and Drink into one button")
+
 H.eq(find(D.FOOD_ITEMS, 13724) and find(D.FOOD_ITEMS, 13724).restoresMana, true,
     "Enriched Manna Biscuit is food that also restores mana")
 H.check(find(D.DRINK_ITEMS, 13724) ~= nil, "and it competes on the Drink button too")
 
 -- Rejuvenation ranks below the pure potion of its tier on the Health button.
-H.eq(D.HEALTH_ITEMS[1], 13446, "Major Healing Potion comes before Major Rejuvenation")
 local function indexOf(list, id) for i, v in ipairs(list) do if v == id then return i end end end
 H.check(indexOf(D.HEALTH_ITEMS, 13446) < indexOf(D.HEALTH_ITEMS, 18253), "Major Rejuvenation after Major Healing")
 H.check(not indexOf(D.HEALTH_ITEMS, 4596), "Discolored potions (they hurt you back) are not offered")
+H.check(not indexOf(D.MANA_ITEMS, 8008), "mage mana gems are not on the potion button")
+
+-- Items the client files under "Other" still make it: classification is by tooltip.
+H.eq(D.BANDAGE_ITEMS[1], 232433, "Dense Runecloth Bandage (3400, subclass Other) is the best bandage")
+H.eq(D.DRINK_ITEMS[1].id, 227813, "Drinkable Stratholme Holy Water (6363 mana) is the best drink")
+H.check(find(D.FOOD_ITEMS, 19060) ~= nil, "a battleground ration (subclass Other) is food")
 
 ------------------------------------------------------------
 -- Battleground-only items
 ------------------------------------------------------------
 H.eq(Apotheca.IsItemUsableHere(13446), true, "an ordinary potion is usable anywhere")
 H.eq(Apotheca.IsItemUsableHere(17348), false, "a battleground draught is not usable outdoors")
-WoW.instanceName, WoW.instanceType = "Arathi Basin", "pvp"
+WoW.instanceName, WoW.instanceType, WoW.instanceMap = "Arathi Basin", "pvp", 529
 H.eq(Apotheca.IsItemUsableHere(17348), true, "a PvP draught is usable in any battleground")
 H.eq(Apotheca.IsItemUsableHere(20065), true, "an Arathi Basin bandage is usable in Arathi Basin")
 H.eq(Apotheca.IsItemUsableHere(19066), false, "a Warsong Gulch bandage is not usable in Arathi Basin")
-WoW.instanceName, WoW.instanceType = "Kalimdor", "none"
+WoW.instanceName = "Bassin Arathi"   -- a French client
+H.eq(Apotheca.IsItemUsableHere(20065), true, "the gate uses the map ID, so it works on a localized client")
+WoW.instanceName, WoW.instanceType, WoW.instanceMap = "Kalimdor", "none", 1
 
 ------------------------------------------------------------
 -- Role profiles pick the right elixirs and buff food
@@ -88,6 +95,13 @@ WoW.SetAura("HELPFUL", "Flask of Distilled Wisdom", 17627)
 res = Apotheca.ResolveElixirs(every)
 H.eq(res.hasFlask, true, "an active flask is recognised by its spell ID")
 H.eq(res.battleID, 250333, "and the elixir slots are still offered: they stack on Forever")
+WoW.auras.HELPFUL = {}
+
+-- An aura whose spell ID differs from the item's spell is still found by
+-- the spell's localized name.
+WoW.spellNames[17627] = "Weisheit"
+WoW.SetAura("HELPFUL", "Weisheit", 99999)
+H.eq(Apotheca.ResolveElixirs(every).hasFlask, true, "a buff with another spell ID is matched by localized name")
 WoW.auras.HELPFUL = {}
 
 WoW.class = "MAGE"

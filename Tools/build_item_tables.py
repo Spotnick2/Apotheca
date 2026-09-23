@@ -24,6 +24,24 @@ import sys
 from collections import defaultdict
 
 SUB_POTION, SUB_ELIXIR, SUB_FLASK, SUB_SCROLL, SUB_FOOD, SUB_BANDAGE = 1, 2, 3, 4, 5, 7
+SUB_OTHER = 8
+RESTORE_SUBS = (SUB_POTION, SUB_FOOD, SUB_BANDAGE, SUB_OTHER)
+PERCENT = re.compile(r'Restores (\d+)% (?:of your )?(health|mana)|(\d+)% of (?:your )?(?:total )?(?:health|mana)', re.I)
+
+
+def kind(r):
+    """What the tooltip says the item is: "potion" (instant restore),
+    "food" (restore over time), "bandage", or None."""
+    u = r['use']
+    if r['sub'] not in RESTORE_SUBS or not u or r['quest'] or 'Healthstone' in r['name']:
+        return None
+    if re.search(r'Heals [\d,]+ damage over', u):
+        return 'bandage'
+    if re.search(r'Restores [\d,]+ (?:health|mana)(?: and [\d,]+ (?:health|mana)| and (?:mana|health))? over', u):
+        return 'food'
+    if re.search(r'Restores [\d,]+ to [\d,]+ (?:health|mana)', u):
+        return 'potion'
+    return None
 
 # Items to leave out whatever their tooltip says.
 EXCLUDE_NAME = re.compile(r'^(Deprecated|Test |\[PH\])|\(TEST\)|McWeaksauce', re.I)
@@ -48,6 +66,7 @@ def load(path):
             spell=int(p[4]) if p[4] not in ('nil', '') else None,
             use=use, lvl=int(m.group(1)) if m else 0,
             conjured='Conjured Item' in lines,
+            quest='Quest Item' in lines,
             tip=tip,
         ))
     return [r for r in rows if not EXCLUDE_NAME.search(r['name'])]
@@ -57,21 +76,31 @@ def load(path):
 # Where an item may be used
 # ------------------------------------------------------------------
 
-BG_NAMES = {
-    'Warsong Gulch': 'Warsong Gulch', 'Arathi Basin': 'Arathi Basin',
-    'Alterac Valley': 'Alterac Valley', 'Darkspear Islands': 'Darkspear Islands',
+# enUS name -> instance map ID (8th return of GetInstanceInfo). The ID is
+# what the addon compares, so the gate works on any client language; the
+# name is only a fallback. Darkspear Islands is Forever-new and its ID is
+# not measured yet (None): name only, so enUS only, until it is.
+BATTLEGROUNDS = {
+    'Warsong Gulch': 489, 'Arathi Basin': 529, 'Alterac Valley': 30,
+    'Darkspear Islands': None,
 }
 
 
 def restriction(r):
-    """None, "pvp" (any battleground), or the one battleground's name."""
+    """None, "pvp" (any battleground), or (mapID, enUS name) of one battleground."""
     t = r['tip']
     if re.search(r'may only be used in PvP Battlegrounds', t, re.I):
         return 'pvp'
-    for key, name in BG_NAMES.items():
-        if re.search(r'(only inside|only be used in) ' + key, t, re.I):
-            return name
+    for name, map_id in BATTLEGROUNDS.items():
+        if re.search(r'(only inside|only be used in) ' + name, t, re.I):
+            return (map_id, name)
     return None
+
+
+def outdoor_locked(r):
+    """Usable only in an outdoor zone (e.g. Windstone, Skywall): cannot be gated
+    by instance, so such items are left out."""
+    return re.search(r'cannot be used outside of|only (?:be )?usable in (?!side)', r['use'], re.I)
 
 
 # ------------------------------------------------------------------
@@ -131,6 +160,16 @@ def parse_stats(text):
     if m: add('spellDmgNature', int(m.group(1)))
     m = re.search(r'damage done by magical spells and effects by up to (\d+)', t, re.I)
     if m: add('spellDmg', int(m.group(1)))
+    m = re.search(r'increases healing done by up to (\d+)', t, re.I)
+    if m: add('healing', int(m.group(1)))
+    # "If you eat for 10 seconds will also increase your Spell Damage by 12"
+    # "Also increases your Stamina by 10 for 10 min"
+    for w, v in re.findall(r'(?:will also increase|Also increases) your (Strength|Agility|Stamina|Intellect|Spirit|Spell Damage|Healing done) by (\d+)', t, re.I):
+        key = {'spell damage': 'spellDmg', 'healing done': 'healing'}.get(w.lower(), STAT_WORDS.get(w.lower()))
+        if key: add(key, int(v))
+    # "become refreshed and gain 6 Mana every 5 seconds"
+    m = re.search(r'refreshed and gain (\d+) Mana every 5 sec', t, re.I)
+    if m: add('mp5', int(m.group(1)))
     m = re.search(r'healing done by spells and effects by up to (\d+)', t, re.I)
     if m: add('healing', int(m.group(1)))
     m = re.search(r'effect of healing spells by up to (\d+)', t, re.I)
@@ -178,7 +217,7 @@ def avg_range(pat, text):
 
 def potion_values(u):
     """(health, mana) averages for an instant potion, or None each."""
-    m = re.search(r'Restores ([\d,]+) to ([\d,]+) mana and health', u)
+    m = re.search(r'Restores ([\d,]+) to ([\d,]+) (?:mana and health|health and mana)', u)
     if m:
         v = (num(m.group(1)) + num(m.group(2))) // 2
         return v, v
@@ -190,6 +229,9 @@ def potion_values(u):
 
 def food_values(u):
     """(health, mana) totals for food/drink eaten over time."""
+    m = re.search(r'Restores ([\d,]+) (?:health and mana|mana and health) over', u)
+    if m:
+        return num(m.group(1)), num(m.group(1))
     m = re.search(r'Restores ([\d,]+) health and ([\d,]+) mana', u)
     if m:
         return num(m.group(1)), num(m.group(2))
@@ -215,14 +257,22 @@ def build(rows):
     # belong on a "best potion" button.
     health, mana, percent_h, percent_m = [], [], [], []
     for r in rows:
-        if r['sub'] != SUB_POTION or not r['use']:
-            continue
         u = r['use']
+        m = re.search(r'Restores (\d+)% (health|mana)\.', u)
+        if m and r['sub'] == SUB_POTION:
+            (percent_h if m.group(2) == 'health' else percent_m).append(r)
+            continue
+        if kind(r) != 'potion':
+            continue
         if re.search(r'Discolored|Dreamless|Wildvine', r['name']) or 'sleep' in u:
             continue
-        m = re.search(r'Restores (\d+)% (health|mana)', u)
-        if m:
-            (percent_h if m.group(2) == 'health' else percent_m).append(r)
+        # Mage mana gems: class-only, their own cooldown. On the potion
+        # button they would hide real potions; a mage button is future work.
+        if re.match(r'Mana (Agate|Jade|Citrine|Ruby)$', r['name']):
+            skipped.append((r['id'], r['name'], 'mage mana gem: separate cooldown, not a potion'))
+            continue
+        if outdoor_locked(r):
+            skipped.append((r['id'], r['name'], 'usable only in an outdoor zone'))
             continue
         h, mn = potion_values(u)
         if not h and not mn:
@@ -242,19 +292,23 @@ def build(rows):
     # Food and drink.
     food, drink, both, buff = [], [], [], defaultdict(list)
     for r in rows:
-        if r['sub'] != SUB_FOOD or not r['use']:
-            continue
         u = r['use']
+        if r['sub'] == SUB_FOOD and u and PERCENT.search(u) and not kind(r):
+            skipped.append((r['id'], r['name'], 'restores a percentage: not rankable against fixed amounts'))
+            continue
+        if kind(r) != 'food':
+            continue
         h, mn = food_values(u)
-        stats = parse_stats(u) if 'well fed' in u.lower() else {}
+        buffy = re.search(r'well fed|will also increase|Also increases|become refreshed', u, re.I)
+        stats = parse_stats(u) if buffy else {}
         z = restriction(r)
         if z: zone[r['id']] = z
         if stats:
             for k, v in stats.items():
                 buff[k].append((-v, r['lvl'], r['id'], r['name'], v))
             continue
-        if 'well fed' in u.lower():
-            skipped.append((r['id'], r['name'], 'well fed, no stat recognised'))
+        if buffy:
+            skipped.append((r['id'], r['name'], 'buff food, no stat recognised'))
             continue
         # Food restoring both competes on BOTH buttons. It must not collapse
         # them into one: a low-level item would hide a high-level drink.
@@ -278,7 +332,7 @@ def build(rows):
     # Bandages.
     bd = []
     for r in rows:
-        if r['sub'] != SUB_BANDAGE:
+        if kind(r) != 'bandage':
             continue
         m = re.search(r'Heals ([\d,]+) damage', r['use'])
         if not m:
@@ -427,10 +481,15 @@ def emit(out, build_id, src):
     w('')
 
     w('-- Items usable only in battlegrounds. "pvp" = any battleground; otherwise')
-    w('-- the battleground\'s enUS name, matched against GetInstanceInfo().')
+    w('-- { map = instance map ID (8th return of GetInstanceInfo), name = enUS name }.')
+    w('-- map nil = not measured yet: the name is the only (enUS-only) match.')
     w('D.ZONE_RESTRICTED_ITEMS = {')
     for k in sorted(out['ZONE_RESTRICTED_ITEMS']):
-        w('    [%d] = "%s",' % (k, out['ZONE_RESTRICTED_ITEMS'][k]))
+        z = out['ZONE_RESTRICTED_ITEMS'][k]
+        if z == 'pvp':
+            w('    [%d] = "pvp",' % k)
+        else:
+            w('    [%d] = { map = %s, name = "%s" },' % (k, z[0] if z[0] else 'nil', z[1]))
     w('}')
     w('')
     return '\n'.join(L)

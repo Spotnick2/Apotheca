@@ -12,15 +12,22 @@ Apotheca.DATA = D
 
 -- Health potions, strongest first (average of the tooltip range).
 D.HEALTH_ITEMS = {
+    223913, -- Major Healing Potion (1500)
     13446,  -- Major Healing Potion (1400)
     18253,  -- Major Rejuvenation Potion (1600)
     17348,  -- Major Healing Draught (1120)
+    15723,  -- Tea with Sugar (1400)
     3928,   -- Superior Healing Potion (800)
+    11951,  -- Whipper Root Tuber (800)
+    18839,  -- Combat Healing Potion (800)
+    223914, -- Greater Healing Potion (650)
     17349,  -- Superior Healing Draught (640)
     274935, -- Tessa's Tonic (800)
     1710,   -- Greater Healing Potion (520)
+    14894,  -- Lily Root (600)
     268883, -- Perishable Healing Potion (320)
     929,    -- Healing Potion (320)
+    11952,  -- Night Dragon's Breath (425)
     268882, -- Perishable Lesser Healing Potion (160)
     858,    -- Lesser Healing Potion (160)
     2456,   -- Minor Rejuvenation Potion (120)
@@ -34,12 +41,17 @@ D.MANA_ITEMS = {
     13444,  -- Major Mana Potion (1800)
     13443,  -- Superior Mana Potion (1200)
     18253,  -- Major Rejuvenation Potion (1600)
+    18841,  -- Combat Mana Potion (1200)
     17351,  -- Major Mana Draught (1120)
+    15723,  -- Tea with Sugar (1400)
     6149,   -- Greater Mana Potion (800)
     17352,  -- Superior Mana Draught (640)
     274935, -- Tessa's Tonic (800)
     3827,   -- Mana Potion (520)
+    14894,  -- Lily Root (600)
+    1072,   -- Full Moonshine (320)
     3385,   -- Lesser Mana Potion (320)
+    11952,  -- Night Dragon's Breath (425)
     2455,   -- Minor Mana Potion (160)
     3087,   -- Mug of Shimmer Stout (160)
     2456,   -- Minor Rejuvenation Potion (120)
@@ -56,16 +68,33 @@ D.CONJURED_ITEMS = {}
 
 -- Plain drinks (no Well Fed), strongest first. Conjured = the tooltip says "Conjured Item".
 D.DRINK_ITEMS = {
+    { id = 227813, manaValue = 6363  },  -- Drinkable Stratholme Holy Water
     { id = 231778, manaValue = 4903 , conjured = true },  -- Mountain Spring Water
     { id = 13724 , manaValue = 4240 , restoresHealth = true },  -- Enriched Manna Biscuit
+    { id = 19060 , manaValue = 4240 , restoresHealth = true },  -- Warsong Gulch Enriched Ration
     { id = 19301 , manaValue = 4240 , restoresHealth = true },  -- Alterac Manna Biscuit
     { id = 20031 , manaValue = 4240 , restoresHealth = true },  -- Essence Mango
+    { id = 20062 , manaValue = 4240 , restoresHealth = true },  -- Arathi Basin Enriched Ration
+    { id = 20222 , manaValue = 4240 , restoresHealth = true },  -- Defiler's Enriched Ration
+    { id = 20225 , manaValue = 4240 , restoresHealth = true },  -- Highlander's Enriched Ration
     { id = 262433, manaValue = 4240 , restoresHealth = true },  -- Ketharas' Hyjal Stew
+    { id = 272055, manaValue = 4240 , restoresHealth = true },  -- Darkspear Islands Enriched Ration
     { id = 8079  , manaValue = 4038 , conjured = true },  -- Conjured Crystal Water
     { id = 18300 , manaValue = 4038  },  -- Hyjal Nectar
+    { id = 19061 , manaValue = 3178 , restoresHealth = true },  -- Warsong Gulch Iron Ration
+    { id = 20064 , manaValue = 3178 , restoresHealth = true },  -- Arathi Basin Iron Ration
+    { id = 20224 , manaValue = 3178 , restoresHealth = true },  -- Defiler's Iron Ration
+    { id = 20227 , manaValue = 3178 , restoresHealth = true },  -- Highlander's Iron Ration
+    { id = 272054, manaValue = 3178 , restoresHealth = true },  -- Darkspear Islands Iron Ration
     { id = 8078  , manaValue = 2821 , conjured = true },  -- Conjured Sparkling Water
     { id = 8766  , manaValue = 2821  },  -- Morning Glory Dew
+    { id = 23161 , manaValue = 2821  },  -- Freshly-Squeezed Lemonade
     { id = 285359, manaValue = 2821  },  -- Warm Apple Juice
+    { id = 19062 , manaValue = 2117 , restoresHealth = true },  -- Warsong Gulch Field Ration
+    { id = 20063 , manaValue = 2117 , restoresHealth = true },  -- Arathi Basin Field Ration
+    { id = 20223 , manaValue = 2117 , restoresHealth = true },  -- Defiler's Field Ration
+    { id = 20226 , manaValue = 2117 , restoresHealth = true },  -- Highlander's Field Ration
+    { id = 272053, manaValue = 2117 , restoresHealth = true },  -- Darkspear Islands Field Ration
     { id = 8077  , manaValue = 1915 , conjured = true },  -- Conjured Mineral Water
     { id = 1645  , manaValue = 1915  },  -- Moonberry Juice
     { id = 19300 , manaValue = 1915  },  -- Bottled Winterspring Water
@@ -76,6 +105,7 @@ D.DRINK_ITEMS = {
     { id = 1205  , manaValue = 803   },  -- Melon Juice
     { id = 9451  , manaValue = 803   },  -- Bubbling Water
     { id = 19299 , manaValue = 803   },  -- Fizzy Faire Drink
+    { id = 17747 , manaValue = 600  , restoresHealth = true },  -- Razorlash Root
     { id = 2288  , manaValue = 420  , conjured = true },  -- Conjured Fresh Water
     { id = 1179  , manaValue = 420   },  -- Ice Cold Milk
     { id = 17404 , manaValue = 420   },  -- Blended Bean Brew
@@ -92,7 +122,9 @@ D.FOOD_ITEMS = {
     { id = 262433, healthValue = 4240 , restoresMana = true },  -- Ketharas' Hyjal Stew
     { id = 22895 , healthValue = 3057 , conjured = true },  -- Conjured Cinnamon Roll
     { id = 20031 , healthValue = 2451 , restoresMana = true },  -- Essence Mango
+    { id = 238637, healthValue = 2451  },  -- Prowler Steak
     { id = 238638, healthValue = 2451  },  -- Filet o' Flank
+    { id = 238639, healthValue = 2451  },  -- Sunrise Omelette
     { id = 8076  , healthValue = 2065 , conjured = true },  -- Conjured Sweet Roll
     { id = 8932  , healthValue = 2065  },  -- Alterac Swiss
     { id = 8948  , healthValue = 2065  },  -- Dried King Bolete
@@ -104,7 +136,11 @@ D.FOOD_ITEMS = {
     { id = 12763 , healthValue = 2065  },  -- Un'Goro Etherfruit
     { id = 13724 , healthValue = 2065 , restoresMana = true },  -- Enriched Manna Biscuit
     { id = 16171 , healthValue = 2065  },  -- Shinsollo
+    { id = 19060 , healthValue = 2065 , restoresMana = true },  -- Warsong Gulch Enriched Ration
     { id = 19225 , healthValue = 2065  },  -- Deep Fried Candybar
+    { id = 20062 , healthValue = 2065 , restoresMana = true },  -- Arathi Basin Enriched Ration
+    { id = 20222 , healthValue = 2065 , restoresMana = true },  -- Defiler's Enriched Ration
+    { id = 20225 , healthValue = 2065 , restoresMana = true },  -- Highlander's Enriched Ration
     { id = 21031 , healthValue = 2065  },  -- Cabbage Kimchi
     { id = 21033 , healthValue = 2065  },  -- Radish Kimchi
     { id = 22324 , healthValue = 2065  },  -- Winter Kimchi
@@ -112,8 +148,13 @@ D.FOOD_ITEMS = {
     { id = 250081, healthValue = 2065  },  -- Clam Linguine
     { id = 260627, healthValue = 2065  },  -- Savory Shen'dralar Steak
     { id = 260628, healthValue = 2065  },  -- Stuffed Pumpkin
+    { id = 272055, healthValue = 2065 , restoresMana = true },  -- Darkspear Islands Enriched Ration
     { id = 278122, healthValue = 2065  },  -- Carrot Salad
-    { id = 13810 , healthValue = 1858  },  -- Blessed Sunfruit
+    { id = 19061 , healthValue = 1546 , restoresMana = true },  -- Warsong Gulch Iron Ration
+    { id = 20064 , healthValue = 1546 , restoresMana = true },  -- Arathi Basin Iron Ration
+    { id = 20224 , healthValue = 1546 , restoresMana = true },  -- Defiler's Iron Ration
+    { id = 20227 , healthValue = 1546 , restoresMana = true },  -- Highlander's Iron Ration
+    { id = 272054, healthValue = 1546 , restoresMana = true },  -- Darkspear Islands Iron Ration
     { id = 8075  , healthValue = 1338 , conjured = true },  -- Conjured Sourdough
     { id = 3927  , healthValue = 1338  },  -- Fine Aged Cheddar
     { id = 4599  , healthValue = 1338  },  -- Cured Ham Steak
@@ -134,6 +175,11 @@ D.FOOD_ITEMS = {
     { id = 249796, healthValue = 1338  },  -- Hyjal Berries
     { id = 260624, healthValue = 1338  },  -- Pristine Peach
     { id = 260625, healthValue = 1338  },  -- Garnished Rice Cake
+    { id = 19062 , healthValue = 1032 , restoresMana = true },  -- Warsong Gulch Field Ration
+    { id = 20063 , healthValue = 1032 , restoresMana = true },  -- Arathi Basin Field Ration
+    { id = 20223 , healthValue = 1032 , restoresMana = true },  -- Defiler's Field Ration
+    { id = 20226 , healthValue = 1032 , restoresMana = true },  -- Highlander's Field Ration
+    { id = 272053, healthValue = 1032 , restoresMana = true },  -- Darkspear Islands Field Ration
     { id = 1487  , healthValue = 841  , conjured = true },  -- Conjured Pumpernickel
     { id = 1707  , healthValue = 841   },  -- Stormwind Brie
     { id = 3771  , healthValue = 841   },  -- Wild Hog Shank
@@ -151,6 +197,7 @@ D.FOOD_ITEMS = {
     { id = 260623, healthValue = 841   },  -- Candied Fruit Sampler
     { id = 278118, healthValue = 841   },  -- Rich Broth
     { id = 278120, healthValue = 841   },  -- Fruit Platter
+    { id = 17747 , healthValue = 600  , restoresMana = true },  -- Razorlash Root
     { id = 1114  , healthValue = 530  , conjured = true },  -- Conjured Rye
     { id = 422   , healthValue = 530   },  -- Dwarven Mild
     { id = 1119  , healthValue = 530   },  -- Bottled Spirits
@@ -197,11 +244,14 @@ D.FOOD_ITEMS = {
     { id = 4656  , healthValue = 58    },  -- Small Pumpkin
     { id = 5057  , healthValue = 58    },  -- Ripe Watermelon
     { id = 5525  , healthValue = 58    },  -- Boiled Clams
+    { id = 6458  , healthValue = 58    },  -- Oil Covered Fish
     { id = 7097  , healthValue = 58    },  -- Leg Meat
     { id = 16166 , healthValue = 58    },  -- Bean Soup
     { id = 17344 , healthValue = 58    },  -- Candy Cane
     { id = 19223 , healthValue = 58    },  -- Darkmoon Dog
+    { id = 240945, healthValue = 58    },  -- Slice of Carrie's Apple Pie
     { id = 249792, healthValue = 58    },  -- Sweetsour Grapes
+    { id = 251917, healthValue = 58    },  -- Falorne's Homemade Tart
     { id = 252022, healthValue = 58    },  -- Galestrider Jerky
     { id = 252023, healthValue = 58    },  -- Zaalanarr Sharp
     { id = 252028, healthValue = 58    },  -- Fresh Gustberry Bread
@@ -253,6 +303,7 @@ D.BUFF_FOOD_BY_STAT = {
         { id = 249870, value = 44  },  -- Sage's Tea (L45)
         { id = 249869, value = 33  },  -- Sunny Tea (L35)
         { id = 249868, value = 22  },  -- Triage Tea (L25)
+        { id = 232438, value = 22  },  -- Smoked Redgill (L35)
         { id = 249867, value = 11  },  -- Root Tea (L15)
         { id = 249866, value = 7   },  -- Royal Tea (L5)
         { id = 249865, value = 2   },  -- Peace Tea (L0)
@@ -276,12 +327,16 @@ D.BUFF_FOOD_BY_STAT = {
         { id = 250079, value = 1   },  -- Tasty Raptor Bites (L0)
         { id = 263512, value = 1   },  -- Pincer Bites (L5)
     },
+    mp5 = {
+        { id = 23176 , value = 6   },  -- Fizzy Energy Drink (L0)
+    },
     spellDmg = {
         { id = 13933 , value = 28  },  -- Lobster Stew (L45)
         { id = 13935 , value = 28  },  -- Baked Salmon (L45)
         { id = 6887  , value = 22  },  -- Spotted Yellowtail (L35)
         { id = 13931 , value = 22  },  -- Nightfin Soup (L35)
         { id = 274971, value = 14  },  -- Briny Seafood Stew (L25)
+        { id = 232436, value = 12  },  -- Darkclaw Bisque (L45)
         { id = 21217 , value = 7   },  -- Sagefish Delight (L30)
         { id = 21072 , value = 4   },  -- Smoked Sagefish (L10)
         { id = 5095  , value = 1   },  -- Rainbow Fin Albacore (L5)
@@ -291,6 +346,8 @@ D.BUFF_FOOD_BY_STAT = {
         { id = 249875, value = 15  },  -- Spicy Smoothie (L35)
         { id = 16971 , value = 12  },  -- Clamlette Surprise (L40)
         { id = 249874, value = 10  },  -- Calcified Smoothie (L25)
+        { id = 13813 , value = 10  },  -- Blessed Sunfruit Juice (L45)
+        { id = 19318 , value = 10  },  -- Bottled Alterac Spring Water (L55)
         { id = 5527  , value = 6   },  -- Goblin Deviled Clams (L15)
         { id = 248613, value = 6   },  -- Lightning in a Bottle (L15)
         { id = 249873, value = 5   },  -- Mrrggl Smrrthle (L15)
@@ -301,6 +358,7 @@ D.BUFF_FOOD_BY_STAT = {
         { id = 11584 , value = 2   },  -- Cactus Apple Surprise (L0)
         { id = 17197 , value = 2   },  -- Gingerbread Cookie (L0)
         { id = 17198 , value = 2   },  -- Egg Nog (L0)
+        { id = 206177, value = 2   },  -- Pine Nut Butter (L0)
         { id = 249871, value = 1   },  -- Venomous Smoothie (L0)
     },
     stamina = {
@@ -312,6 +370,7 @@ D.BUFF_FOOD_BY_STAT = {
         { id = 6038  , value = 10  },  -- Giant Clam Scorcho (L25)
         { id = 12215 , value = 10  },  -- Heavy Kodo Stew (L25)
         { id = 250078, value = 10  },  -- Giant Scrambled Eggs (L25)
+        { id = 11950 , value = 10  },  -- Windblossom Berries (L45)
         { id = 5527  , value = 6   },  -- Goblin Deviled Clams (L15)
         { id = 248613, value = 6   },  -- Lightning in a Bottle (L15)
         { id = 3665  , value = 5   },  -- Curiously Tasty Omelet (L15)
@@ -329,6 +388,7 @@ D.BUFF_FOOD_BY_STAT = {
         { id = 11584 , value = 2   },  -- Cactus Apple Surprise (L0)
         { id = 17197 , value = 2   },  -- Gingerbread Cookie (L0)
         { id = 17198 , value = 2   },  -- Egg Nog (L0)
+        { id = 206177, value = 2   },  -- Pine Nut Butter (L0)
         { id = 3663  , value = 1   },  -- Murloc Fin Soup (L0)
         { id = 5472  , value = 1   },  -- Kaldorei Spider Kabob (L0)
         { id = 5474  , value = 1   },  -- Roasted Kodo Meat (L0)
@@ -342,6 +402,7 @@ D.BUFF_FOOD_BY_STAT = {
         { id = 250065, value = 15  },  -- Savory Stag Sliders (L35)
         { id = 250074, value = 10  },  -- Bear Brisket (L25)
         { id = 274976, value = 10  },  -- Plain Ol' Paletusk (L25)
+        { id = 13810 , value = 10  },  -- Blessed Sunfruit (L45)
         { id = 2685  , value = 5   },  -- Succulent Pork Ribs (L15)
         { id = 5480  , value = 5   },  -- Lean Venison (L15)
         { id = 724   , value = 3   },  -- Goretusk Liver Pie (L5)
@@ -375,6 +436,7 @@ D.HEALTHSTONE_ITEMS = {
 
 -- Bandages, strongest first. Battleground ones are gated in ZONE_RESTRICTED_ITEMS.
 D.BANDAGE_ITEMS = {
+    232433, -- Dense Runecloth Bandage (3400)
     23684,  -- Crystal Infused Bandage (2500)
     14530,  -- Heavy Runecloth Bandage (2000)
     19066,  -- Warsong Gulch Runecloth Bandage (2000)
@@ -399,6 +461,7 @@ D.BANDAGE_ITEMS = {
     272056, -- Darkspear Islands Silk Bandage (640)
     6450,   -- Silk Bandage (400)
     3531,   -- Heavy Wool Bandage (301)
+    5473,   -- Scorpid Surprise (282)
     3530,   -- Wool Bandage (161)
     2581,   -- Heavy Linen Bandage (114)
     1251,   -- Linen Bandage (66)
@@ -521,30 +584,46 @@ D.OILS = {
     { id = 20750 , kind = "wizard", stats = { healing = 30, spellDmg = 30 } },  -- Wizard Oil
     { id = 20748 , kind = "mana",  stats = { healing = 30, mp5 = 15 } },  -- Brilliant Mana Oil
     { id = 20744 , kind = "wizard", stats = { healing = 15, spellDmg = 15 } },  -- Minor Wizard Oil
-    { id = 20745 , kind = "mana",  stats = { mp5 = 5 } },  -- Minor Mana Oil
+    { id = 20745 , kind = "mana",  stats = { healing = 10, mp5 = 5 } },  -- Minor Mana Oil
 }
 
 -- Items usable only in battlegrounds. "pvp" = any battleground; otherwise
--- the battleground's enUS name, matched against GetInstanceInfo().
+-- { map = instance map ID (8th return of GetInstanceInfo), name = enUS name }.
+-- map nil = not measured yet: the name is the only (enUS-only) match.
 D.ZONE_RESTRICTED_ITEMS = {
     [17348] = "pvp",
     [17349] = "pvp",
     [17351] = "pvp",
     [17352] = "pvp",
-    [19066] = "Warsong Gulch",
-    [19067] = "Warsong Gulch",
-    [19068] = "Warsong Gulch",
-    [19307] = "Alterac Valley",
-    [20065] = "Arathi Basin",
-    [20066] = "Arathi Basin",
-    [20067] = "Arathi Basin",
-    [20232] = "Arathi Basin",
-    [20234] = "Arathi Basin",
-    [20235] = "Arathi Basin",
-    [20237] = "Arathi Basin",
-    [20243] = "Arathi Basin",
-    [20244] = "Arathi Basin",
-    [272056] = "Darkspear Islands",
-    [272057] = "Darkspear Islands",
-    [272058] = "Darkspear Islands",
+    [19060] = { map = 489, name = "Warsong Gulch" },
+    [19061] = { map = 489, name = "Warsong Gulch" },
+    [19062] = { map = 489, name = "Warsong Gulch" },
+    [19066] = { map = 489, name = "Warsong Gulch" },
+    [19067] = { map = 489, name = "Warsong Gulch" },
+    [19068] = { map = 489, name = "Warsong Gulch" },
+    [19307] = { map = 30, name = "Alterac Valley" },
+    [20062] = { map = 529, name = "Arathi Basin" },
+    [20063] = { map = 529, name = "Arathi Basin" },
+    [20064] = { map = 529, name = "Arathi Basin" },
+    [20065] = { map = 529, name = "Arathi Basin" },
+    [20066] = { map = 529, name = "Arathi Basin" },
+    [20067] = { map = 529, name = "Arathi Basin" },
+    [20222] = { map = 529, name = "Arathi Basin" },
+    [20223] = { map = 529, name = "Arathi Basin" },
+    [20224] = { map = 529, name = "Arathi Basin" },
+    [20225] = { map = 529, name = "Arathi Basin" },
+    [20226] = { map = 529, name = "Arathi Basin" },
+    [20227] = { map = 529, name = "Arathi Basin" },
+    [20232] = { map = 529, name = "Arathi Basin" },
+    [20234] = { map = 529, name = "Arathi Basin" },
+    [20235] = { map = 529, name = "Arathi Basin" },
+    [20237] = { map = 529, name = "Arathi Basin" },
+    [20243] = { map = 529, name = "Arathi Basin" },
+    [20244] = { map = 529, name = "Arathi Basin" },
+    [272053] = { map = nil, name = "Darkspear Islands" },
+    [272054] = { map = nil, name = "Darkspear Islands" },
+    [272055] = { map = nil, name = "Darkspear Islands" },
+    [272056] = { map = nil, name = "Darkspear Islands" },
+    [272057] = { map = nil, name = "Darkspear Islands" },
+    [272058] = { map = nil, name = "Darkspear Islands" },
 }

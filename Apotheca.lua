@@ -349,19 +349,23 @@ for _, oil in ipairs(DATA.OILS) do
     list[#list + 1] = oil.id
 end
 
--- Battleground-only items: "pvp" means any battleground, otherwise the
--- battleground's name.
+-- Battleground-only items: "pvp" means any battleground, otherwise
+-- { map = instance map ID, name = enUS name }.
 local ZONE_RESTRICTED_ITEMS = DATA.ZONE_RESTRICTED_ITEMS
 
 -- True unless the item is battleground-only and we are somewhere else.
 -- GetInstanceInfo returns the CONTINENT outdoors on this client, so the
--- gate is instanceType, never the name alone.
+-- gate is instanceType first. The map ID works on every client language;
+-- the enUS name is only the fallback for a battleground whose ID is not
+-- measured yet (Darkspear Islands).
 function Apotheca.IsItemUsableHere(itemID)
     local where = ZONE_RESTRICTED_ITEMS[itemID]
     if not where then return true end
-    local name, instanceType = GetInstanceInfo()
+    local name, instanceType, _, _, _, _, _, mapID = GetInstanceInfo()
     if instanceType ~= "pvp" then return false end
-    return where == "pvp" or name == where
+    if where == "pvp" then return true end
+    if where.map then return mapID == where.map end
+    return name == where.name
 end
 
 -- ============================================================
@@ -781,6 +785,11 @@ local function HasSpellOrName(spells, ...)
     local names, ids = Apotheca.API.PlayerAuras("HELPFUL")
     if not names then return nil end
     for id in pairs(ids) do if spells[id] then return true end end
+    -- Also by the scroll spell's localized name (see HasBuffFromList).
+    for id in pairs(spells) do
+        local ok, n = pcall(C_Spell.GetSpellName, id)
+        if ok and n and names[n] then return true end
+    end
     for i = 1, select("#", ...) do
         if names[select(i, ...)] then return true end
     end
@@ -872,18 +881,28 @@ end
 -- Aura secrecy and combat lockdown are separate switches, so this can be
 -- nil even out of combat.
 local function GetActiveBoneSet()
-    local _, spellIDs = Apotheca.API.PlayerAuras("HELPFUL")
-    return spellIDs
+    local names, spellIDs = Apotheca.API.PlayerAuras("HELPFUL")
+    return spellIDs, names
 end
 
 -- Check if any entry's buff is active.  Tries the stored name first,
 -- then common prefixed variants ("Elixir of X", "Flask of X") so the
 -- detection works regardless of whether UnitBuff returns the short or
 -- long form.
-local function HasBuffFromList(list, active)
+-- The item's spell ID is usually the buff's, but that is not measured for
+-- every item. So also match the spell's LOCALIZED name (C_Spell.GetSpellName),
+-- which is what the buff is called on this client, in any language.
+local function SpellName(spellID)
+    local ok, name = pcall(C_Spell.GetSpellName, spellID)
+    return ok and name or nil
+end
+
+local function HasBuffFromList(list, active, activeNames)
     if not active then return nil end     -- unknown, not missing
     for _, entry in ipairs(list) do
         if entry.spell and active[entry.spell] then return true end
+        local n = entry.spell and activeNames and SpellName(entry.spell)
+        if n and activeNames[n] then return true end
     end
     return false
 end
