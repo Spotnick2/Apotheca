@@ -2,7 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.0.5] - 2026-09-23
+
+**This is the final release for TBC Classic Anniversary.** From 2.0.0, Apotheca targets World of Warcraft: Forever. 1.0.5 stays available on CurseForge for Anniversary players, but it will not get further updates.
 
 ### Added
 - Added live cooldown swipes on bar buttons, so the cooldown animation starts the moment an item is used instead of only after combat ends.
