@@ -47,9 +47,23 @@ Run 2 checks whether `UnitHealthMissing`, `UnitPowerMissing` or `UnitHealthPerce
 
 On specs: **each class has exactly one spec, named after the class, with no tree.** Healer detection by spec is meaningless on this client, which confirms that class-only detection is right. The `showOnlyHealingSpec` option has to be reworded as "healer classes only", or removed.
 
+## Run 2: 2026-09-23, out of combat (Priest)
+
+Run 2 was taken on a Priest and confirms run 1. **Every** current health and power reading is secret at rest:
+
+```
+UnitHealthMissing / UnitPowerMissing / UnitPower(Mana)   = <secret>
+UnitHealthPercent / UnitPowerPercent                     = <secret>
+UnitHealthMissing("player") == 0
+    -> ERROR: attempt to compare a secret number value (execution tainted by 'Apotheca')
+```
+
+**There is no way for an addon to branch on the player's current health or mana on this build.** Secret values can only be handed to widgets for display, and cannot be compared.
+
+On specs: the Priest also has one spec (`1487, "Priest", ..., "DAMAGER"`). The role reads `DAMAGER` even for a Priest, so neither the spec nor the role says who heals.
+
 ## Still to measure
 
-- **Run 2, out of combat:** the `UnitHealthMissing`, `UnitPowerMissing`, `UnitHealthPercent` and `UnitPowerPercent` rows.
 - **Run 3, in combat:** aura secrecy, cooldown and stack-count secrecy, and `GetWeaponEnchantInfo`.
 - **`C_Item.UseItemByName` on a real item** from the right-click alternate "Use X instead?" popup.
 - **Clicks, on a healer-class character:** one use per click, on left and right click, in and out of combat.
