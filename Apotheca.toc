@@ -1,5 +1,5 @@
-## Interface: 20505
-## Title: Apotheca
+## Interface: 16001
+## Title: Apotheca Forever
 ## Notes: Smart consumable action bars for healers that automatically select the best potions, runes, and recovery items.
 ## Category-enUS: User Interface
 ## Category-deDE: Benutzerinterface
@@ -14,8 +14,12 @@
 ## Category-zhTW: 使用者介面
 ## Author: Spotnick
 ## Version: @project-version@
+## IconTexture: Interface\Icons\INV_Potion_76
 ## SavedVariables: ApothecaDB
 ## SavedVariablesPerCharacter: ApothecaCharDB
+## X-Curse-Project-ID: 1498195
 
+ApothecaCompat.lua
 Apotheca.lua
 Apotheca_Options.lua
+ApothecaProbe.lua

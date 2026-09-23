@@ -8,7 +8,12 @@ manual-changelog:
 ignore:
   - .github
   - .gitignore
+  - .claude
   - README.md
   - CHANGELOG.md
+  - AGENTS.md
+  - CLAUDE.md
   - screenshots
   - docs
+  - tests
+  - Tools
