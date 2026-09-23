@@ -1,9 +1,10 @@
 -- ============================================================
--- Apotheca - Smart Consumable Bar for WoW Classic TBC
+-- Apotheca - Smart Consumable Bar for WoW: Forever
 -- Author: Spotnick
 -- ============================================================
 
-Apotheca = {}
+-- ApothecaCompat.lua loads first and has already set Apotheca.API.
+Apotheca = Apotheca or {}
 
 -- ============================================================
 -- SAVED VARIABLES & DEFAULTS
@@ -206,47 +207,30 @@ local function InitDB()
 end
 
 -- ============================================================
--- CONTAINER API SHIMS
--- Wraps both C_Container (TBC Anniversary) and legacy globals.
--- Functions never assign nil — safe at parse time.
+-- CONTAINER / ITEM HELPERS
+-- Thin wrappers over Apotheca.API (ApothecaCompat.lua), which owns
+-- every moved API. They call through the table at call time.
 -- ============================================================
 
-local _CC = C_Container or {}
+local function ContainerGetNumSlots(bag)   return Apotheca.API.ContainerNumSlots(bag) end
+local function ContainerGetItemID(bag, slot) return Apotheca.API.ContainerItemID(bag, slot) end
+local function ContainerGetCount(bag, slot) return Apotheca.API.ContainerItemCount(bag, slot) end
+local function SafeGetItemCooldown(itemID) return Apotheca.API.ItemCooldown(itemID) end
 
-local function ContainerGetNumSlots(bag)
-    if _CC.GetContainerNumSlots then return _CC.GetContainerNumSlots(bag) end
-    if GetContainerNumSlots      then return GetContainerNumSlots(bag) end
-    return 0
+-- Draw an item's cooldown swipe. Cooldowns may be secret in combat, and a
+-- secret throws when compared, so the test runs inside a pcall. On failure
+-- the swipe is left as it was.
+local function ApplyItemCooldown(cooldown, itemID)
+    pcall(function()
+        local st, dur = SafeGetItemCooldown(itemID)
+        if st and dur and dur > 0 then
+            cooldown:SetCooldown(st, dur)
+        else
+            cooldown:SetCooldown(0, 0)
+        end
+    end)
 end
-
-local function ContainerGetItemLink(bag, slot)
-    if _CC.GetContainerItemLink then return _CC.GetContainerItemLink(bag, slot) end
-    if GetContainerItemLink      then return GetContainerItemLink(bag, slot) end
-    return nil
-end
-
-local function ContainerGetCount(bag, slot)
-    if _CC.GetContainerItemInfo then
-        local info = _CC.GetContainerItemInfo(bag, slot)
-        return info and info.stackCount or 0
-    end
-    if GetContainerItemInfo then
-        local _, count = GetContainerItemInfo(bag, slot)
-        return count or 0
-    end
-    return 0
-end
-
-local function SafeGetItemCooldown(itemID)
-    if _CC.GetItemCooldown  then return _CC.GetItemCooldown(itemID) end
-    if _G.GetItemCooldown   then return _G.GetItemCooldown(itemID) end
-    return 0, 0, 0
-end
-
-local function GetItemIDFromLink(link)
-    if not link then return nil end
-    return tonumber(link:match("item:(%d+)"))
-end
+local function GetItemInfo(itemID)         return Apotheca.API.ItemInfo(itemID) end
 
 -- ============================================================
 -- TEXTURE CACHE
@@ -288,46 +272,15 @@ local DEFAULT_POS = { point = "BOTTOMLEFT", x = 600, y = 200 }
 -- HEALER SPEC DETECTION
 -- ============================================================
 
-local HEALER_SPEC = {
-    -- tabs = talent tree indices to check (any one qualifying = healer)
-    -- threshold = minimum points to count as healing spec
-    -- For PRIEST: tab 1 = Discipline, tab 2 = Holy
-    -- A full Holy Priest will have 0 in Disc and 41+ in Holy — both tabs
-    -- are checked so either spec qualifies.
-    -- Threshold is kept low (14) to avoid false negatives during respec or
-    -- before talents are fully loaded.
-    PRIEST  = { tabs = {1, 2}, threshold = 14 },
-    PALADIN = { tabs = {2},    threshold = 14 },
-    SHAMAN  = { tabs = {3},    threshold = 14 },
-    DRUID   = { tabs = {3},    threshold = 14 },
-}
-
--- Healer classes — if talent data is unavailable (returns "" or nil),
--- fall back to showing the bar for any healer-capable class.
+-- WoW: Forever has no talent-tab API (GetTalentTabInfo / GetNumTalentTabs
+-- are gone), so there is no way to read a spec yet. Until
+-- C_SpecializationInfo is measured on this client, every healer-capable
+-- class counts as a healer.
 local HEALER_CLASSES = { PRIEST = true, PALADIN = true, SHAMAN = true, DRUID = true }
 
 function Apotheca.IsHealerSpec()
     local _, className = UnitClass("player")
-    local spec = HEALER_SPEC[className]
-    if not spec then return false end   -- not a healer class at all
-
-    local anyTabRead = false
-    for _, tabIndex in ipairs(spec.tabs) do
-        local _, _, pts = GetTalentTabInfo(tabIndex)
-        local n = tonumber(pts)
-        if n then
-            anyTabRead = true
-            if n >= spec.threshold then return true end
-        end
-    end
-
-    -- If GetTalentTabInfo returned nothing usable (loading screen, fresh login)
-    -- fall back to class-only check so the bar isn't hidden by a transient nil.
-    if not anyTabRead then
-        return HEALER_CLASSES[className] == true
-    end
-
-    return false
+    return HEALER_CLASSES[className] == true
 end
 
 function Apotheca.GetStatPriority()
@@ -745,11 +698,10 @@ local HEALTHSTONE_BUTTON_CONFIG = {
 
 function Apotheca.BuildBagMap()
     local bagMap = {}
-    for bag = 0, 4 do
+    for _, bag in ipairs(Apotheca.API.CarriedBags()) do
         local numSlots = ContainerGetNumSlots(bag)
         for slot = 1, numSlots do
-            local link = ContainerGetItemLink(bag, slot)
-            local id   = GetItemIDFromLink(link)
+            local id = ContainerGetItemID(bag, slot)
             if id then
                 local count = ContainerGetCount(bag, slot)
                 if count > 0 then
@@ -920,15 +872,19 @@ function Apotheca.FindBestBuffFood(bagMap)
     return nil, 0, nil
 end
 
-function Apotheca.HasFoodBuff()
-    local i = 1
-    while true do
-        local name = UnitBuff("player", i)
-        if not name then break end
-        if name == "Well Fed" then return true end
-        i = i + 1
+-- Aura checks return true / false, or nil when the client refused the
+-- read (combat secrecy). Callers must treat nil as "unknown", not "missing".
+local function PlayerHasAnyAura(filter, ...)
+    local names = Apotheca.API.PlayerAuras(filter)
+    if not names then return nil end
+    for i = 1, select("#", ...) do
+        if names[select(i, ...)] then return true end
     end
     return false
+end
+
+function Apotheca.HasFoodBuff()
+    return PlayerHasAnyAura("HELPFUL", "Well Fed")
 end
 
 -- ============================================================
@@ -957,7 +913,9 @@ function Apotheca.FindBestHealthstone(bagMap)
     local db      = DB()
     local hsDB    = db.healthstone
     local smart   = (not hsDB) or hsDB.smartRank ~= false
-    local missing = (UnitHealthMax("player") or 0) - (UnitHealth("player") or 0)
+    -- Unreadable health (secret in combat) counts as full, which offers
+    -- the strongest stone.
+    local missing = (Apotheca.API.PlayerMissing()) or 0
 
     -- List is strongest → weakest, so the first hit is the strongest held
     -- and the last stone that still covers `missing` is the smallest one.
@@ -1012,31 +970,13 @@ end
 -- Check if the player has a Spirit buff (Divine Spirit or scroll-applied spirit).
 -- We check for both the priest spell buff and the scroll buff name.
 function Apotheca.HasSpiritBuff()
-    local i = 1
-    while true do
-        local name = UnitBuff("player", i)
-        if not name then break end
-        if name == "Divine Spirit" or name == "Prayer of Spirit"
-        or name == "Scroll of Spirit" or name == "Spirit" then
-            return true
-        end
-        i = i + 1
-    end
-    return false
+    return PlayerHasAnyAura("HELPFUL", "Divine Spirit", "Prayer of Spirit",
+                            "Scroll of Spirit", "Spirit")
 end
 
 -- Check if the player has the Devotion Aura or a protection scroll buff.
 function Apotheca.HasProtectionScrollBuff()
-    local i = 1
-    while true do
-        local name = UnitBuff("player", i)
-        if not name then break end
-        if name == "Scroll of Protection" or name == "Armor" then
-            return true
-        end
-        i = i + 1
-    end
-    return false
+    return PlayerHasAnyAura("HELPFUL", "Scroll of Protection", "Armor")
 end
 
 -- ============================================================
@@ -1095,14 +1035,7 @@ end
 -- Returns true if the player has the "Recently Bandaged" debuff,
 -- which prevents using another bandage for 60 seconds.
 function Apotheca.HasRecentlyBandaged()
-    local i = 1
-    while true do
-        local name = UnitDebuff("player", i)
-        if not name then break end
-        if name == "Recently Bandaged" then return true end
-        i = i + 1
-    end
-    return false
+    return PlayerHasAnyAura("HARMFUL", "Recently Bandaged")
 end
 
 -- ============================================================
@@ -1117,17 +1050,11 @@ local function GetPlayerElixirData()
     return ELIXIRS[className]
 end
 
--- Build a set of active buff names for quick lookup.
+-- Set of active buff names for quick lookup. Empty when the client
+-- refused the read; elixir resolution only runs out of combat, where
+-- the read is allowed.
 local function GetActiveBoneSet()
-    local active = {}
-    local i = 1
-    while true do
-        local name = UnitBuff("player", i)
-        if not name then break end
-        active[name] = true
-        i = i + 1
-    end
-    return active
+    return Apotheca.API.PlayerAuras("HELPFUL") or {}
 end
 
 -- Check if any entry's buff is active.  Tries the stored name first,
@@ -1261,10 +1188,12 @@ local function ResolveRecovery(bagMap)
     end
 
     local debug   = DB().debug
+    local missHP, missMana = Apotheca.API.PlayerMissing()
+    -- Unknown (nil) shows the button: hiding it needs proof it is full.
     local showFood  = (not Apotheca.hideWhenFull) or debug
-                      or ((UnitHealthMax("player") or 0) - (UnitHealth("player") or 0)) > 0
+                      or missHP == nil or missHP > 0
     local showDrink = (not Apotheca.hideWhenFull) or debug
-                      or ((UnitPowerMax("player") or 0) - (UnitPower("player") or 0)) > 0
+                      or missMana == nil or missMana > 0
 
     if showFood then
         local id, cnt, tex, aID, aCnt, aTex, restoresMana = Apotheca.FindBestFood(bagMap, 0)
@@ -1400,6 +1329,9 @@ local function CreateGlowOverlay()
     o.ants:SetPoint("CENTER")
     o.ants:SetAlpha(0)
     o.ants:SetTexture(ICON_ALERT_ANTS)
+    -- AnimateTexCoords is absent on Forever. Without it the texture would
+    -- show the whole 256x256 flipbook sheet, so pin it to the first frame.
+    if not AnimateTexCoords then o.ants:SetTexCoord(0, 48/256, 0, 48/256) end
 
     -- animIn
     o.animIn = o:CreateAnimationGroup()
@@ -1748,8 +1680,7 @@ anchor:SetScript("OnHide", function()
 end)
 
 local modFrame = CreateFrame("Frame")
-modFrame:RegisterEvent("MODIFIER_STATE_CHANGED")
-modFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+Apotheca.API.RegisterEvents(modFrame, "MODIFIER_STATE_CHANGED", "PLAYER_REGEN_DISABLED")
 modFrame:SetScript("OnEvent", function(_, event, key)
     if event == "MODIFIER_STATE_CHANGED" and key ~= "LALT" and key ~= "RALT" then
         return
@@ -1799,14 +1730,13 @@ local function CreateApothecaButton(cfg)
     local btn = CreateFrame("Button", "ApothecaButton_" .. cfg.key, ApothecaFrame, "SecureActionButtonTemplate")
     btn:SetWidth(BUTTON_SIZE)
     btn:SetHeight(BUTTON_SIZE)
-    -- Register ONE click edge, and it must be the DOWN edge.
-    -- This client's SecureActionButton_OnClick reads the "type" attribute on
-    -- the press and "typerelease" on the release. We only ever set "type"
-    -- (see ApplySecureItemAttributes), so registering "AnyUp" alone makes
-    -- every button dead — the release edge looks for an attribute that is
-    -- never set. Registering both edges instead runs the handler twice for
-    -- one physical click. Do not change this to "AnyUp" or to both.
-    btn:RegisterForClicks("AnyDown")
+    -- Register BOTH mouse edges. The client's SecureActionButton_OnClick
+    -- acts only on the edge where down == useOnKeyDown (the attribute, else
+    -- the ActionButtonUseKeyDown CVar), so one click uses the item once
+    -- (measured on Forever). A single edge is a dead button for anyone on
+    -- the other CVar setting. Never set "typerelease": the press-and-hold
+    -- release path reads it and would use the item a second time.
+    btn:RegisterForClicks(Apotheca.API.ClickEdges())
     -- Do NOT RegisterForDrag on secure buttons — that taints them.
     -- Do NOT SetScript("OnDragStart/Stop") on secure buttons — that taints them.
     -- Do NOT HookScript("OnClick") on secure buttons — that taints them.
@@ -1964,7 +1894,7 @@ StaticPopupDialogs["APOTHECA_WASTE_ASK"] = {
             -- Use the item directly — the "Yes" click is a hardware event.
             local name = GetItemInfo(btn.itemID)
             if name then
-                UseItemByName(name)
+                Apotheca.API.UseItemByName(name)
             end
             -- Also re-enable the button for subsequent clicks
             Apotheca.ApplySecureItemAttributes(btn, btn.itemID)
@@ -1990,7 +1920,7 @@ StaticPopupDialogs["APOTHECA_ALT_ASK"] = {
             -- Use the alternate item directly.
             local name = GetItemInfo(data.altItemID)
             if name then
-                UseItemByName(name)
+                Apotheca.API.UseItemByName(name)
             end
             -- Also swap the button in case the direct use failed
             SetWasteBypass(data.btnKey)
@@ -2024,8 +1954,10 @@ end
 -- e.g. a mana biscuit blocked at full health and mana, then clicked after
 -- mana has been spent. Re-read the live values instead of trusting it.
 local function IsStillWasteful(btn)
-    local hpFull   = (UnitHealth("player") or 0) >= (UnitHealthMax("player") or 1)
-    local manaFull = (UnitPower("player")  or 0) >= (UnitPowerMax("player")  or 1)
+    local missHP, missMana = Apotheca.API.PlayerMissing()
+    -- Unreadable means nothing is known to be wasted: use the item.
+    if missHP == nil then return false end
+    local hpFull, manaFull = missHP <= 0, missMana <= 0
     local res = btn._wasteResource
     if res == "health" then return hpFull end
     if res == "mana"   then return manaFull end
@@ -2058,7 +1990,7 @@ local function CreateAskOverlay(btn)
                 return
             end
             local name = GetCachedItemName(btn.itemID) or GetItemInfo(btn.itemID)
-            if name then UseItemByName(name) end
+            if name then Apotheca.API.UseItemByName(name) end
             -- Hand the button back to the secure path so later clicks skip
             -- this overlay entirely.
             Apotheca.ApplySecureItemAttributes(btn, btn.itemID)
@@ -2249,12 +2181,7 @@ local function ApplyItemToButton(btn, itemID, count, texture)
         btn.icon:Show()
         btn.emptyBg:SetAlpha(0)
         btn.countText:SetText(count and count > 1 and count or "")
-        local st, dur = SafeGetItemCooldown(itemID)
-        if st and dur and dur > 0 then
-            btn.cooldown:SetCooldown(st, dur)
-        else
-            btn.cooldown:SetCooldown(0, 0)
-        end
+        ApplyItemCooldown(btn.cooldown, itemID)
     else
         btn.countText:SetText("")
         btn.cooldown:SetCooldown(0, 0)
@@ -2281,16 +2208,15 @@ function Apotheca.RefreshButtonVisuals(countsToo)
     local bagMap
     for _, btn in pairs(Apotheca.buttons) do
         if btn.itemID then
-            local st, dur = SafeGetItemCooldown(btn.itemID)
-            if st and dur and dur > 0 then
-                btn.cooldown:SetCooldown(st, dur)
-            else
-                btn.cooldown:SetCooldown(0, 0)
-            end
+            ApplyItemCooldown(btn.cooldown, btn.itemID)
             if countsToo then
-                bagMap = bagMap or Apotheca.BuildBagMap()
-                local count = bagMap[btn.itemID] or 0
-                btn.countText:SetText(count > 1 and count or "")
+                -- Stack counts may be secret in combat; a failed read keeps
+                -- the last count shown.
+                pcall(function()
+                    bagMap = bagMap or Apotheca.BuildBagMap()
+                    local count = bagMap[btn.itemID] or 0
+                    btn.countText:SetText(count > 1 and count or "")
+                end)
             end
         end
     end
@@ -2487,8 +2413,9 @@ function Apotheca.UpdateAllButtons()
     -- Buff food is always excluded (you eat for the buff, not the HP).
     local wasteMode = db.preventWasteMode or "BLOCK"
     if wasteMode ~= "DO_NOTHING" and not db.debug and not InCombatLockdown() then
-        local hpFull   = (UnitHealth("player") or 0) >= (UnitHealthMax("player") or 1)
-        local manaFull = (UnitPower("player")  or 0) >= (UnitPowerMax("player")  or 1)
+        local missHP, missMana = Apotheca.API.PlayerMissing()
+        local hpFull   = missHP ~= nil and missHP <= 0
+        local manaFull = missMana ~= nil and missMana <= 0
 
         local function DisableButton(btn, resource)
             if not btn or not btn.itemID then return end
@@ -2597,16 +2524,19 @@ SlashCmdList["APOTHECA"] = function(msg)
     local cmd = msg and msg:lower():match("^%s*(.-)%s*$") or ""
     if cmd == "debug" then
         Apotheca.SetDebug(not DB().debug)
+    elseif cmd == "probe" and Apotheca.RunProbe then
+        Apotheca.RunProbe()
     elseif cmd == "status" then
         -- Diagnostic for "I click a button and nothing happens".
         local db = DB()
-        local hpFull   = (UnitHealth("player") or 0) >= (UnitHealthMax("player") or 1)
-        local manaFull = (UnitPower("player")  or 0) >= (UnitPowerMax("player")  or 1)
+        local missHP, missMana = Apotheca.API.PlayerMissing()
+        local hpFull   = missHP == nil and "unknown" or tostring(missHP <= 0)
+        local manaFull = missMana == nil and "unknown" or tostring(missMana <= 0)
         print("|cff9966ffApotheca:|r debug=" .. tostring(db.debug and true or false)
               .. "  preventWaste=" .. (db.preventWasteMode or "BLOCK")
               .. "  combat=" .. tostring(InCombatLockdown() and true or false)
-              .. "  healthFull=" .. tostring(hpFull)
-              .. "  manaFull=" .. tostring(manaFull))
+              .. "  healthFull=" .. hpFull
+              .. "  manaFull=" .. manaFull)
         for _, key in ipairs(Apotheca.GetButtonOrder()) do
             local btn = Apotheca.buttons[key]
             if btn and btn:IsShown() then
@@ -2645,32 +2575,19 @@ end
 local playerReady = false
 
 local eventFrame = CreateFrame("Frame", "ApothecaEventFrame", UIParent)
-eventFrame:RegisterEvent("ADDON_LOADED")
-eventFrame:RegisterEvent("PLAYER_LOGIN")
-eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
-eventFrame:RegisterEvent("BAG_UPDATE_COOLDOWN")
-eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
-eventFrame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
-eventFrame:RegisterEvent("PLAYER_LOGOUT")
-eventFrame:RegisterEvent("PLAYER_TALENT_UPDATE")
-eventFrame:RegisterEvent("READY_CHECK")
-eventFrame:RegisterEvent("READY_CHECK_FINISHED")
--- Instance-restricted potions (Cenarion / Auchenai / Nethergon) become
--- usable or unusable purely by where you are standing, so the bar has to
--- rescan on zone change, not just on bag change.
-eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+-- ZONE_CHANGED_NEW_AREA: instance-restricted potions become usable or
+-- unusable purely by where you are standing, so the bar rescans on zone
+-- change, not just on bag change.
+Apotheca.API.RegisterEvents(eventFrame,
+    "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD",
+    "BAG_UPDATE_DELAYED", "BAG_UPDATE_COOLDOWN",
+    "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED",
+    "GET_ITEM_INFO_RECEIVED", "PLAYER_LOGOUT", "PLAYER_TALENT_UPDATE",
+    "READY_CHECK", "READY_CHECK_FINISHED", "ZONE_CHANGED_NEW_AREA")
 
-if eventFrame.RegisterUnitEvent then
-    eventFrame:RegisterUnitEvent("UNIT_HEALTH",       "player")
-    eventFrame:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
-    eventFrame:RegisterUnitEvent("UNIT_AURA",         "player")
-else
-    eventFrame:RegisterEvent("UNIT_HEALTH")
-    eventFrame:RegisterEvent("UNIT_POWER_UPDATE")
-    eventFrame:RegisterEvent("UNIT_AURA")
-end
+eventFrame:RegisterUnitEvent("UNIT_HEALTH",       "player")
+eventFrame:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
+eventFrame:RegisterUnitEvent("UNIT_AURA",         "player")
 
 local recoveryPending      = false
 local recoveryElapsed      = 0
@@ -2758,7 +2675,11 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         end
 
     elseif event == "UNIT_AURA" then
-        if (arg1 == "player" or arg1 == nil) and playerReady then
+        -- Registered for "player" only, so the unit needs no test. The
+        -- payload (updateInfo) is secret data on this client and is never
+        -- touched. In combat every aura read is refused, so the glows are
+        -- left as PLAYER_REGEN_DISABLED set them.
+        if playerReady and not InCombatLockdown() then
             UpdateBuffFoodGlow()
             UpdateElixirGlow(Apotheca._lastElixRes)
             UpdateScrollGlow()
@@ -2767,7 +2688,8 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         end
 
     elseif event == "READY_CHECK" then
-        if playerReady then
+        -- A ready check during combat cannot read auras, so it glows nothing.
+        if playerReady and not InCombatLockdown() then
             readyCheckActive = true
             UpdateBuffFoodGlow()
             UpdateElixirGlow(Apotheca._lastElixRes)
