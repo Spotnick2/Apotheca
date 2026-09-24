@@ -2477,8 +2477,11 @@ Apotheca.API.RegisterEvents(eventFrame,
     "GET_ITEM_INFO_RECEIVED", "PLAYER_LOGOUT", "PLAYER_TALENT_UPDATE",
     "READY_CHECK", "READY_CHECK_FINISHED", "ZONE_CHANGED_NEW_AREA")
 
+-- UNIT_MAXHEALTH / UNIT_MAXPOWER: percentage potions are ranked against the
+-- maximum (FindBestPotion), so a Fortitude buff, a level-up or gear can
+-- change which potion is best.
 Apotheca.API.RegisterUnitEvents(eventFrame, "player",
-    "UNIT_HEALTH", "UNIT_POWER_UPDATE", "UNIT_AURA")
+    "UNIT_HEALTH", "UNIT_POWER_UPDATE", "UNIT_AURA", "UNIT_MAXHEALTH", "UNIT_MAXPOWER")
 
 local recoveryPending      = false
 local recoveryElapsed      = 0
@@ -2623,6 +2626,11 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         UpdateElixirGlow(nil)
         UpdateScrollGlow()
         UpdateWeaponOilGlow()
+
+    elseif event == "UNIT_MAXHEALTH" or event == "UNIT_MAXPOWER" then
+        -- Rare, and each changes which potion is best: one deferred update.
+        -- In combat UpdateAllButtons waits; PLAYER_REGEN_ENABLED updates.
+        if playerReady then RequestUpdate() end
 
     elseif event == "UNIT_HEALTH" or event == "UNIT_POWER_UPDATE" then
         -- Everything this rescan feeds reads health or mana. While both are

@@ -90,6 +90,20 @@ pid = Apotheca.FindBestPotion("mana", D.MANA_ITEMS, bagWith(282013, 13444))
 H.eq(pid, 13444, "20% of 5000 mana (1000) loses to a Major Mana Potion (1800)")
 WoW.healthMax, WoW.powerMax = 1000, 1000
 
+-- The buttons follow a change of maximum (#10): Fortitude, a level-up or
+-- gear can make the percentage potion the better one.
+WoW.AddItem(4, 1, 282011, 1, "Restored Healing Potion")
+WoW.AddItem(4, 2, 118, 1, "Minor Healing Potion")
+WoW.healthMax = 200
+Apotheca.UpdateAllButtons()
+H.eq(Apotheca.buttons.health.itemID, 118, "at 200 max health the Health button holds Minor Healing (80)")
+WoW.healthMax = 1000
+WoW.fire("UNIT_MAXHEALTH", "player")
+WoW.tick(1) ; WoW.tick(1)
+H.eq(Apotheca.buttons.health.itemID, 282011, "after UNIT_MAXHEALTH to 1000 it holds Restored Healing (300)")
+WoW.bags[4] = nil
+Apotheca.UpdateAllButtons()
+
 ------------------------------------------------------------
 -- Battleground-only items
 ------------------------------------------------------------
