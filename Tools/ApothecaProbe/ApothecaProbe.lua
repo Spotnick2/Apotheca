@@ -378,6 +378,71 @@ function Apotheca.RunProbe()
         end
         return table.concat(parts, "  ")
     end)
+    -- 3) Forever keeps all three Vanilla trees in ONE trait tree. Walk its
+    --    nodes and group the points spent by every field that could name
+    --    the Vanilla tree: subTreeID (with its name), groupIDs, and posX.
+    try("talent nodes (count, with points)", function()
+        local configID = C_ClassTalents.GetActiveConfigID()
+        local treeID = C_Traits.GetConfigInfo(configID).treeIDs[1]
+        local nodes = C_Traits.GetTreeNodes(treeID)
+        local withPoints = 0
+        for _, nodeID in ipairs(nodes) do
+            local n = C_Traits.GetNodeInfo(configID, nodeID)
+            if n and (n.ranksPurchased or 0) > 0 then withPoints = withPoints + 1 end
+        end
+        return #nodes, withPoints
+    end)
+    try("talent points by subTree / group / posX", function()
+        local configID = C_ClassTalents.GetActiveConfigID()
+        local treeID = C_Traits.GetConfigInfo(configID).treeIDs[1]
+        local bySub, byGroup, byX, subNames = {}, {}, {}, {}
+        local minX, maxX = math.huge, -math.huge
+        for _, nodeID in ipairs(C_Traits.GetTreeNodes(treeID)) do
+            local n = C_Traits.GetNodeInfo(configID, nodeID)
+            if n and n.isVisible then
+                if n.posX < minX then minX = n.posX end
+                if n.posX > maxX then maxX = n.posX end
+                local pts = n.ranksPurchased or 0
+                local sub = tostring(n.subTreeID)
+                bySub[sub] = (bySub[sub] or 0) + pts
+                if n.subTreeID and not subNames[sub] then
+                    local ok, st = pcall(C_Traits.GetSubTreeInfo, configID, n.subTreeID)
+                    subNames[sub] = ok and st and tostring(st.name) or "?"
+                end
+                local g = tostring(n.groupIDs and n.groupIDs[1])
+                byGroup[g] = (byGroup[g] or 0) + pts
+                local x = tostring(math.floor(n.posX / 1000))
+                byX[x] = (byX[x] or 0) + pts
+            end
+        end
+        local function fmt(t, names)
+            local out = {}
+            for k, v in pairs(t) do out[#out + 1] = k .. (names and names[k] and ("(" .. names[k] .. ")") or "") .. "=" .. v end
+            table.sort(out)
+            return table.concat(out, " ")
+        end
+        return "sub{" .. fmt(bySub, subNames) .. "} group{" .. fmt(byGroup) .. "} posX/1000{"
+            .. fmt(byX) .. "} x range " .. minX .. ".." .. maxX
+    end)
+    try("purchased talents (spell @ posX,posY)", function()
+        local configID = C_ClassTalents.GetActiveConfigID()
+        local treeID = C_Traits.GetConfigInfo(configID).treeIDs[1]
+        local out = {}
+        for _, nodeID in ipairs(C_Traits.GetTreeNodes(treeID)) do
+            local n = C_Traits.GetNodeInfo(configID, nodeID)
+            if n and (n.ranksPurchased or 0) > 0 then
+                local name = "?"
+                local entryID = n.activeEntry and n.activeEntry.entryID or (n.entryIDs and n.entryIDs[1])
+                if entryID then
+                    local e = C_Traits.GetEntryInfo(configID, entryID)
+                    local d = e and e.definitionID and C_Traits.GetDefinitionInfo(e.definitionID)
+                    if d and d.spellID then name = tostring(C_Spell.GetSpellName(d.spellID)) end
+                end
+                out[#out + 1] = name .. "x" .. n.ranksPurchased .. "@" .. n.posX .. "," .. n.posY
+            end
+        end
+        return table.concat(out, "; ")
+    end)
     try("UnitCharacterPoints / GetUnspentTalentPoints", function()
         local a = UnitCharacterPoints and UnitCharacterPoints("player")
         local b = GetUnspentTalentPoints and GetUnspentTalentPoints()
