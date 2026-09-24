@@ -8,7 +8,6 @@ WoW.AddItem(1, 1, 10306, 3, "Scroll of Spirit IV")
 WoW.AddItem(1, 2, 10305, 3, "Scroll of Protection IV")
 WoW.AddItem(1, 3, 10308, 3, "Scroll of Intellect IV")
 WoW.AddItem(1, 4, 10307, 3, "Scroll of Stamina IV")
-WoW.AddItem(1, 5, 12292, 3, "Scroll of Strength")      -- any strength scroll id in data
 WoW.AddItem(1, 6, 3012, 3, "Scroll of Agility")
 WoW.AddItem(1, 7, 8008, 2, "Mana Ruby")
 H.loadAddon()
@@ -37,6 +36,12 @@ H.check(not shown("spiritscroll") and not shown("intellectscroll"), "and no cast
 roleIs("WARRIOR", { damage = true })
 H.check(shown("strengthscroll") and shown("agilityscroll"), "a melee warrior is offered Strength and Agility")
 
+-- Hunters (Agility profile, but mana users) also get Intellect; rogues not.
+roleIs("HUNTER", { damage = true })
+H.check(shown("intellectscroll") and shown("agilityscroll"), "a hunter is offered Intellect as well as Agility")
+roleIs("ROGUE", { damage = true })
+H.check(not shown("intellectscroll"), "a rogue is not offered Intellect")
+
 -- A switched-off kind stays hidden for every role.
 ApothecaDB.profiles[ApothecaDB.activeProfile].scrolls.agility = false
 roleIs("ROGUE", { damage = true })
@@ -47,9 +52,12 @@ ApothecaDB.profiles[ApothecaDB.activeProfile].scrolls.agility = true
 local int
 for _, k in ipairs(Apotheca.SCROLL_KINDS) do if k.key == "intellectscroll" then int = k end end
 H.eq(Apotheca.HasScrollBuff(int), false, "no intellect buff: the Intellect scroll is wanted")
-WoW.spellNames[1459] = "Arcane Intellect"
-WoW.SetAura("HELPFUL", "Arcane Intellect", 10157)      -- another rank
-H.eq(Apotheca.HasScrollBuff(int), true, "Arcane Intellect (any rank) covers the Intellect scroll")
+WoW.SetAura("HELPFUL", "Arcane Intellect", 10157)      -- a listed rank: by spell ID
+H.eq(Apotheca.HasScrollBuff(int), true, "Arcane Intellect (a listed rank) covers the Intellect scroll")
+WoW.auras.HELPFUL = {}
+WoW.spellNames[1459] = "Intelligence des Arcanes"        -- a French client
+WoW.SetAura("HELPFUL", "Intelligence des Arcanes", 9999999) -- an ID NOT in the list
+H.eq(Apotheca.HasScrollBuff(int), true, "an unlisted Arcane Intellect is matched by its localized name")
 WoW.auras.HELPFUL = {}
 
 -- Mana gem: mages only.

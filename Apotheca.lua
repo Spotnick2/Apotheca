@@ -2434,6 +2434,10 @@ function UpdateAllButtonsBody()
     local scrollsOn  = not scrollsDB or scrollsDB.enabled
     local wanted = {}
     for _, stat in ipairs(Apotheca.GetRoleProfile().scrolls or {}) do wanted[stat] = true end
+    -- Every mana user also wants Intellect (more mana): hunters share the
+    -- Agility profile with rogues, and paladin or druid tanks and ret
+    -- paladins have mana too. Warriors and rogues do not.
+    if Apotheca.UsesMana() then wanted.intellect = true end
     local scrollRes = {}      -- key -> { id, count, tex, show }
     for _, kind in ipairs(SCROLL_KINDS) do
         local on = scrollsOn and wanted[kind.stat]

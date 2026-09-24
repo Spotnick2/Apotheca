@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
   - Tanks: Stamina
   - Melee and agility classes: Strength and Agility
   - Every role: Protection
+  - Every class with mana (hunters, paladins, druids…): Intellect as well
 
   A scroll counts as not needed while a buff it doesn't stack with is up, such as Arcane Intellect for Intellect or Power Word: Fortitude for Stamina.
 - **Mana Gem button for mages** (Jade, Citrine, Ruby), separate from mana potions because gems have their own cooldown.
