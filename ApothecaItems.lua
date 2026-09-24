@@ -29,7 +29,6 @@ D.HEALTH_ITEMS = {
     2456,   -- Minor Rejuvenation Potion (120)
     268881, -- Perishable Minor Healing Potion (80)
     118,    -- Minor Healing Potion (80)
-    282011, -- Restored Healing Potion (30%)
 }
 
 -- Mana potions, strongest first.
@@ -47,7 +46,52 @@ D.MANA_ITEMS = {
     2455,   -- Minor Mana Potion (160)
     3087,   -- Mug of Shimmer Stout (160)
     2456,   -- Minor Rejuvenation Potion (120)
-    282013, -- Restored Mana Potion (20%)
+}
+
+-- The ranking value of each fixed potion (a potion restoring both counts
+-- 25% less), so a percentage potion can be compared with it in game.
+D.POTION_VALUE = {
+    health = {
+        [223913] = 1500,  -- Major Healing Potion
+        [13446] = 1400,  -- Major Healing Potion
+        [18253] = 1200,  -- Major Rejuvenation Potion
+        [17348] = 1120,  -- Major Healing Draught
+        [3928] = 800,  -- Superior Healing Potion
+        [18839] = 800,  -- Combat Healing Potion
+        [223914] = 650,  -- Greater Healing Potion
+        [17349] = 640,  -- Superior Healing Draught
+        [274935] = 600,  -- Tessa's Tonic
+        [1710] = 520,  -- Greater Healing Potion
+        [268883] = 320,  -- Perishable Healing Potion
+        [929] = 320,  -- Healing Potion
+        [268882] = 160,  -- Perishable Lesser Healing Potion
+        [858] = 160,  -- Lesser Healing Potion
+        [2456] = 90,  -- Minor Rejuvenation Potion
+        [268881] = 80,  -- Perishable Minor Healing Potion
+        [118] = 80,  -- Minor Healing Potion
+    },
+    mana = {
+        [13444] = 1800,  -- Major Mana Potion
+        [13443] = 1200,  -- Superior Mana Potion
+        [18253] = 1200,  -- Major Rejuvenation Potion
+        [18841] = 1200,  -- Combat Mana Potion
+        [17351] = 1120,  -- Major Mana Draught
+        [6149] = 800,  -- Greater Mana Potion
+        [17352] = 640,  -- Superior Mana Draught
+        [274935] = 600,  -- Tessa's Tonic
+        [3827] = 520,  -- Mana Potion
+        [3385] = 320,  -- Lesser Mana Potion
+        [2455] = 160,  -- Minor Mana Potion
+        [3087] = 160,  -- Mug of Shimmer Stout
+        [2456] = 90,  -- Minor Rejuvenation Potion
+    },
+}
+
+-- Potions restoring a percentage of the maximum: ranked in game against
+-- the best fixed potion held, using the (readable) maximum health / mana.
+D.PERCENT_POTIONS = {
+    { id = 282011, resource = "health", percent = 30 },  -- Restored Healing Potion
+    { id = 282013, resource = "mana", percent = 20 },  -- Restored Mana Potion
 }
 
 -- Demonic Rune (12662) and Dark Rune (20520) were NOT in the client scan on
@@ -93,6 +137,7 @@ D.DRINK_ITEMS = {
     { id = 3772  , manaValue = 1292 , conjured = true },  -- Conjured Spring Water
     { id = 1708  , manaValue = 1292  },  -- Sweet Nectar
     { id = 4791  , manaValue = 1292  },  -- Enchanted Water
+    { id = 10841 , manaValue = 1292  },  -- Goldthorn Tea
     { id = 2136  , manaValue = 803  , conjured = true },  -- Conjured Purified Water
     { id = 1205  , manaValue = 803   },  -- Melon Juice
     { id = 9451  , manaValue = 803   },  -- Bubbling Water
@@ -140,6 +185,7 @@ D.FOOD_ITEMS = {
     { id = 250081, healthValue = 2065  },  -- Clam Linguine
     { id = 260627, healthValue = 2065  },  -- Savory Shen'dralar Steak
     { id = 260628, healthValue = 2065  },  -- Stuffed Pumpkin
+    { id = 267341, healthValue = 2065  },  -- Sweetpaw Jam
     { id = 272055, healthValue = 2065 , restoresMana = true },  -- Darkspear Islands Enriched Ration
     { id = 278122, healthValue = 2065  },  -- Carrot Salad
     { id = 19061 , healthValue = 1546 , restoresMana = true },  -- Warsong Gulch Iron Ration
@@ -153,9 +199,11 @@ D.FOOD_ITEMS = {
     { id = 4601  , healthValue = 1338  },  -- Soft Banana Bread
     { id = 4602  , healthValue = 1338  },  -- Moon Harvest Pumpkin
     { id = 4608  , healthValue = 1338  },  -- Raw Black Truffle
+    { id = 8957  , healthValue = 1338  },  -- Spinefin Halibut
     { id = 9681  , healthValue = 1338  },  -- Grilled King Crawler Legs
     { id = 13546 , healthValue = 1338  },  -- Bloodbelly Fish
     { id = 13893 , healthValue = 1338  },  -- Large Raw Mightfish
+    { id = 13930 , healthValue = 1338  },  -- Filet of Redgill
     { id = 16168 , healthValue = 1338  },  -- Heaven Peach
     { id = 16766 , healthValue = 1338  },  -- Undermine Clam Chowder
     { id = 17408 , healthValue = 1338  },  -- Spicy Beefstick
@@ -177,6 +225,7 @@ D.FOOD_ITEMS = {
     { id = 3771  , healthValue = 841   },  -- Wild Hog Shank
     { id = 4539  , healthValue = 841   },  -- Goldenbark Apple
     { id = 4544  , healthValue = 841   },  -- Mulgore Spice Bread
+    { id = 4594  , healthValue = 841   },  -- Rockscale Cod
     { id = 4607  , healthValue = 841   },  -- Delicious Cave Mold
     { id = 6807  , healthValue = 841   },  -- Frog Leg Stew
     { id = 8543  , healthValue = 841   },  -- Underwater Mushroom Cap
@@ -196,6 +245,7 @@ D.FOOD_ITEMS = {
     { id = 3770  , healthValue = 530   },  -- Mutton Chop
     { id = 4538  , healthValue = 530   },  -- Snapvine Watermelon
     { id = 4542  , healthValue = 530   },  -- Moist Cornbread
+    { id = 4593  , healthValue = 530   },  -- Bristle Whisker Catfish
     { id = 4606  , healthValue = 530   },  -- Spongy Morel
     { id = 5478  , healthValue = 530   },  -- Dig Rat Stew
     { id = 7228  , healthValue = 530   },  -- Tigule's Strawberry Ice Cream
@@ -207,12 +257,14 @@ D.FOOD_ITEMS = {
     { id = 5473  , healthValue = 282   },  -- Scorpid Surprise
     { id = 1113  , healthValue = 234  , conjured = true },  -- Conjured Bread
     { id = 414   , healthValue = 234   },  -- Dalaran Sharp
+    { id = 733   , healthValue = 234   },  -- Westfall Stew
     { id = 1326  , healthValue = 234   },  -- Sauteed Sunfish
     { id = 2287  , healthValue = 234   },  -- Haunch of Meat
     { id = 4537  , healthValue = 234   },  -- Tel'Abim Banana
     { id = 4541  , healthValue = 234   },  -- Freshly Baked Bread
     { id = 4605  , healthValue = 234   },  -- Red-speckled Mushroom
     { id = 5066  , healthValue = 234   },  -- Fissure Plant
+    { id = 5476  , healthValue = 234   },  -- Fillet of Frenzy
     { id = 5526  , healthValue = 234   },  -- Clam Chowder
     { id = 12238 , healthValue = 234   },  -- Darkshore Grouper
     { id = 16167 , healthValue = 234   },  -- Versicolor Treat
@@ -237,6 +289,7 @@ D.FOOD_ITEMS = {
     { id = 4656  , healthValue = 58    },  -- Small Pumpkin
     { id = 5057  , healthValue = 58    },  -- Ripe Watermelon
     { id = 5525  , healthValue = 58    },  -- Boiled Clams
+    { id = 6316  , healthValue = 58    },  -- Loch Frenzy Delight
     { id = 6458  , healthValue = 58    },  -- Oil Covered Fish
     { id = 7097  , healthValue = 58    },  -- Leg Meat
     { id = 16166 , healthValue = 58    },  -- Bean Soup
@@ -568,6 +621,20 @@ D.ELIXIR_CATALOG = {
     { id = 274274, spell = 1293741, flask = true , level = 55, stats = { stamina = 60 } },  -- Flask of Natural Aggression
     { id = 274275, spell = 1293742, flask = true , level = 55, stats = { stamina = 60 } },  -- Flask of Natural Precision
     { id = 274276, spell = 1293743, flask = true , level = 55, stats = { stamina = 60 } },  -- Flask of Natural Swiftness
+}
+
+-- The buff spell of every flask, statless ones included: only one flask can
+-- be active, so any of these means the flask slot is filled.
+D.ALL_FLASK_SPELLS = {
+    17624,    -- Flask of Petrification
+    17626,    -- Flask of the Titans
+    17627,    -- Flask of Distilled Wisdom
+    17628,    -- Flask of Supreme Power
+    17629,    -- Flask of Chromatic Resistance
+    1293740,  -- Flask of Natural Accuracy
+    1293741,  -- Flask of Natural Aggression
+    1293742,  -- Flask of Natural Precision
+    1293743,  -- Flask of Natural Swiftness
 }
 
 -- Weapon oils. kind = "mana" (healer default) or "wizard".

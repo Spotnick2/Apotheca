@@ -7,6 +7,12 @@ local H = dofile("tests/harness.lua")
 H.loadAddon()
 local D = Apotheca.DATA
 
+local function bagWith(...)
+    local m = {}
+    for i = 1, select("#", ...) do m[select(i, ...)] = 1 end
+    return m
+end
+
 ------------------------------------------------------------
 -- Shape: strongest first, no duplicates, every value positive
 ------------------------------------------------------------
@@ -66,6 +72,24 @@ H.check(not indexOf(D.BANDAGE_ITEMS, 5473), "and not a bandage")
 H.check(not indexOf(D.HEALTH_ITEMS, 11951), "Whipper Root Tuber (own cooldown) is not on the potion button")
 H.check(not find(D.FOOD_ITEMS, 11951) and not find(D.DRINK_ITEMS, 11951), "nor on Food or Drink")
 
+-- Food whose Well Fed bonus Buff Food does not offer is still recovery food.
+H.check(find(D.DRINK_ITEMS, 10841) ~= nil, "Goldthorn Tea (1292 mana, +herbalism) is a drink")
+H.check(find(D.FOOD_ITEMS, 4594) ~= nil, "Rockscale Cod (841 health, +fishing) is food")
+
+-- Percentage potions are ranked against the player's (readable) maximum.
+WoW.healthMax = 1000
+local pid = Apotheca.FindBestPotion("health", D.HEALTH_ITEMS, bagWith(282011, 118))
+H.eq(pid, 282011, "at 1000 max health, Restored Healing Potion (30% = 300) beats Minor Healing (80)")
+WoW.healthMax = 200
+pid = Apotheca.FindBestPotion("health", D.HEALTH_ITEMS, bagWith(282011, 118))
+H.eq(pid, 118, "at 200 max health (30% = 60), the Minor Healing Potion (80) wins")
+pid = Apotheca.FindBestPotion("health", D.HEALTH_ITEMS, bagWith(282011))
+H.eq(pid, 282011, "a percentage potion alone is still offered")
+WoW.powerMax = 5000
+pid = Apotheca.FindBestPotion("mana", D.MANA_ITEMS, bagWith(282013, 13444))
+H.eq(pid, 13444, "20% of 5000 mana (1000) loses to a Major Mana Potion (1800)")
+WoW.healthMax, WoW.powerMax = 1000, 1000
+
 ------------------------------------------------------------
 -- Battleground-only items
 ------------------------------------------------------------
@@ -95,11 +119,6 @@ WoW.bags[2] = nil
 ------------------------------------------------------------
 -- Role profiles pick the right elixirs and buff food
 ------------------------------------------------------------
-local function bagWith(...)
-    local m = {}
-    for i = 1, select("#", ...) do m[select(i, ...)] = 1 end
-    return m
-end
 local every = {}
 for _, e in ipairs(D.ELIXIR_CATALOG) do every[e.id] = 1 end
 
@@ -149,6 +168,14 @@ WoW.SetAura("HELPFUL", "Flask of the Titans", 17626)
 res = Apotheca.ResolveElixirs(every)
 H.eq(res.hasFlask, true, "a healer with Flask of the Titans running has a flask")
 H.eq(res.flaskID, nil, "and is not offered Distilled Wisdom on top of it")
+WoW.auras.HELPFUL = {}
+
+-- A flask whose effect is no catalog stat still fills the slot (Codex
+-- follow-up on #8: Chromatic Resistance was invisible).
+WoW.SetAura("HELPFUL", "Chromatic Resistance", 17629)
+res = Apotheca.ResolveElixirs(every)
+H.eq(res.hasFlask, true, "Flask of Chromatic Resistance running counts as a flask")
+H.eq(res.flaskID, nil, "so Distilled Wisdom is not offered over it")
 WoW.auras.HELPFUL = {}
 
 -- An elixir fitting both slots goes to the first slot only.

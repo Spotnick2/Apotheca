@@ -281,7 +281,7 @@ def build(rows):
         u = r['use']
         m = re.search(r'Restores (\d+)% (health|mana)\.', u)
         if m and r['sub'] == SUB_POTION:
-            (percent_h if m.group(2) == 'health' else percent_m).append(r)
+            (percent_h if m.group(2) == 'health' else percent_m).append((r, int(m.group(1))))
             continue
         if kind(r) == 'other-restore':
             skipped.append((r['id'], r['name'], 'restores instantly but is not a potion (own cooldown)'))
@@ -308,10 +308,15 @@ def build(rows):
         # A potion that restores both is the expensive one: rank it as if it
         # were 25% weaker, so a pure potion of the same tier is used first.
         both = h and mn
-        if h: health.append((-h * (0.75 if both else 1), tie, r['id'], r['name'], h))
-        if mn: mana.append((-mn * (0.75 if both else 1), tie, r['id'], r['name'], mn))
-    out['HEALTH_ITEMS'] = sorted(health) + [(0, 2, r['id'], r['name'], '30%') for r in percent_h]
-    out['MANA_ITEMS'] = sorted(mana) + [(0, 2, r['id'], r['name'], '20%') for r in percent_m]
+        if h: health.append((-h * (0.75 if both else 1), tie, r['id'], r['name'], h, h * (0.75 if both else 1)))
+        if mn: mana.append((-mn * (0.75 if both else 1), tie, r['id'], r['name'], mn, mn * (0.75 if both else 1)))
+    # Fixed-value potions, strongest first. Percentage potions cannot be
+    # ranked here (it depends on the player's maximum), so they are listed
+    # apart and ranked in game against the player's readable maximum.
+    out['HEALTH_ITEMS'] = sorted(health)
+    out['MANA_ITEMS'] = sorted(mana)
+    out['PERCENT_POTIONS'] = [(r['id'], r['name'], 'health', pct) for r, pct in percent_h] + \
+                             [(r['id'], r['name'], 'mana', pct) for r, pct in percent_m]
 
     # Food and drink.
     food, drink, both, buff = [], [], [], defaultdict(list)
@@ -341,9 +346,12 @@ def build(rows):
             for k, v in stats.items():
                 buff[k].append((-v, r['lvl'], r['id'], r['name'], v))
             continue
-        if buffy:
-            skipped.append((r['id'], r['name'], 'buff food, no stat recognised'))
+        if buffy and not (h or mn):
+            skipped.append((r['id'], r['name'], 'buff food, no stat recognised and no fixed restore'))
             continue
+        # A bonus Buff Food does not offer (fishing skill, herbalism,
+        # movement speed) does not stop it being good food or drink:
+        # Rockscale Cod restores 841, Goldthorn Tea 1292 mana.
         # Food restoring both competes on BOTH buttons. It must not collapse
         # them into one: a low-level item would hide a high-level drink.
         if h:
@@ -409,6 +417,12 @@ def build(rows):
         oils.append((r['id'], r['name'], 'mana' if 'Mana Oil' in r['name'] else 'wizard', st))
     out['OILS'] = oils
 
+    # Only one flask can be active. Its spell must count as "a flask is
+    # running" even when the flask's effect is no catalog stat (Chromatic
+    # Resistance, Petrification).
+    out['ALL_FLASK_SPELLS'] = sorted({(r['spell'], r['name']) for r in rows
+                                      if r['sub'] == SUB_FLASK and r['spell']})
+
     out['ZONE_RESTRICTED_ITEMS'] = zone
     return out, skipped
 
@@ -451,6 +465,26 @@ def emit(out, build_id, src):
     id_list('MANA_ITEMS', out['MANA_ITEMS'],
             lambda t: '    %-7s -- %s (%s)' % ('%d,' % t[2], t[3], t[4]),
             'Mana potions, strongest first.')
+    w('-- The ranking value of each fixed potion (a potion restoring both counts')
+    w('-- 25% less), so a percentage potion can be compared with it in game.')
+    w('D.POTION_VALUE = {')
+    seen = set()
+    for t in out['HEALTH_ITEMS'] + out['MANA_ITEMS']:
+        key = (t[2], t in out['MANA_ITEMS'])
+    for label, lst in (('health', out['HEALTH_ITEMS']), ('mana', out['MANA_ITEMS'])):
+        w('    %s = {' % label)
+        for t in lst:
+            w('        [%d] = %d,  -- %s' % (t[2], int(t[5]), t[3]))
+        w('    },')
+    w('}')
+    w('')
+    w('-- Potions restoring a percentage of the maximum: ranked in game against')
+    w('-- the best fixed potion held, using the (readable) maximum health / mana.')
+    w('D.PERCENT_POTIONS = {')
+    for t in out['PERCENT_POTIONS']:
+        w('    { id = %d, resource = "%s", percent = %d },  -- %s' % (t[0], t[2], t[3], t[1]))
+    w('}')
+    w('')
     w('-- Demonic Rune (12662) and Dark Rune (20520) were NOT in the client scan on')
     w('-- this build. Kept so the button works if they exist; they never match if not.')
     w('D.RUNE_ITEMS = { 20520, 12662 }')
@@ -504,6 +538,14 @@ def emit(out, build_id, src):
     for t in out['ELIXIR_CATALOG']:
         w('    { id = %-6d, spell = %-7s flask = %-5s, level = %-2d, stats = %s },  -- %s' % (
             t[0], '%s,' % t[3], 'true' if t[2] else 'false', t[5], lua_stats(t[4]), t[1]))
+    w('}')
+    w('')
+
+    w('-- The buff spell of every flask, statless ones included: only one flask can')
+    w('-- be active, so any of these means the flask slot is filled.')
+    w('D.ALL_FLASK_SPELLS = {')
+    for spell, name in out['ALL_FLASK_SPELLS']:
+        w('    %-9s -- %s' % ('%d,' % spell, name))
     w('}')
     w('')
 

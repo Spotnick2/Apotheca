@@ -346,6 +346,8 @@ local DATA = Apotheca.DATA
 
 local MANA_ITEMS        = DATA.MANA_ITEMS
 local HEALTH_ITEMS      = DATA.HEALTH_ITEMS
+local POTION_VALUE      = DATA.POTION_VALUE
+local PERCENT_POTIONS   = DATA.PERCENT_POTIONS
 local RUNE_ITEMS        = DATA.RUNE_ITEMS
 local CONJURED_ITEMS    = DATA.CONJURED_ITEMS
 local DRINK_ITEMS       = DATA.DRINK_ITEMS
@@ -561,6 +563,27 @@ function Apotheca.BuildBagMap()
         end
     end
     return bagMap
+end
+
+-- The best potion held for `resource` ("health" or "mana"): the strongest
+-- fixed potion, unless a percentage potion restores more for THIS player.
+-- Maximum health and mana are readable, so "30%" becomes a number here;
+-- if they are not, a percentage potion is only used when nothing else is.
+function Apotheca.FindBestPotion(resource, list, bagMap)
+    local id, count, tex = Apotheca.FindBestItem(list, bagMap)
+    local best = id and POTION_VALUE[resource][id] or 0
+    local maxHP, maxMana = Apotheca.API.PlayerMax()
+    local max = resource == "health" and maxHP or maxMana
+    for _, p in ipairs(PERCENT_POTIONS) do
+        local c = bagMap[p.id]
+        if p.resource == resource and c and c > 0 then
+            local value = max and max * p.percent / 100 or 0
+            if not id or value > best then
+                id, count, tex, best = p.id, c, GetCachedTexture(p.id), value
+            end
+        end
+    end
+    return id, count, tex
 end
 
 function Apotheca.FindBestItem(list, bagMap)
@@ -850,7 +873,7 @@ function Apotheca.FindBestHealthConsumable(bagMap)
         if id then return id, count, GetCachedTexture(id) end
     end
     -- Fall back to healing potions
-    return Apotheca.FindBestItem(HEALTH_ITEMS, bagMap)
+    return Apotheca.FindBestPotion("health", HEALTH_ITEMS, bagMap)
 end
 
 -- ============================================================
@@ -946,10 +969,9 @@ end
 
 -- Every flask, whatever the role: only one flask can be active, so ANY
 -- active flask fills the slot.
-local ALL_FLASK_SPELLS = {}
-for _, e in ipairs(DATA.ELIXIR_CATALOG) do
-    if e.flask and e.spell then ALL_FLASK_SPELLS[#ALL_FLASK_SPELLS + 1] = e.spell end
-end
+-- Generated from every flask the client has, including those whose effect
+-- is no catalog stat (Chromatic Resistance, Petrification).
+local ALL_FLASK_SPELLS = DATA.ALL_FLASK_SPELLS
 
 -- Pick the highest-value item from an elixir list that exists in bagMap,
 -- other than `exclude` (an item another slot already took).
@@ -2117,7 +2139,11 @@ function Apotheca.UpdateAllButtons()
         if cfg.key == "health" then
             id, cnt, tex = Apotheca.FindBestHealthConsumable(bagMap)
         else
-            id, cnt, tex = Apotheca.FindBestItem(cfg.list, bagMap)
+            if cfg.key == "mana" then
+                id, cnt, tex = Apotheca.FindBestPotion("mana", cfg.list, bagMap)
+            else
+                id, cnt, tex = Apotheca.FindBestItem(cfg.list, bagMap)
+            end
         end
         ApplyItemToButton(btn, id, cnt, tex)
         local show = id ~= nil or showEmpty or ALWAYS_VISIBLE_STATIC[cfg.key]

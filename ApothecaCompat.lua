@@ -136,6 +136,20 @@ function API.PlayerMissing()
                    function() return UnitPowerMax("player", mana) end)
 end
 
+-- Maximum health and mana. Unlike the current values these are readable
+-- (measured: ShouldUnitHealthMaxBeSecret = false, UnitPowerMax plain), but
+-- read inside a pcall anyway so a future build cannot throw here.
+function API.PlayerMax()
+    local mana = Enum and Enum.PowerType and Enum.PowerType.Mana or 0
+    local ok, h, m = pcall(function()
+        local hh, mm = UnitHealthMax("player"), UnitPowerMax("player", mana)
+        local _ = (hh > 0), (mm >= 0)
+        return hh, mm
+    end)
+    if not ok then return nil, nil end
+    return h, m
+end
+
 -- ------------------------------------------------------------
 -- Using items from insecure code
 --
