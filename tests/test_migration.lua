@@ -16,7 +16,8 @@ H.loadAddon({ savedDB = {
             PRIEST  = { "healing", "mp5", "crit", "stamina" },     -- old default
             PALADIN = { "healing", "crit", "mp5", "stamina" },     -- old default
             SHAMAN  = { "healing", "sausage", "crit", "stamina" }, -- stat that no longer exists
-            DRUID   = { "spirit", "healing", "intellect", "stamina" }, -- a real custom order
+            DRUID   = { "spirit", "healing", "intellect", "stamina" }, -- per CLASS: gone since #9
+            HEALER  = { "spirit", "healing", "intellect", "stamina" }, -- per ROLE: a real custom order
         },
     } },
 } })
@@ -25,8 +26,9 @@ local prio = ApothecaDB.profiles.Global.buffFoodPriority
 H.eq(prio.PRIEST, nil, "the old priest default is dropped, so the role profile decides")
 H.eq(prio.PALADIN, nil, "the old paladin default too")
 H.eq(prio.SHAMAN, nil, "a priority naming a stat Forever food lacks is dropped")
-H.eq(prio.DRUID and prio.DRUID[1], "spirit", "a real custom order survives")
-H.eq(Apotheca.GetStatPriority()[1], "healing", "a priest now gets the healer profile's priority")
+H.eq(prio.DRUID, nil, "per-class priorities are dropped: priorities are per role since #9")
+H.eq(prio.HEALER and prio.HEALER[1], "spirit", "a real custom order saved for a role survives")
+H.eq(Apotheca.GetStatPriority()[1], "spirit", "a priest (healer role) gets the healer role's saved order")
 H.eq(ApothecaDB.profiles["Realm-Alt"].buffFoodPriority.PRIEST, nil, "an inactive profile is cleaned as well")
 
 -- The flat (pre-profile) database route.

@@ -306,6 +306,84 @@ function Apotheca.RunProbe()
     end)
     out("  -> blocked event", blockedBy or "none")
 
+    -- Role sources (#9): the group-assigned role, and the game's own role
+    -- selector (Tank / Healer / Damage), through each API that may hold it.
+    local function fields(t)
+        if type(t) ~= "table" then return tostring(t) end
+        local parts = {}
+        for k, v in pairs(t) do parts[#parts + 1] = tostring(k) .. "=" .. tostring(v) end
+        table.sort(parts)
+        return "{" .. table.concat(parts, ", ") .. "}"
+    end
+    try("IsInGroup / IsInRaid", function() return IsInGroup(), IsInRaid() end)
+    try("UnitGroupRolesAssigned(player)", function() return UnitGroupRolesAssigned("player") end)
+    try("GetLFGRoles", function() return GetLFGRoles() end)
+    try("C_LFGListRoles.GetRoles", function() return fields(C_LFGListRoles.GetRoles()) end)
+    try("C_LFGListRoles.GetSavedRoles", function() return fields(C_LFGListRoles.GetSavedRoles()) end)
+    try("UnitPowerType / UnitPowerMax(Mana)", function()
+        return UnitPowerType("player"), UnitPowerMax("player", Enum.PowerType.Mana)
+    end)
+
+    -- Weapons (#9 stones and poisons): main hand 16, off hand 17, with the
+    -- item class and subclass that tell a blade from a blunt weapon.
+    for _, slot in ipairs({ 16, 17 }) do
+        try("weapon slot " .. slot, function()
+            local id = GetInventoryItemID("player", slot)
+            if not id then return "empty" end
+            local _, itemType, subType, _, _, classID, subClassID = C_Item.GetItemInfoInstant(id)
+            return id, itemType, subType, classID, subClassID
+        end)
+    end
+
+    -- Talents (#9): points spent per tree would give the real spec. The
+    -- Classic tab API is gone; try the two routes the dump offers.
+    -- 1) C_SpecializationInfo.GetTalentInfo{ specializationIndex, talentIndex }
+    --    returns rank / maxRank (Classic-shaped). Sum the ranks per tree.
+    try("talents via GetTalentInfo (tree: talents found, points)", function()
+        local out = {}
+        for tree = 1, 4 do
+            local found, points, names = 0, 0, {}
+            for i = 1, 40 do
+                local ok, r = pcall(C_SpecializationInfo.GetTalentInfo,
+                    { specializationIndex = tree, talentIndex = i })
+                if ok and type(r) == "table" and r.name then
+                    found = found + 1
+                    points = points + (tonumber(r.rank) or 0)
+                    if #names < 2 then names[#names + 1] = tostring(r.name) end
+                end
+            end
+            out[#out + 1] = tree .. ":" .. found .. "/" .. points .. "(" .. table.concat(names, ",") .. ")"
+        end
+        return table.concat(out, "  ")
+    end)
+    try("talents via GetTalentInfo tier/column (tree 1)", function()
+        local ok, r = pcall(C_SpecializationInfo.GetTalentInfo, { specializationIndex = 1, tier = 1, column = 1 })
+        return ok, type(r) == "table" and (tostring(r.name) .. " rank " .. tostring(r.rank) .. "/" .. tostring(r.maxRank)) or tostring(r)
+    end)
+    -- 2) C_ClassTalents / C_Traits: the active config's trees and the points
+    --    spent in each.
+    try("talents via C_Traits (config, trees, spent)", function()
+        local configID = C_ClassTalents.GetActiveConfigID()
+        if not configID then return "no active config" end
+        local info = C_Traits.GetConfigInfo(configID)
+        local parts = { "config " .. configID }
+        for _, treeID in ipairs(info and info.treeIDs or {}) do
+            local cur = C_Traits.GetTreeCurrencyInfo(configID, treeID, false) or {}
+            local spent = {}
+            for _, c in ipairs(cur) do
+                spent[#spent + 1] = tostring(c.traitCurrencyID) .. ":" .. tostring(c.spent)
+                    .. "/" .. tostring(c.spentInTree)
+            end
+            parts[#parts + 1] = "tree " .. treeID .. " [" .. table.concat(spent, " ") .. "]"
+        end
+        return table.concat(parts, "  ")
+    end)
+    try("UnitCharacterPoints / GetUnspentTalentPoints", function()
+        local a = UnitCharacterPoints and UnitCharacterPoints("player")
+        local b = GetUnspentTalentPoints and GetUnspentTalentPoints()
+        return a, b
+    end)
+
     -- Spec detection candidates. The talent-tab API is gone.
     try("C_SpecializationInfo.GetSpecialization", function() return C_SpecializationInfo.GetSpecialization() end)
     try("C_SpecializationInfo.GetSpecializationInfo(1)", function() return C_SpecializationInfo.GetSpecializationInfo(1) end)

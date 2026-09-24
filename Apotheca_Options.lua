@@ -347,10 +347,28 @@ function Apotheca.BuildOptionsPanelContent(panel)
     Checkbox("Enable Apotheca",
         function() return DBGet("enabled") ~= false end,
         function(v) DBSet(v, "enabled") end)
-    -- Forever has one spec per class and no talent trees, so "healer"
-    -- can only mean the class.
-    Checkbox("Only show on healer classes  |cff888888(Priest, Paladin, Shaman, Druid)|r",
-        function() return DBGet("showOnlyHealingSpec") ~= false end,
+    SectionHeader("Role")
+    SmallLabel("What the bar offers (buff food, flask and elixirs, mana buttons) follows your role.\n"
+        .. "Auto uses the Tank / Healer / Damage role you ticked in the game's role selector.")
+    RadioGroup(
+        {
+            { value = "AUTO",   label = "Auto  |cff888888(the game's role selector, else your class)|r" },
+            { value = "TANK",   label = "|TInterface\\Icons\\INV_Shield_06:14|t Tank" },
+            { value = "HEALER", label = "|TInterface\\Icons\\Spell_Holy_FlashHeal:14|t Healer" },
+            { value = "DAMAGE", label = "|TInterface\\Icons\\INV_Sword_04:14|t Damage" },
+        },
+        function() return DBGet("role") or "AUTO" end,
+        function(v) DBSet(v, "role") ; Apotheca.ResetLayout() end)
+    SmallLabel("Druid and Shaman damage:")
+    RadioGroup(
+        {
+            { value = "SPELL",    label = "Spell  |cff888888(Balance, Elemental)|r" },
+            { value = "PHYSICAL", label = "Physical  |cff888888(Feral, Enhancement)|r" },
+        },
+        function() return DBGet("damageStyle") or "SPELL" end,
+        function(v) DBSet(v, "damageStyle") ; Apotheca.ResetLayout() end)
+    Checkbox("Only show the bar while my role is Healer",
+        function() return DBGet("showOnlyHealingSpec") == true end,
         function(v) DBSet(v, "showOnlyHealingSpec") end)
     Checkbox("Always show empty buttons  |cff888888(show all slots even if bag is empty)|r",
         function() return DBGet("showEmptyButtons") == true end,
@@ -479,16 +497,18 @@ function Apotheca.BuildOptionsPanelContent(panel)
         { value = "armor",       label = "Armor" },
     }
     local function DefaultPrio() return Apotheca.GetRoleProfile().buffFood end
+    -- Per role profile (#9): what you eat as a healer is not what you eat
+    -- as a tank.
+    local function ProfileKey() local _, key = Apotheca.ResolveRole() return key end
+    SmallLabel("|cff888888Saved for your current role; each role keeps its own order.|r")
     for slot = 1, 4 do
         Dropdown("Priority " .. slot .. ":", STAT_OPTIONS,
             function()
-                local _, cls = UnitClass("player")
-                local p = DBGet("buffFoodPriority", cls or "PRIEST")
+                local p = DBGet("buffFoodPriority", ProfileKey())
                 return (p and p[slot]) or DefaultPrio()[slot]
             end,
             function(v)
-                local _, cls = UnitClass("player")
-                if not cls then return end
+                local cls = ProfileKey()
                 local db = DB()
                 if type(db.buffFoodPriority) ~= "table" then db.buffFoodPriority = {} end
                 if type(db.buffFoodPriority[cls]) ~= "table" then

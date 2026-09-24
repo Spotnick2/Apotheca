@@ -215,6 +215,53 @@ function API.PaintFullness(resource, textures)
 end
 
 -- ------------------------------------------------------------
+-- The game's role selector (#9)
+--
+-- The Tank / Healer / Damage checkboxes the player ticks in the game's
+-- own role selector. Read through the typed C_LFGListRoles first, then the
+-- older GetLFGRoles global; each inside a pcall, and only real booleans
+-- are trusted, so an unexpected shape reads as "nothing selected".
+-- The group-assigned role is deliberately NOT used (Codex review of #9):
+-- joining a group must not silently change what the bar offers.
+-- Returns tank, healer, damage (plain booleans), or nil when no source
+-- answered.
+-- ------------------------------------------------------------
+
+local function fromStruct(r)
+    if type(r) ~= "table" then return nil end
+    local tank, healer = r.tank, r.healer
+    local damage = r.dps
+    if damage == nil then damage = r.damage end
+    if type(tank) ~= "boolean" and type(healer) ~= "boolean" and type(damage) ~= "boolean" then
+        return nil
+    end
+    return tank == true, healer == true, damage == true
+end
+
+function API.SelectedRoles()
+    local L = C_LFGListRoles
+    if L then
+        for _, getter in ipairs({ "GetRoles", "GetSavedRoles" }) do
+            local fn = L[getter]
+            if fn then
+                local ok, r = pcall(fn)
+                if ok then
+                    local t, h, d = fromStruct(r)
+                    if t ~= nil and (t or h or d) then return t, h, d end
+                end
+            end
+        end
+    end
+    if GetLFGRoles then
+        local ok, _, t, h, d = pcall(GetLFGRoles)   -- leader, tank, healer, dps
+        if ok and (t == true or h == true or d == true) then
+            return t == true, h == true, d == true
+        end
+    end
+    return nil
+end
+
+-- ------------------------------------------------------------
 -- Using items from insecure code
 --
 -- The UseItemByName global is gone. C_Item.UseItemByName exists but is
