@@ -98,8 +98,18 @@ On specs: the Priest also has one spec (`1487, "Priest", ..., "DAMAGER"`). The r
 - **Absent from the client:** Demonic Rune, Dark Rune, Lesser Mana Oil and Lesser Wizard Oil.
 - **Wowhead is incomplete.** It lists no Scroll of Protection, but the client has ranks I to IV.
 
+## Run 6: 2026-09-24, clicks (Priest, level 3)
+
+With Forest Mushroom Cap on the Food button (secure button registered for both edges, `AnyUp` + `AnyDown`, and `ActionButtonUseKeyDown = 1`), out of combat:
+
+- **Left click: one item eaten.**
+- **Right click: one item eaten.**
+
+This confirms the both-edges registration in game: the client's secure handler acts on exactly one edge, so one click uses one item.
+
 ## Still to measure
 
 - **`C_Item.UseItemByName` on a real item** from the right-click alternate "Use X instead?" popup.
-- **Clicks, on a healer-class character:** one use per click, on left and right click, in and out of combat. This needs an item the bar knows, so it moves to #4.
+- **Clicks in combat.** Measured out of combat only, since food can't be eaten in combat. Check once with a potion.
+- **Clicks with `ActionButtonUseKeyDown = 0`**, the other edge. The porting guide measured it with a forced attribute; Apotheca hasn't been checked on it yet.
 - **Elixir and flask stacking.** This needs a character high enough to use them, and waits on issue #4.
