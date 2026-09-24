@@ -375,7 +375,8 @@ function Apotheca.BuildOptionsPanelContent(panel)
         function() return DBGet("fullTint") ~= false end,
         function(v) DBSet(v, "fullTint") end)
     SmallLabel("|cff888888Display only: the client lets addons colour an icon by your health\n"
-        .. "and mana, but not read them, so a click still uses the item.|r")
+        .. "and mana, but not read them, so a click still uses the item. Items that\n"
+        .. "restore both (Enriched Manna Biscuit, rejuvenation potions) are never greyed.|r")
 
     SectionHeader("Waste Prevention")
     SmallLabel("When at full health/mana, recovery buttons:")

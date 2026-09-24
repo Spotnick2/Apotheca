@@ -2117,12 +2117,26 @@ local TINT_RESOURCE = {
     drink = "mana", mana = "mana",
 }
 
+-- Items that restore BOTH health and mana: Enriched Manna Biscuit, the
+-- rations, rejuvenation potions. They are still useful while only one of
+-- the two is full, and "both full" cannot be shown: it would mean combining
+-- two secret colours, which Lua may not touch. So they are never greyed.
+local RESTORES_BOTH = {}
+for _, e in ipairs(DATA.FOOD_ITEMS)  do if e.restoresMana   then RESTORES_BOTH[e.id] = true end end
+for _, e in ipairs(DATA.DRINK_ITEMS) do if e.restoresHealth then RESTORES_BOTH[e.id] = true end end
+for id in pairs(DATA.POTION_VALUE.health) do
+    if DATA.POTION_VALUE.mana[id] then RESTORES_BOTH[id] = true end
+end
+Apotheca._RESTORES_BOTH = RESTORES_BOTH
+
 function Apotheca.RefreshFullTint()
     local on = DB().fullTint ~= false
     for key, resource in pairs(TINT_RESOURCE) do
         local btn = Apotheca.buttons[key]
         if btn and btn.icon then
-            local tinted = on and btn.itemID and Apotheca.API.TintByFullness(btn.icon, resource)
+            local id = btn.itemID
+            local tinted = on and id and not RESTORES_BOTH[id]
+                and Apotheca.API.TintByFullness(btn.icon, resource)
             if not tinted then btn.icon:SetVertexColor(1, 1, 1) end
         end
     end

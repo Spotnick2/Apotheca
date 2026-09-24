@@ -160,8 +160,11 @@ end
 -- a setter (SetVertexColor) and are never compared. This is how unit
 -- frame addons draw health on Forever.
 --
--- The curve is white up to 99.9% and grey at exactly 100%: a linear curve,
--- so it needs no curve-type enum (not in the API dump).
+-- The curve is white up to 99.99% and grey at exactly 100%, linear (set
+-- explicitly when the client has the enum; it is not in the API dump, and
+-- EllesmereUI's Forever port sets it). The 0.01% ramp is under one hit
+-- point for any real maximum. Health uses usePredicted = false: an
+-- incoming heal must not grey the icon before it lands.
 -- ------------------------------------------------------------
 
 API.FULL_GREY = 0.4
@@ -172,10 +175,12 @@ local function FullCurve()
         fullCurve = false
         pcall(function()
             local c = C_CurveUtil.CreateColorCurve()
+            local linear = Enum and Enum.LuaCurveType and Enum.LuaCurveType.Linear
+            if linear and c.SetType then c:SetType(linear) end
             local g = API.FULL_GREY
-            c:AddPoint(0,     CreateColor(1, 1, 1, 1))
-            c:AddPoint(0.999, CreateColor(1, 1, 1, 1))
-            c:AddPoint(1,     CreateColor(g, g, g, 1))
+            c:AddPoint(0,      CreateColor(1, 1, 1, 1))
+            c:AddPoint(0.9999, CreateColor(1, 1, 1, 1))
+            c:AddPoint(1,      CreateColor(g, g, g, 1))
             fullCurve = c
         end)
     end
@@ -191,7 +196,7 @@ function API.TintByFullness(texture, resource)
     return (pcall(function()
         local color
         if resource == "health" then
-            color = UnitHealthPercent("player", true, curve)
+            color = UnitHealthPercent("player", false, curve)
         else
             local mana = Enum and Enum.PowerType and Enum.PowerType.Mana or 0
             color = UnitPowerPercent("player", mana, false, curve)

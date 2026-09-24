@@ -42,7 +42,18 @@ WoW.events = {}       -- [frame] = { [event] = true }
 ------------------------------------------------------------
 
 local secretMT = {}
-local function Secret() return setmetatable({}, secretMT) end
+-- A secret may carry the real value, hidden from the addon (it can only be
+-- read through WoW.Reveal, i.e. by what the client would draw).
+local hidden = setmetatable({}, { __mode = "k" })
+local function Secret(v)
+    local s = setmetatable({}, secretMT)
+    hidden[s] = v
+    return s
+end
+function WoW.Reveal(v)
+    if getmetatable(v) == secretMT then return hidden[v] end
+    return v
+end
 for _, op in ipairs({ "__add", "__sub", "__mul", "__div", "__unm" }) do
     secretMT[op] = function() return Secret() end
 end
@@ -175,7 +186,12 @@ function Frame:SetPoint(...) self._points[#self._points + 1] = { ... } end
 function Frame:ClearAllPoints() self._points = {} end
 function Frame:GetPoint() return "CENTER", nil, "CENTER", 0, 0 end
 function Frame:GetFontString() return self._fs end
-function Frame:SetVertexColor(r, g, b) self._vertex = { r, g, b } end
+-- Records what the texture would be drawn with: a secret channel is
+-- unwrapped here, as the client does, never by the addon.
+function Frame:SetVertexColor(r, g, b)
+    self._vertex = { r, g, b }
+    self._drawn = { WoW.Reveal(r), WoW.Reveal(g), WoW.Reveal(b) }
+end
 
 local function childRegion(self, kind)
     return NewRegion(kind, self)
@@ -375,14 +391,17 @@ function UnitPowerMissing() return Secret() end
 
 local function curveColor(curve, pct)
     local r, g, b = curve:_eval(pct)
-    if WoW.healthSecret then r, g, b = Secret(), Secret(), Secret() end
-    WoW.lastCurveColor = { curve:_eval(pct) }   -- what the client would paint
+    if WoW.healthSecret then r, g, b = Secret(r), Secret(g), Secret(b) end
     return { GetRGB = function() return r, g, b end }
 end
-function UnitHealthPercent(_, _, curve)
+-- usePredicted: WoW.incomingHeal counts only when predicted is asked for.
+function UnitHealthPercent(_, usePredicted, curve)
     if not curve then return Secret() end
     if WoW.curvesRefused then error("curve refused") end
-    return curveColor(curve, WoW.health / WoW.healthMax)
+    local h = WoW.health
+    if usePredicted ~= false then h = math.min(WoW.healthMax, h + (WoW.incomingHeal or 0)) end
+    WoW.lastPredicted = usePredicted
+    return curveColor(curve, h / WoW.healthMax)
 end
 function UnitPowerPercent(_, _, _, curve)
     if not curve then return Secret() end
