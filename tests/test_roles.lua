@@ -70,10 +70,19 @@ Apotheca.ResetLayout()
 Apotheca.UpdateAllButtons()
 H.check(not Apotheca.buttons.mana:IsShown(), "a warrior has no Mana button, even holding mana potions")
 H.check(Apotheca.buttons.health:IsShown(), "but keeps the Health button")
+WoW.AddItem(0, 3, 8766, 3, "Morning Glory Dew")
+WoW.AddItem(0, 4, 20748, 3, "Brilliant Mana Oil")
+Apotheca.ResetLayout()
+Apotheca.UpdateAllButtons()
+H.check(not Apotheca.buttons.drink:IsShown(), "a warrior has no Drink button, even holding water")
+H.check(not Apotheca.buttons.weaponoil:IsShown(), "nor a Weapon Oil button holding Brilliant Mana Oil")
+H.check(Apotheca.buttons.food:IsShown(), "but keeps the Food button")
 WoW.class = "PRIEST"
 Apotheca.ResetLayout()
 Apotheca.UpdateAllButtons()
 H.check(Apotheca.buttons.mana:IsShown(), "a priest has the Mana button")
+H.check(Apotheca.buttons.drink:IsShown(), "and the Drink button")
+H.check(Apotheca.buttons.weaponoil:IsShown(), "and the Weapon Oil button")
 
 -- The bar shows for every role by default; "healer only" is opt-in.
 WoW.class = "MAGE"

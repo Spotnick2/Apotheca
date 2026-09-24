@@ -2074,7 +2074,8 @@ local function RefreshLayout(recoveryMode, elixirMode, staticFlags, scrollFlags)
         shouldShow["recovery"] = true
     elseif recoveryMode == "split" then
         shouldShow["food"]  = true
-        shouldShow["drink"] = true
+        -- Drink restores mana only: no Drink slot for warriors and rogues.
+        shouldShow["drink"] = Apotheca.UsesMana()
     end
 
     if elixirMode then
@@ -2339,7 +2340,11 @@ function UpdateAllButtonsBody()
     -- ── Weapon oil ───────────────────────────────────────────────
     local oilID, oilCnt, oilTex
     if not db.weaponOil or db.weaponOil.enabled then
-        oilID, oilCnt, oilTex = Apotheca.FindBestWeaponOil(bagMap)
+        -- Mana and wizard oils are for mana users; warriors and rogues get
+        -- stones and poisons instead (#9 part 2/3).
+        if Apotheca.UsesMana() then
+            oilID, oilCnt, oilTex = Apotheca.FindBestWeaponOil(bagMap)
+        end
     end
 
     -- ── Buff food ────────────────────────────────────────────────
@@ -2365,7 +2370,7 @@ function UpdateAllButtonsBody()
         food        = (buffFoodID ~= nil)          or (db.buffFood and db.buffFood.enabled and showEmpty),
         spirit      = (spiritID   ~= nil)          or (scrollsOn   and (not scrollsDB or scrollsDB.spirit)   and showEmpty),
         protection  = (protID     ~= nil)          or (scrollsOn   and (not scrollsDB or scrollsDB.protection) and showEmpty),
-        oil         = (oilID      ~= nil)          or ((not db.weaponOil or db.weaponOil.enabled) and showEmpty),
+        oil         = (oilID      ~= nil)          or ((not db.weaponOil or db.weaponOil.enabled) and showEmpty and Apotheca.UsesMana()),
         bandage     = (bandageID  ~= nil)          or ((not db.bandage or db.bandage.enabled) and showEmpty),
         healthstone = (hsID       ~= nil)          or ((not db.healthstone or db.healthstone.enabled ~= false) and showEmpty),
     }

@@ -358,7 +358,9 @@ function Apotheca.BuildOptionsPanelContent(panel)
             { value = "DAMAGE", label = "|TInterface\\Icons\\INV_Sword_04:14|t Damage" },
         },
         function() return DBGet("role") or "AUTO" end,
-        function(v) DBSet(v, "role") ; Apotheca.ResetLayout() end)
+        -- The role decides which buff-food priority the dropdowns below
+        -- show and write: re-read them, or they display the old role's order.
+        function(v) DBSet(v, "role") ; Apotheca.ResetLayout() ; Apotheca.RefreshOptions() end)
     SmallLabel("Druid and Shaman damage:")
     RadioGroup(
         {
@@ -366,7 +368,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
             { value = "PHYSICAL", label = "Physical  |cff888888(Feral, Enhancement)|r" },
         },
         function() return DBGet("damageStyle") or "SPELL" end,
-        function(v) DBSet(v, "damageStyle") ; Apotheca.ResetLayout() end)
+        function(v) DBSet(v, "damageStyle") ; Apotheca.ResetLayout() ; Apotheca.RefreshOptions() end)
     Checkbox("Only show the bar while my role is Healer",
         function() return DBGet("showOnlyHealingSpec") == true end,
         function(v) DBSet(v, "showOnlyHealingSpec") end)
