@@ -32,6 +32,9 @@ local PROFILE_DEFAULTS = {
     -- Druid / Shaman damage: "SPELL" (caster) or "PHYSICAL". Nothing on
     -- this client tells Balance from Feral or Elemental from Enhancement.
     damageStyle         = "SPELL",
+    -- Use the role assigned in the current group (party frame "Set Role")
+    -- when there is one. Off by default: it is often unset or stale.
+    useGroupRole        = false,
     -- Grey the food, drink, potion and healthstone icons while the resource
     -- they restore is full (#6). Display only: clicks still work.
     fullTint            = true,
@@ -486,9 +489,10 @@ end
 
 -- The role this character plays: "TANK", "HEALER" or "DAMAGE", and the
 -- profile key it maps to ("TANK", "HEALER", "CASTER", "MELEE", "AGILITY").
--- Order: Apotheca's own override, then the game's role selector (one
--- ticked role, or the class's preferred one among several), then the
--- class default. The group-assigned role is not used (#9).
+-- Order: Apotheca's own override; then, only if the player opted in, the
+-- role assigned in the current group; then the game's role selector (one
+-- ticked role, or the class's preferred one among several); then the
+-- class default.
 function Apotheca.ResolveRole()
     local _, className = UnitClass("player")
     local cls = CLASS_ROLES[className] or CLASS_ROLES.PRIEST
@@ -496,7 +500,9 @@ function Apotheca.ResolveRole()
 
     local role = db.role
     if role ~= "TANK" and role ~= "HEALER" and role ~= "DAMAGE" then
-        role = nil
+        role = db.useGroupRole == true and Apotheca.API.GroupRole() or nil
+    end
+    if not role then
         local t, h, d = Apotheca.API.SelectedRoles()
         if t ~= nil then
             local ticked = { TANK = t, HEALER = h, DAMAGE = d }
@@ -2625,7 +2631,7 @@ local eventFrame = CreateFrame("Frame", "ApothecaEventFrame", UIParent)
 -- unusable purely by where you are standing, so the bar rescans on zone
 -- change, not just on bag change.
 Apotheca.API.RegisterEvents(eventFrame,
-    "LFG_ROLE_UPDATE", "ROLE_CHANGED_INFORM",
+    "LFG_ROLE_UPDATE", "ROLE_CHANGED_INFORM", "PLAYER_ROLES_ASSIGNED", "GROUP_ROSTER_UPDATE",
     "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD",
     "BAG_UPDATE_DELAYED", "BAG_UPDATE_COOLDOWN",
     "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED",
@@ -2782,7 +2788,8 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         UpdateScrollGlow()
         UpdateWeaponOilGlow()
 
-    elseif event == "LFG_ROLE_UPDATE" or event == "ROLE_CHANGED_INFORM" then
+    elseif event == "LFG_ROLE_UPDATE" or event == "ROLE_CHANGED_INFORM"
+        or event == "PLAYER_ROLES_ASSIGNED" or event == "GROUP_ROSTER_UPDATE" then
         -- Only a change of the RESOLVED role costs an update: these can
         -- come in bursts. In combat the update waits for combat's end.
         if playerReady then

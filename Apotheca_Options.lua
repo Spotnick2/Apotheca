@@ -361,6 +361,9 @@ function Apotheca.BuildOptionsPanelContent(panel)
         -- The role decides which buff-food priority the dropdowns below
         -- show and write: re-read them, or they display the old role's order.
         function(v) DBSet(v, "role") ; Apotheca.ResetLayout() ; Apotheca.RefreshOptions() end)
+    Checkbox("In a group, use the role set there  |cff888888(party frame \"Set Role\"; often unset)|r",
+        function() return DBGet("useGroupRole") == true end,
+        function(v) DBSet(v, "useGroupRole") ; Apotheca.ResetLayout() ; Apotheca.RefreshOptions() end)
     SmallLabel("Druid and Shaman damage:")
     RadioGroup(
         {

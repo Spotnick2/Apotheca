@@ -238,6 +238,20 @@ local function fromStruct(r)
     return tank == true, healer == true, damage == true
 end
 
+-- The role assigned in the current group ("Set Role" on the party frame),
+-- as "TANK" / "HEALER" / "DAMAGE", or nil when not in a group or none is
+-- set. Opt-in only (db.useGroupRole): the owner found it often unset or
+-- stale, which is why it is not part of the default order.
+function API.GroupRole()
+    local ok, inGroup, role = pcall(function()
+        return IsInGroup(), UnitGroupRolesAssigned("player")
+    end)
+    if not ok or not inGroup then return nil end
+    if role == "TANK" or role == "HEALER" then return role end
+    if role == "DAMAGER" then return "DAMAGE" end
+    return nil
+end
+
 function API.SelectedRoles()
     local L = C_LFGListRoles
     if L then

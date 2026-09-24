@@ -39,7 +39,17 @@ H.eq(role(), "HEALER", "a paladin ticking Tank and Healer heals")
 WoW.class = "PRIEST"
 WoW.lfgRoles = { healer = true }
 WoW.inGroup, WoW.assignedRole = true, "DAMAGER"
-H.eq(role(), "HEALER", "a group assignment does not override the selector")
+H.eq(role(), "HEALER", "by default a group assignment does not override the selector")
+db().useGroupRole = true
+H.eq(role(), "DAMAGE", "opted in, the group's assigned role wins over the selector")
+WoW.assignedRole = "NONE"
+H.eq(role(), "HEALER", "an unset group role falls back to the selector")
+WoW.inGroup, WoW.assignedRole = false, "DAMAGER"
+H.eq(role(), "HEALER", "outside a group the assigned role is ignored")
+WoW.inGroup = true
+db().role = "TANK"
+H.eq(role(), "TANK", "the override still wins over the group role")
+db().role, db().useGroupRole = "AUTO", false
 WoW.inGroup, WoW.assignedRole = false, nil
 
 -- The override wins over everything.

@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- **Apotheca is for every role now, not just healers.** It follows the role you tick in the game's own role selector (Tank / Healer / Damage), or your class if you haven't picked one. You can also set the role yourself in the options. That's handy for a healer questing solo who wants caster food.
+- **Apotheca is for every role now, not just healers.** It follows the role you tick in the game's own role selector (Tank / Healer / Damage), or your class if you haven't picked one. You can also set the role yourself in the options. That's handy for a healer questing solo who wants caster food. In a group, you can opt in to use the role set on the party frame.
 - **A Tank role:** stamina and armor buff food, Flask of the Titans, and armor and stamina elixirs.
 - **Damage roles pick the right items:** casters get spell damage and intellect, warriors strength, and rogues and hunters agility. Druids and Shamans choose Spell or Physical damage in the options.
 - **Full health / mana tint:** food, drink, potions, healthstones, bandages and runes turn grey while what they restore is full. Display only: a click still uses the item.
