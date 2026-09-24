@@ -23,6 +23,9 @@ local PROFILE_DEFAULTS = {
     enabled             = true,
     debug               = false,
     showOnlyHealingSpec = true,
+    -- Grey the food, drink, potion and healthstone icons while the resource
+    -- they restore is full (#6). Display only: clicks still work.
+    fullTint            = true,
     lockPosition        = false,
     visibility          = "ALWAYS",
     showEmptyButtons    = false,
@@ -2101,6 +2104,31 @@ function Apotheca.RefreshButtonVisuals(countsToo)
 end
 
 -- ============================================================
+-- FULL TINT (#6)
+-- Greys a recovery icon while the resource it restores is full, using
+-- the client-side colour curve (Apotheca.API.TintByFullness). Waste
+-- prevention cannot BLOCK on Forever, because current health and mana
+-- are secret; this is the part that can still be shown. It touches no
+-- secure attribute, so it runs in combat too.
+-- ============================================================
+
+local TINT_RESOURCE = {
+    food = "health", health = "health", healthstone = "health",
+    drink = "mana", mana = "mana",
+}
+
+function Apotheca.RefreshFullTint()
+    local on = DB().fullTint ~= false
+    for key, resource in pairs(TINT_RESOURCE) do
+        local btn = Apotheca.buttons[key]
+        if btn and btn.icon then
+            local tinted = on and btn.itemID and Apotheca.API.TintByFullness(btn.icon, resource)
+            if not tinted then btn.icon:SetVertexColor(1, 1, 1) end
+        end
+    end
+end
+
+-- ============================================================
 -- MAIN UPDATE
 -- ============================================================
 
@@ -2108,6 +2136,11 @@ function Apotheca.UpdateAllButtons()
     -- Secure buttons cannot be shown/hidden/moved/resized during combat.
     -- The bar will refresh automatically when combat ends (PLAYER_REGEN_ENABLED).
     if InCombatLockdown() then return end
+    Apotheca._UpdateAllButtons()
+    Apotheca.RefreshFullTint()
+end
+
+function Apotheca._UpdateAllButtons()
 
     local db = DB()
 
@@ -2633,6 +2666,8 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         if playerReady then RequestUpdate() end
 
     elseif event == "UNIT_HEALTH" or event == "UNIT_POWER_UPDATE" then
+        -- The full tint follows health and mana live, in combat too.
+        if playerReady then Apotheca.RefreshFullTint() end
         -- Everything this rescan feeds reads health or mana. While both are
         -- secret (always, on 69977), the rescan cannot change anything.
         local missHP, missMana = Apotheca.API.PlayerMissing()

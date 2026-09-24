@@ -370,6 +370,13 @@ function Apotheca.BuildOptionsPanelContent(panel)
         return h ~= nil or m ~= nil
     end
 
+    SectionHeader("Full Health / Mana")
+    Checkbox("Grey out food, drink, potions and healthstones when you are full",
+        function() return DBGet("fullTint") ~= false end,
+        function(v) DBSet(v, "fullTint") end)
+    SmallLabel("|cff888888Display only: the client lets addons colour an icon by your health\n"
+        .. "and mana, but not read them, so a click still uses the item.|r")
+
     SectionHeader("Waste Prevention")
     SmallLabel("When at full health/mana, recovery buttons:")
     local wasteNote = SmallLabel(UNAVAILABLE)

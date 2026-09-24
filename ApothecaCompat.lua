@@ -151,6 +151,56 @@ function API.PlayerMax()
 end
 
 -- ------------------------------------------------------------
+-- Showing fullness without knowing it (#6)
+--
+-- The client will not tell an addon whether the player is at full health
+-- or mana, but it will COLOUR something by it: UnitHealthPercent /
+-- UnitPowerPercent take a colour curve and evaluate it inside the client,
+-- returning a colour whose channels may be secret. Those go straight into
+-- a setter (SetVertexColor) and are never compared. This is how unit
+-- frame addons draw health on Forever.
+--
+-- The curve is white up to 99.9% and grey at exactly 100%: a linear curve,
+-- so it needs no curve-type enum (not in the API dump).
+-- ------------------------------------------------------------
+
+API.FULL_GREY = 0.4
+
+local fullCurve
+local function FullCurve()
+    if fullCurve == nil then
+        fullCurve = false
+        pcall(function()
+            local c = C_CurveUtil.CreateColorCurve()
+            local g = API.FULL_GREY
+            c:AddPoint(0,     CreateColor(1, 1, 1, 1))
+            c:AddPoint(0.999, CreateColor(1, 1, 1, 1))
+            c:AddPoint(1,     CreateColor(g, g, g, 1))
+            fullCurve = c
+        end)
+    end
+    return fullCurve or nil
+end
+
+-- Paint `texture` white, or grey when the player's `resource` ("health" or
+-- "mana") is full. Returns false when the client refused (the caller then
+-- leaves the texture white); nothing here compares the secret colour.
+function API.TintByFullness(texture, resource)
+    local curve = FullCurve()
+    if not curve then return false end
+    return (pcall(function()
+        local color
+        if resource == "health" then
+            color = UnitHealthPercent("player", true, curve)
+        else
+            local mana = Enum and Enum.PowerType and Enum.PowerType.Mana or 0
+            color = UnitPowerPercent("player", mana, false, curve)
+        end
+        texture:SetVertexColor(color:GetRGB())
+    end))
+end
+
+-- ------------------------------------------------------------
 -- Using items from insecure code
 --
 -- The UseItemByName global is gone. C_Item.UseItemByName exists but is
