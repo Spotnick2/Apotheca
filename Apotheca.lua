@@ -162,13 +162,18 @@ local function CleanBuffFoodPriority(prof)
     local valid = {}
     for k in pairs(Apotheca.DATA.BUFF_FOOD_BY_STAT) do valid[k] = true end
     for cls, list in pairs(prof.buffFoodPriority) do
+        -- Anything that is not a list of known stat names is dropped, the
+        -- two old TBC defaults included (their "mp5" and "crit" slots are
+        -- valid stats, so they are matched whole).
         local legacy = type(list) ~= "table"
-            or table.concat(list, ",") == "healing,mp5,crit,stamina"
-            or table.concat(list, ",") == "healing,crit,mp5,stamina"
         if not legacy then
             for _, stat in ipairs(list) do
-                if not valid[stat] then legacy = true end
+                if type(stat) ~= "string" or not valid[stat] then legacy = true end
             end
+        end
+        if not legacy then
+            local joined = table.concat(list, ",")
+            legacy = joined == "healing,mp5,crit,stamina" or joined == "healing,crit,mp5,stamina"
         end
         if legacy then prof.buffFoodPriority[cls] = nil end
     end
@@ -220,8 +225,12 @@ local function InitDB()
         end
         ApplyDefaults(ApothecaDB.profiles.Global, PROFILE_DEFAULTS)
     end)
-    if type(ApothecaDB) == "table" and type(ApothecaDB.profiles) == "table" then
-        for _, prof in pairs(ApothecaDB.profiles) do CleanBuffFoodPriority(prof) end
+    -- Inside its own pcall, and only on a DB that initialised: a malformed
+    -- saved priority must fall into the reset below, never escape it.
+    if ok then
+        ok, err = pcall(function()
+            for _, prof in pairs(ApothecaDB.profiles) do CleanBuffFoodPriority(prof) end
+        end)
     end
 
     if not ok then
@@ -968,6 +977,20 @@ end
 --   guardianID, guardianCount, guardianTex
 --   hasFlask, hasBattle, hasGuardian   (active buff flags)
 -- }
+-- Has any elixir slot's buff come or gone since the last resolve? Cheap
+-- (one aura read), so UNIT_AURA can afford it on every event and only pay
+-- for a full update when a slot actually needs re-resolving.
+function Apotheca.ElixirBuffStateChanged()
+    local last = Apotheca._lastElixRes
+    if not last then return true end
+    local auras = ReadAuras("HELPFUL")
+    if not auras then return false end
+    local data = GetPlayerElixirData()
+    return AurasHave(auras, ALL_FLASK_SPELLS) ~= last.hasFlask
+        or AurasHave(auras, data.battleSpells) ~= last.hasBattle
+        or AurasHave(auras, data.guardianSpells) ~= last.hasGuardian
+end
+
 function Apotheca.ResolveElixirs(bagMap)
     local result = {
         mode        = "none",
@@ -2544,9 +2567,10 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
             UpdateWeaponOilGlow()
             UpdateBandageUsability()
             -- A slot whose buff was running offers nothing; when the buff
-            -- expires there is no bag event, so re-resolve (deferred, so a
-            -- burst of aura changes costs one update).
-            RequestUpdate()
+            -- expires there is no bag event, so re-resolve. Only when an
+            -- elixir buff actually came or went: UNIT_AURA fires for every
+            -- aura, and each full update is a bag scan and a layout pass.
+            if Apotheca.ElixirBuffStateChanged() then RequestUpdate() end
         end
 
     elseif event == "READY_CHECK" then

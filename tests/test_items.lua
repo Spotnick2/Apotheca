@@ -125,6 +125,21 @@ WoW.auras.HELPFUL = {}
 WoW.fire("UNIT_AURA", "player")
 WoW.tick(1) ; WoW.tick(1)
 H.eq(Apotheca.buttons.flask.itemID, 13511, "when it expires, UNIT_AURA brings the flask back")
+
+-- An unrelated aura coming and going costs no full update.
+local updates = 0
+local realUpdate = Apotheca.UpdateAllButtons
+Apotheca.UpdateAllButtons = function(...) updates = updates + 1 return realUpdate(...) end
+WoW.SetAura("HELPFUL", "Power Word: Fortitude", 1243)
+WoW.fire("UNIT_AURA", "player")
+WoW.tick(1) ; WoW.tick(1)
+H.eq(updates, 0, "an aura that is no elixir's does not trigger a full update")
+WoW.auras.HELPFUL = {}
+WoW.fire("UNIT_AURA", "player")
+WoW.tick(1) ; WoW.tick(1)
+H.eq(updates, 0, "nor does it going away")
+Apotheca.UpdateAllButtons = realUpdate
+
 WoW.bags[3] = nil
 Apotheca.UpdateAllButtons()
 

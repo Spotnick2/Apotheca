@@ -37,4 +37,12 @@ local g = ApothecaDB.profiles and ApothecaDB.profiles.Global
 H.check(g ~= nil, "a flat database is migrated into profiles")
 H.eq(g and g.buffFoodPriority and g.buffFoodPriority.PRIEST, nil, "and its old priority is cleaned on that route too")
 
+-- A malformed saved priority must not escape InitDB's guard: the database
+-- resets instead of throwing out of ADDON_LOADED.
+rawset(_G, "ApothecaDB", { activeProfile = "Global",
+    profiles = { Global = { buffFoodPriority = { PRIEST = { false, 3 } } } } })
+local okLoad = pcall(WoW.fire, "ADDON_LOADED", "Apotheca")
+H.check(okLoad, "a malformed buffFoodPriority does not throw out of ADDON_LOADED")
+H.eq(ApothecaDB.profiles.Global.buffFoodPriority.PRIEST, nil, "and it is dropped")
+
 H.done("test_migration")

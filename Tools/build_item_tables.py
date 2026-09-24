@@ -321,6 +321,8 @@ def build(rows):
             skipped.append((r['id'], r['name'], 'restores a percentage: not rankable against fixed amounts'))
             continue
         if kind(r) != 'food':
+            if r['sub'] == SUB_FOOD and not r['quest']:
+                skipped.append((r['id'], r['name'], 'Food & Drink with no Use text in the scan'))
             continue
         h, mn = food_values(u)
         if not h and not mn:
@@ -528,6 +530,13 @@ def emit(out, build_id, src):
 
 
 if __name__ == '__main__':
+    # --expect-skipped ID ...: fail unless each ID is in the skipped report.
+    # CI uses it to prove that items left out are accounted for, not lost.
+    expect = []
+    if '--expect-skipped' in sys.argv:
+        i = sys.argv.index('--expect-skipped')
+        expect = [int(x) for x in sys.argv[i + 1:]]
+        sys.argv = sys.argv[:i]
     src = sys.argv[1]
     build_id = re.search(r'(\d{5,})', src)
     rows = load(src)
@@ -539,3 +548,8 @@ if __name__ == '__main__':
     print('skipped (review these):')
     for s in skipped:
         print('   ', s)
+    reported = {s[0] for s in skipped}
+    missing = [x for x in expect if x not in reported]
+    if missing:
+        print('NOT REPORTED as skipped: %s' % missing)
+        sys.exit(1)
