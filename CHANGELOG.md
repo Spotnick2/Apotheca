@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Apotheca is for every role now, not just healers.** It follows the role you tick in the game's own role selector (Tank / Healer / Damage), or your class if you haven't picked one. You can also set the role yourself in the options. That's handy for a healer questing solo who wants caster food. In a group, you can opt in to use the role set on the party frame.
+- **A Tank role:** stamina and armor buff food, Flask of the Titans, and armor and stamina elixirs.
+- **Damage roles pick the right items:** casters get spell damage and intellect, warriors strength, and rogues and hunters agility. Druids and Shamans choose Spell or Physical damage in the options.
+- **Full health / mana tint:** food, drink, potions, healthstones, bandages and runes turn grey while what they restore is full. Display only: a click still uses the item.
+
+### Changed
+- The bar shows for every class. "Only show on healer classes" became "Only show the bar while my role is Healer", and it's off by default.
+- Warriors and rogues no longer see mana buttons.
+- Buff food priority is saved per role, so switching from Healer to Damage switches your food too.
+
 ## [2.0.0] - 2026-09-24
 
 **Apotheca now runs on World of Warcraft: Forever.** It is no longer for TBC Classic Anniversary: Anniversary players should stay on 1.0.5, which remains on CurseForge.

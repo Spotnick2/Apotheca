@@ -377,6 +377,28 @@ function C_Secrets.ShouldCooldownsBeSecret() return false end
 function C_Secrets.ShouldUnitHealthMaxBeSecret() return false end
 function C_Secrets.ShouldUnitPowerBeSecret() return WoW.healthSecret end
 
+-- Role sources (#9). Solo by default: no group, no assigned role, and an
+-- empty role selector.
+function IsInGroup() return WoW.inGroup or false end
+function IsInRaid() return WoW.inRaid or false end
+function UnitGroupRolesAssigned() return WoW.assignedRole or "NONE" end
+function GetLFGRoles()
+    local r = WoW.lfgRoles or {}
+    return false, r.tank or false, r.healer or false, r.damage or false
+end
+C_LFGListRoles = {}
+function C_LFGListRoles.GetRoles()
+    local r = WoW.lfgRoles or {}
+    return { tank = r.tank or false, healer = r.healer or false, dps = r.damage or false }
+end
+-- Saved roles can differ from the current ones (WoW.lfgSavedRoles).
+function C_LFGListRoles.GetSavedRoles()
+    local r = WoW.lfgSavedRoles or WoW.lfgRoles or {}
+    return { tank = r.tank or false, healer = r.healer or false, dps = r.damage or false }
+end
+function UnitPowerType() return 0, "MANA" end
+function GetInventoryItemID(_, slot) return WoW.equipped and WoW.equipped[slot] end
+
 C_SpecializationInfo = {}
 function C_SpecializationInfo.GetSpecialization() return 1 end
 function C_SpecializationInfo.GetSpecializationInfo() return 1487, "Priest", "", 626004, "DAMAGER" end

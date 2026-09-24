@@ -215,6 +215,70 @@ function API.PaintFullness(resource, textures)
 end
 
 -- ------------------------------------------------------------
+-- The game's role selector (#9)
+--
+-- The Tank / Healer / Damage checkboxes the player ticks in the game's
+-- own role selector. Read through the typed C_LFGListRoles first, then the
+-- older GetLFGRoles global; each inside a pcall, and only real booleans
+-- are trusted, so an unexpected shape reads as "nothing selected".
+-- (The group-assigned role is a separate, opt-in source: API.GroupRole.)
+-- Returns tank, healer, damage (plain booleans), or nil when no source
+-- answered.
+-- ------------------------------------------------------------
+
+local function fromStruct(r)
+    if type(r) ~= "table" then return nil end
+    local tank, healer = r.tank, r.healer
+    local damage = r.dps
+    if damage == nil then damage = r.damage end
+    if type(tank) ~= "boolean" and type(healer) ~= "boolean" and type(damage) ~= "boolean" then
+        return nil
+    end
+    return tank == true, healer == true, damage == true
+end
+
+-- The role assigned in the current group ("Set Role" on the party frame),
+-- as "TANK" / "HEALER" / "DAMAGE", or nil when not in a group or none is
+-- set. Opt-in only (db.useGroupRole): the owner found it often unset or
+-- stale, which is why it is not part of the default order.
+function API.GroupRole()
+    local ok, inGroup, role = pcall(function()
+        return IsInGroup(), UnitGroupRolesAssigned("player")
+    end)
+    if not ok or not inGroup then return nil end
+    if role == "TANK" or role == "HEALER" then return role end
+    if role == "DAMAGER" then return "DAMAGE" end
+    return nil
+end
+
+-- The FIRST source that answers with a valid shape wins, even when nothing
+-- is ticked: "nothing ticked" is a real answer (the class default then
+-- applies), and a later source may still hold an older pick (Codex review
+-- of #14). The fallbacks are only for a failing call or a wrong shape.
+function API.SelectedRoles()
+    local L = C_LFGListRoles
+    if L then
+        for _, getter in ipairs({ "GetRoles", "GetSavedRoles" }) do
+            local fn = L[getter]
+            if fn then
+                local ok, r = pcall(fn)
+                if ok then
+                    local t, h, d = fromStruct(r)
+                    if t ~= nil then return t, h, d end
+                end
+            end
+        end
+    end
+    if GetLFGRoles then
+        local ok, _, t, h, d = pcall(GetLFGRoles)   -- leader, tank, healer, dps
+        if ok and (type(t) == "boolean" or type(h) == "boolean" or type(d) == "boolean") then
+            return t == true, h == true, d == true
+        end
+    end
+    return nil
+end
+
+-- ------------------------------------------------------------
 -- Using items from insecure code
 --
 -- The UseItemByName global is gone. C_Item.UseItemByName exists but is

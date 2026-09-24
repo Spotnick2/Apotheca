@@ -211,12 +211,13 @@ H.eq(Apotheca.ResolveElixirs(every).hasFlask, true, "a buff with another spell I
 WoW.auras.HELPFUL = {}
 
 WoW.class = "MAGE"
-local fresh = {}
+Apotheca.RefreshRole()
 res = Apotheca.ResolveElixirs(every)
 H.eq(res.flaskID, 13512, "caster flask: Flask of Supreme Power")
 local sp = Apotheca.GetStatPriority()
 H.eq(sp[1], "spellDmg", "caster buff food leads with spell damage")
 WoW.class = "PRIEST"
+Apotheca.RefreshRole()
 H.eq(Apotheca.GetStatPriority()[1], "healing", "healer buff food leads with healing power")
 
 -- Buff food: a healer holding Sage's Tea and Nightfin Soup eats the tea.

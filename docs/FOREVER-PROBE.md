@@ -107,6 +107,32 @@ With Forest Mushroom Cap on the Food button (secure button registered for both e
 
 This confirms the both-edges registration in game: the client's secure handler acts on exactly one edge, so one click uses one item.
 
+## Run 7: 2026-09-24, role sources and talents (Hunter, level 15)
+
+| Question | Result |
+|---|---|
+| `IsInGroup / IsInRaid`, solo | `false, false` |
+| `UnitGroupRolesAssigned("player")`, solo | `NONE` |
+| `GetLFGRoles()`, Damage ticked | `false, false, false, true` (leader, tank, healer, dps) |
+| `C_LFGListRoles.GetRoles()` / `GetSavedRoles()` | `{ dps = true, healer = false, tank = false }` (the shape `API.SelectedRoles` reads) |
+| `UnitPowerType / UnitPowerMax(Mana)` (Hunter) | `0, 505`: hunters have mana |
+| Weapon slot 16 | `15424, "Weapon", "Two-Handed Axes", classID 2, subClassID 1`. The subclass tells a blade from a blunt weapon. |
+| Classic talent query (`C_SpecializationInfo.GetTalentInfo{ specializationIndex, talentIndex }`) | nothing: 0 talents in any tree |
+| `C_Traits` | **one** trait tree (1091) for the whole class, currency 3820, `spent 7`. All three Vanilla trees live in a single modern tree. |
+| `UnitCharacterPoints`, `GetUnspentTalentPoints` | absent |
+
+## Run 8: 2026-09-24, walking the talent tree (Hunter, level 15)
+
+- The one tree (1091) has **52 nodes in 21 groups** (`groupIDs` 11370 to 11390). **No node has a `subTreeID`**, and `posX` does not split into three columns.
+- The purchased talents are **Deadly Aspects** (5 points, x 1620, group 11372) and **Focused Fire** (2 points, x 1020, group 11390). Neither is a Vanilla talent.
+
+**Conclusion: Forever has no Vanilla spec to detect.** The talent tree is a redesigned single tree, not Beast Mastery / Marksmanship / Survival, and the client reports one class-named spec per class (role `DAMAGER` even for a Priest). A player's role is what they tick in the game's **role selector**, which is readable (run 7). Apotheca's order is therefore:
+1. its own override
+2. the role selector
+3. the class default
+
+Talent-based detection would need a hand-made role map of every class's new tree; it isn't attempted.
+
 ## Still to measure
 
 - **`C_Item.UseItemByName` on a real item** from the right-click alternate "Use X instead?" popup.
