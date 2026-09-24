@@ -317,12 +317,20 @@ def build(rows):
     food, drink, both, buff = [], [], [], defaultdict(list)
     for r in rows:
         u = r['use']
-        if r['sub'] == SUB_FOOD and u and PERCENT.search(u) and not kind(r):
+        if r['sub'] == SUB_FOOD and u and PERCENT.search(u):
             skipped.append((r['id'], r['name'], 'restores a percentage: not rankable against fixed amounts'))
             continue
         if kind(r) != 'food':
             continue
         h, mn = food_values(u)
+        if not h and not mn:
+            # Say why, so a future scan's report can be reviewed.
+            if re.search(r'Restores [\d,]+ to [\d,]+ (?:health|mana)', u):
+                why = 'instant restore with its own cooldown: not food, not a potion'
+            else:
+                why = 'Food & Drink restoring no fixed health or mana (alcohol, novelty)'
+            skipped.append((r['id'], r['name'], why))
+            continue
         buffy = re.search(r'well fed|will also increase|Also increases|become refreshed', u, re.I)
         stats = parse_stats(u) if buffy else {}
         z = restriction(r)

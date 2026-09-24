@@ -64,6 +64,7 @@ H.check(find(D.FOOD_ITEMS, 19060) ~= nil, "a battleground ration (subclass Other
 H.check(find(D.FOOD_ITEMS, 5473) ~= nil, "Scorpid Surprise ('Heals 282 damage', Food & Drink) is food")
 H.check(not indexOf(D.BANDAGE_ITEMS, 5473), "and not a bandage")
 H.check(not indexOf(D.HEALTH_ITEMS, 11951), "Whipper Root Tuber (own cooldown) is not on the potion button")
+H.check(not find(D.FOOD_ITEMS, 11951) and not find(D.DRINK_ITEMS, 11951), "nor on Food or Drink")
 
 ------------------------------------------------------------
 -- Battleground-only items
@@ -113,6 +114,19 @@ H.eq(res.hasFlask, true, "an active flask is recognised by its spell ID")
 H.eq(res.flaskID, nil, "and the flask slot offers nothing: a second click would only waste one")
 H.eq(res.battleID, 250333, "the elixir slots are still offered: they stack on Forever")
 WoW.auras.HELPFUL = {}
+
+-- When the flask runs out, the slot comes back without any bag event:
+-- UNIT_AURA re-resolves.
+WoW.AddItem(3, 1, 13511, 2, "Flask of Distilled Wisdom")
+WoW.SetAura("HELPFUL", "Flask of Distilled Wisdom", 17627)
+Apotheca.UpdateAllButtons()
+H.eq(Apotheca.buttons.flask.itemID, nil, "while the flask runs, the Flask button holds nothing")
+WoW.auras.HELPFUL = {}
+WoW.fire("UNIT_AURA", "player")
+WoW.tick(1) ; WoW.tick(1)
+H.eq(Apotheca.buttons.flask.itemID, 13511, "when it expires, UNIT_AURA brings the flask back")
+WoW.bags[3] = nil
+Apotheca.UpdateAllButtons()
 
 -- Only one flask can be active, so ANY flask fills the slot, even one
 -- that is not the role's own.
@@ -164,7 +178,7 @@ H.eq(Apotheca.HasSpiritBuff(), false, "and its absence is a confirmed false")
 -- Localized clients: Divine Spirit, Well Fed and Recently Bandaged are
 -- matched by the client's own name for the spell.
 WoW.spellNames[14752] = "Göttlicher Willen"
-WoW.SetAura("HELPFUL", "Göttlicher Willen", 27841)   -- another rank
+WoW.SetAura("HELPFUL", "Göttlicher Willen", 5555555) -- an ID not in the list: only the name can match
 H.eq(Apotheca.HasSpiritBuff(), true, "a German Divine Spirit (any rank) blocks the spirit scroll")
 WoW.auras.HELPFUL = {}
 WoW.spellNames[19705] = "Satt"
@@ -172,7 +186,7 @@ WoW.SetAura("HELPFUL", "Satt", 1234567)
 H.eq(Apotheca.HasFoodBuff(), true, "German Well Fed is found by its localized name")
 WoW.auras.HELPFUL = {}
 WoW.spellNames[11196] = "Kürzlich bandagiert"
-WoW.SetAura("HARMFUL", "Kürzlich bandagiert", 11196)
+WoW.SetAura("HARMFUL", "Kürzlich bandagiert", 5555556) -- only the name can match
 H.eq(Apotheca.HasRecentlyBandaged(), true, "Recently Bandaged is found on any language")
 WoW.auras.HARMFUL = {}
 

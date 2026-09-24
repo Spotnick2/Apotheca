@@ -152,6 +152,29 @@ end
 -- It must never be given a default.
 local svLoaded = false
 
+-- Buff food priorities saved by TBC builds are the old defaults
+-- ({healing, mp5, crit, stamina} and the paladin variant), or name stats
+-- Forever food no longer has. Drop them so the role profile decides; a real
+-- custom order survives. Applied to EVERY profile, whichever route the data
+-- came in by (profile structure, flat-DB migration, or a later SetProfile).
+local function CleanBuffFoodPriority(prof)
+    if type(prof) ~= "table" or type(prof.buffFoodPriority) ~= "table" then return end
+    local valid = {}
+    for k in pairs(Apotheca.DATA.BUFF_FOOD_BY_STAT) do valid[k] = true end
+    for cls, list in pairs(prof.buffFoodPriority) do
+        local legacy = type(list) ~= "table"
+            or table.concat(list, ",") == "healing,mp5,crit,stamina"
+            or table.concat(list, ",") == "healing,crit,mp5,stamina"
+        if not legacy then
+            for _, stat in ipairs(list) do
+                if not valid[stat] then legacy = true end
+            end
+        end
+        if legacy then prof.buffFoodPriority[cls] = nil end
+    end
+end
+Apotheca._CleanBuffFoodPriority = CleanBuffFoodPriority
+
 local function InitDB()
     svLoaded = type(ApothecaDB) == "table" and ApothecaDB.svLoadCheck ~= nil
     local ok, err = pcall(function()
@@ -164,26 +187,6 @@ local function InitDB()
                 ApothecaDB.profiles[key] = DeepCopy(PROFILE_DEFAULTS)
             else
                 ApplyDefaults(ApothecaDB.profiles[key], PROFILE_DEFAULTS)
-            end
-            -- Buff food priorities saved by TBC builds are the old defaults
-            -- ({healing, mp5, crit, stamina} and the paladin variant), or
-            -- name stats Forever food no longer has. Drop them so the role
-            -- profile decides; a real custom order survives.
-            local prof0 = ApothecaDB.profiles[key]
-            if prof0 and type(prof0.buffFoodPriority) == "table" then
-                local valid = {}
-                for k in pairs(Apotheca.DATA.BUFF_FOOD_BY_STAT) do valid[k] = true end
-                for cls, list in pairs(prof0.buffFoodPriority) do
-                    local legacy = type(list) ~= "table"
-                        or table.concat(list, ",") == "healing,mp5,crit,stamina"
-                        or table.concat(list, ",") == "healing,crit,mp5,stamina"
-                    if not legacy then
-                        for _, stat in ipairs(list) do
-                            if not valid[stat] then legacy = true end
-                        end
-                    end
-                    if legacy then prof0.buffFoodPriority[cls] = nil end
-                end
             end
             -- Migrate old boolean preventWaste → new preventWasteMode
             local prof = ApothecaDB.profiles[key]
@@ -217,6 +220,9 @@ local function InitDB()
         end
         ApplyDefaults(ApothecaDB.profiles.Global, PROFILE_DEFAULTS)
     end)
+    if type(ApothecaDB) == "table" and type(ApothecaDB.profiles) == "table" then
+        for _, prof in pairs(ApothecaDB.profiles) do CleanBuffFoodPriority(prof) end
+    end
 
     if not ok then
         -- SavedVariables was corrupt — wipe and start fresh
@@ -2537,6 +2543,10 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
             UpdateScrollGlow()
             UpdateWeaponOilGlow()
             UpdateBandageUsability()
+            -- A slot whose buff was running offers nothing; when the buff
+            -- expires there is no bag event, so re-resolve (deferred, so a
+            -- burst of aura changes costs one update).
+            RequestUpdate()
         end
 
     elseif event == "READY_CHECK" then
