@@ -299,7 +299,7 @@ def build(rows):
         if re.search(r'Discolored|Dreamless|Wildvine', r['name']) or 'sleep' in u:
             continue
         # Mage mana gems: class-only, their own cooldown. On the potion
-        # button they would hide real potions; a mage button is future work.
+        # button they would hide real potions; they get their own button.
         if outdoor_locked(r):
             skipped.append((r['id'], r['name'], 'usable only in an outdoor zone'))
             continue

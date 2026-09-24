@@ -100,8 +100,9 @@ What the data looks like:
 - **Scrolls:** `SCROLL_KINDS` lists every scroll button by the stat it grants: spirit, armor, intellect, stamina, strength, agility. Each kind has its `db.scrolls` switch, and its `blockers`, the buffs it doesn't stack with (Divine Spirit, Arcane Intellect, Power Word: Fortitude).
   - A profile's `scrolls` list picks which kinds the role shows.
   - `Apotheca.HasScrollBuff(kind)` is tri-state, like every buff check.
-  - Adding a scroll kind means one `SCROLL_KINDS` entry, a `SCROLL_BUTTON_CONFIG` entry, the order key and its options label.
-- **Mana gem:** the `managem` button is mages only (`classOnly`), and fed from the generated `MANA_GEMS`. Its config says `restores = "mana"`, so the full tint and the no-mana gating apply without special cases.
+  - Adding a scroll kind means one `SCROLL_KINDS` entry (button, options checkbox, finder and glow all come from it), the key in `DEFAULT_BUTTON_ORDER`, and its Button Order label.
+  - A scroll whose buff name is shared with an elixir (Agility, Strength, Armor, measured) is matched by **spell ID only**, or a running elixir would hide a missing scroll.
+- **Mana gem:** the `managem` button is mages only (`classOnly = "MAGE"`, applied generically in `RefreshLayout` along with mana gating), and fed from the generated `MANA_GEMS`. Out of combat it offers the strongest **ready** gem (`FindBestReadyItem`), because each gem has its own cooldown. Its config says `restores = "mana"`, so the full tint and the no-mana gating apply without special cases.
 
 **Role profiles** (`ROLE_PROFILES` in `Apotheca.lua`) decide what each role wants: buff food stat priority and the ordered stats for the Flask, Elixir (`battle` key) and Elixir 2 (`guardian` key) slots. Forever has no battle/guardian limit, so all three are offered independently. An item fitting both elixir slots goes to the first only; a slot whose buff is running offers nothing (any active flask fills the flask slot, via the generated `ALL_FLASK_SPELLS`, which includes flasks with no catalog stat); only slots with an item get a place on the bar. There are five profiles: TANK, HEALER, CASTER, MELEE and AGILITY. The bar shows for every role; "only while my role is Healer" (`onlyWhenHealer`) is opt-in.
 

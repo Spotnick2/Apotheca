@@ -554,20 +554,14 @@ function Apotheca.BuildOptionsPanelContent(panel)
 
     SectionHeader("Scrolls & Weapon Oil")
     Gap(4)
-    Checkbox("Enable Spirit Scroll button",
-        function() return DBGet("scrolls", "spirit") ~= false end,
-        function(v) DBSet(v, "scrolls", "spirit") end)
-    Checkbox("Enable Protection Scroll button",
-        function() return DBGet("scrolls", "protection") ~= false end,
-        function(v) DBSet(v, "scrolls", "protection") end)
-    for _, s in ipairs({ { "intellect", "Intellect" }, { "stamina", "Stamina" },
-                         { "strength", "Strength" }, { "agility", "Agility" } }) do
-        Checkbox("Enable " .. s[2] .. " Scroll button",
-            function() return DBGet("scrolls", s[1]) ~= false end,
-            function(v) DBSet(v, "scrolls", s[1]) end)
+    for _, kind in ipairs(Apotheca.SCROLL_KINDS) do
+        Checkbox("Enable " .. kind.label .. " Scroll button",
+            function() return DBGet("scrolls", kind.setting) ~= false end,
+            function(v) DBSet(v, "scrolls", kind.setting) end)
     end
     SmallLabel("|cff888888Each role shows the scrolls it uses: Spirit and Intellect for healers\n"
-        .. "and casters, Strength and Agility for melee, Stamina for tanks; Protection for all.|r")
+        .. "and casters, Stamina for tanks, Strength and Agility for melee, Protection\n"
+        .. "for all, and Intellect for every class with mana.|r")
     Checkbox("Enable Mana Gem button  |cff888888(mages)|r",
         function() return DBGet("manaGem", "enabled") ~= false end,
         function(v) DBSet(v, "manaGem", "enabled") end)
