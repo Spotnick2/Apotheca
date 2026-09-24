@@ -99,6 +99,22 @@ WoW.AddItem(1, 8, 8007, 2, "Mana Citrine")
 WoW.cooldowns[8008] = { WoW.time, 120 }
 roleIs("MAGE", nil)
 H.eq(Apotheca.buttons.managem.itemID, 8007, "with the Ruby on cooldown, the ready Citrine is offered")
+-- When the Ruby's cooldown ends, the button re-picks it, with no bag change
+-- and even if no event fires (Codex review of #15).
+WoW.cooldowns[8008] = { WoW.time - 118, 120 }          -- 2 s left
+roleIs("MAGE", nil)
+H.eq(Apotheca.buttons.managem.itemID, 8007, "Citrine while the Ruby has 2 s left")
+WoW.cooldowns[8008] = nil                               -- the Ruby is ready
+for _ = 1, 4 do WoW.tick(1) end                         -- time passes; no event
+H.eq(Apotheca.buttons.managem.itemID, 8008, "once the Ruby is ready the button offers it again")
+WoW.cooldowns[8008] = { WoW.time - 118, 120 }
+roleIs("MAGE", nil)
+WoW.cooldowns[8008] = nil
+WoW.time = WoW.time + 3
+WoW.fire("BAG_UPDATE_COOLDOWN")
+WoW.tick(1) ; WoW.tick(1)
+H.eq(Apotheca.buttons.managem.itemID, 8008, "a cooldown event after expiry re-picks the Ruby too")
+WoW.cooldowns[8008] = { WoW.time, 120 }
 WoW.cooldowns[8007] = { WoW.time, 120 }
 roleIs("MAGE", nil)
 H.eq(Apotheca.buttons.managem.itemID, 8008, "with both on cooldown, the strongest (Ruby) is offered")

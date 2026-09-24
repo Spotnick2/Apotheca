@@ -771,21 +771,31 @@ end
 
 -- The strongest item held that is off cooldown; if none is (or cooldowns
 -- are unreadable, e.g. secret in combat), the strongest held.
+-- 4th return: when a STRONGER item was skipped for its cooldown, the time
+-- its cooldown ends, so the caller can re-pick it then (an expiry may fire
+-- no event at all).
 function Apotheca.FindBestReadyItem(list, bagMap)
     local firstID, firstCount
+    local strongerReadyAt
     for _, id in ipairs(list) do
         local count = bagMap[id]
         if count and count > 0 then
             if not firstID then firstID, firstCount = id, count end
-            local ok, onCooldown = pcall(function()
-                local _, dur = SafeGetItemCooldown(id)
-                return (dur or 0) > 1.5          -- more than a global cooldown
+            local ok, onCooldown, endsAt = pcall(function()
+                local start, dur = SafeGetItemCooldown(id)
+                local cd = (dur or 0) > 1.5       -- more than a global cooldown
+                return cd, cd and (start + dur) or nil
             end)
-            if ok and not onCooldown then return id, count, GetCachedTexture(id) end
+            if ok and not onCooldown then
+                return id, count, GetCachedTexture(id), strongerReadyAt
+            end
+            if ok and endsAt and (not strongerReadyAt or endsAt < strongerReadyAt) then
+                strongerReadyAt = endsAt
+            end
         end
     end
-    if firstID then return firstID, firstCount, GetCachedTexture(firstID) end
-    return nil, 0, nil
+    if firstID then return firstID, firstCount, GetCachedTexture(firstID), strongerReadyAt end
+    return nil, 0, nil, nil
 end
 
 function Apotheca.FindBestItem(list, bagMap)
@@ -2494,7 +2504,12 @@ function UpdateAllButtonsBody()
     -- a usable Citrine. (In combat the button cannot change.)
     local gemOn = not (db.manaGem and db.manaGem.enabled == false)
     local gemID, gemCnt, gemTex
-    if gemOn then gemID, gemCnt, gemTex = Apotheca.FindBestReadyItem(DATA.MANA_GEMS, bagMap) end
+    -- When a stronger gem was skipped for its cooldown, re-pick once it is
+    -- ready (the slow out-of-combat poll requests the update).
+    Apotheca._recheckAt = nil
+    if gemOn then
+        gemID, gemCnt, gemTex, Apotheca._recheckAt = Apotheca.FindBestReadyItem(DATA.MANA_GEMS, bagMap)
+    end
 
     -- ── Weapon oil ───────────────────────────────────────────────
     local oilID, oilCnt, oilTex
@@ -2817,6 +2832,12 @@ eventFrame:SetScript("OnUpdate", function(self, elapsed)
         if rolePollElapsed >= ROLE_POLL then
             rolePollElapsed = 0
             Apotheca.RefreshRole()
+            -- A stronger item skipped for its cooldown (mana gem) is ready:
+            -- re-pick it. Only out of combat, where the button may change.
+            if Apotheca._recheckAt and GetTime() >= Apotheca._recheckAt then
+                Apotheca._recheckAt = nil
+                RequestUpdate()
+            end
         end
     end
     if deferredPending and playerReady then
@@ -2896,6 +2917,11 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- the swipe animation on mana/health pots etc. Safe in combat.
         if playerReady then
             Apotheca.RefreshButtonVisuals(false)
+            -- A cooldown change may make a skipped, stronger item ready.
+            if not InCombatLockdown() and Apotheca._recheckAt and GetTime() >= Apotheca._recheckAt then
+                Apotheca._recheckAt = nil
+                RequestUpdate()
+            end
         end
 
     elseif event == "GET_ITEM_INFO_RECEIVED" then
