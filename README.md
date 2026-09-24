@@ -18,14 +18,14 @@ The WoW: Forever client doesn't load addon settings back yet. This affects every
 | Healthstone | The strongest stone. |
 | Food / Drink | The best plain food and water. Conjured items are preferred unless vendor food is clearly better; the threshold is configurable. Food that restores both health and mana can appear on both buttons. |
 | Buff food | Well Fed food for your stat priority. On Forever that means the teas (mana + healing), the smoothies (mana + spirit), and the new cooking. |
-| Flask / Elixir / Elixir 2 | On Forever a flask and elixirs all stack, so each slot offers its best item on its own: Distilled Wisdom, Cleric's Elixirs, Mageblood… A slot whose buff is already running offers nothing, so a misclick can't waste a two-hour flask. |
+| Flask / Elixir / Elixir 2 | Three separate slots, each offering its best item for your role on its own: Distilled Wisdom, Cleric's Elixirs, Mageblood… Forever has no TBC-style battle/guardian elixir limit. Which elixirs stack with each other hasn't been measured yet; if two don't, please report it. A slot whose buff is already running offers nothing, so a misclick can't waste a two-hour flask. |
 | Spirit / Protection scroll | The strongest scroll. |
 | Weapon oil | Mana oils; wizard oils are optional. |
 | Bandage | The strongest bandage. Battleground bandages are only offered inside their battleground. |
 
 Every value comes from the WoW: Forever client itself, not from a Vanilla database, because Forever changed many of them. For example, Nightfin Soup now gives spell damage, and a plain healthstone restores what an Improved one did in Vanilla.
 
-Battleground-only items (PvP draughts, Warsong Gulch, Arathi Basin, Alterac Valley and Darkspear Islands rations and bandages) are offered only inside their battleground.
+Battleground-only items (PvP draughts, Warsong Gulch, Arathi Basin, Alterac Valley and Darkspear Islands rations and bandages) are offered only inside their battleground. Darkspear Islands is new in Forever, and its items are recognised on English clients only for now.
 
 Buffs are recognised on every client language.
 

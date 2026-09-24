@@ -22,9 +22,9 @@ All notable changes to this project will be documented in this file.
   - the Restored and Perishable potions
   - Forever's new cooking
 - Restore values are Forever's own, which often differ from Vanilla's.
-- Flask, Elixir and Elixir 2 are offered side by side, because on Forever a flask and elixirs stack. A slot whose buff is already running offers nothing, and any active flask counts, so a misclick can't waste a two-hour flask.
+- Flask, Elixir and Elixir 2 are offered as separate slots, because Forever has no TBC battle/guardian elixir limit. A slot whose buff is already running offers nothing, and any active flask counts, so a misclick can't waste a two-hour flask. Which elixirs stack with each other isn't measured yet: please report any pair that doesn't.
 - Percentage potions (Restored Healing Potion 30%, Restored Mana Potion 20%) are compared with your other potions using your own maximum health and mana. The choice updates when your maximum changes.
-- Battleground-only items (PvP draughts, and the Warsong Gulch, Arathi Basin, Alterac Valley and Darkspear Islands rations and bandages) are offered only inside their battleground.
+- Battleground-only items (PvP draughts, and the Warsong Gulch, Arathi Basin, Alterac Valley and Darkspear Islands rations and bandages) are offered only inside their battleground. Darkspear Islands items are recognised on English clients only for now.
 - Buff food priorities now cover Healing Power, Spell Damage, Intellect, Spirit, Stamina, Strength, Agility, Attack Power, Crit and Armor. Forever buff food has no mp5.
 - A login note when your game build differs from the one Apotheca was tested on.
 
