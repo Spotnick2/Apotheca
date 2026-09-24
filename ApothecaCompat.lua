@@ -189,10 +189,14 @@ local function FullCurve()
     return fullCurve or nil
 end
 
--- The fullness colour for `resource` ("health" or "mana"): r, g, b, which
--- may be secret, or nil when the client refused. Ask once per resource
--- and hand the result to every texture that needs it; never compare it.
-local function fullnessColor(resource, curve)
+-- Paint every texture in `textures` with the fullness colour for
+-- `resource` ("health" or "mana"): white, or grey when full. The colour is
+-- asked for ONCE, and its channels (possibly secret) never leave this
+-- function: they go straight into SetVertexColor. Even `r ~= nil` throws
+-- on a secret (Codex review of #13), and Lua 5.1 tests cannot catch that,
+-- so no caller is ever handed a channel. Returns a plain boolean: false
+-- when the client refused, and nothing was painted.
+local function paint(resource, curve, textures)
     local color
     if resource == "health" then
         color = UnitHealthPercent("player", false, curve)
@@ -200,15 +204,14 @@ local function fullnessColor(resource, curve)
         local mana = Enum and Enum.PowerType and Enum.PowerType.Mana or 0
         color = UnitPowerPercent("player", mana, false, curve)
     end
-    return color:GetRGB()
+    local r, g, b = color:GetRGB()
+    for i = 1, #textures do textures[i]:SetVertexColor(r, g, b) end
 end
 
-function API.FullnessColor(resource)
+function API.PaintFullness(resource, textures)
     local curve = FullCurve()
-    if not curve then return nil end
-    local ok, r, g, b = pcall(fullnessColor, resource, curve)
-    if not ok then return nil end
-    return r, g, b
+    if not curve or #textures == 0 then return false end
+    return (pcall(paint, resource, curve, textures))
 end
 
 -- ------------------------------------------------------------

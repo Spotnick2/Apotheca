@@ -138,4 +138,16 @@ Apotheca.UpdateAllButtons()
 H.eq(food.itemID, nil, "no food in bags")
 H.check(near(drawn(food), 1), "the empty Food button is white")
 
+-- Secret colour channels never leave ApothecaCompat.lua (Codex review of
+-- #13: `r ~= nil` on a secret throws, and Lua 5.1 cannot make this stub
+-- throw on it). So check it structurally: no API function hands a colour
+-- back, and only the compat file may call the curve functions.
+H.eq(Apotheca.API.FullnessColor, nil, "no API function returns a (secret) colour")
+for _, file in ipairs({ "Apotheca.lua", "Apotheca_Options.lua", "ApothecaItems.lua" }) do
+    local src = assert(io.open(file)):read("*a")
+    for _, name in ipairs({ "UnitHealthPercent", "UnitPowerPercent", "GetRGB", "CreateColorCurve" }) do
+        H.check(not src:find(name, 1, true), file .. " does not call " .. name .. " (compat only)")
+    end
+end
+
 H.done("test_tint")

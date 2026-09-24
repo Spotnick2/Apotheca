@@ -2135,27 +2135,28 @@ Apotheca._RESTORES_BOTH = RESTORES_BOTH
 -- swap. Safe in combat: no secure attribute is touched.
 function Apotheca.RefreshFullTint(only)
     local on = DB().fullTint ~= false
-    local colours = {}
+    -- Sort the icons: those to tint, per resource, and those to reset.
+    local toTint = { health = {}, mana = {} }
+    local toReset = {}
     for key, btn in pairs(Apotheca.buttons) do
         local resource = btn.cfg and btn.cfg.restores
         if resource and btn.icon and (not only or only == resource) then
             local id = altSwap[key] or btn.itemID
-            local tinted = false
             if on and id and not RESTORES_BOTH[id] then
-                local c = colours[resource]
-                if c == nil then
-                    local r, g, b = Apotheca.API.FullnessColor(resource)
-                    c = r ~= nil and { r, g, b } or false
-                    colours[resource] = c
-                end
-                if c then
-                    btn.icon:SetVertexColor(c[1], c[2], c[3])
-                    tinted = true
-                end
+                local list = toTint[resource]
+                list[#list + 1] = btn.icon
+            else
+                toReset[#toReset + 1] = btn.icon
             end
-            if not tinted then btn.icon:SetVertexColor(1, 1, 1) end
         end
     end
+    -- The compat layer paints; this file never holds a (secret) colour.
+    for resource, icons in pairs(toTint) do
+        if not Apotheca.API.PaintFullness(resource, icons) then
+            for _, icon in ipairs(icons) do toReset[#toReset + 1] = icon end
+        end
+    end
+    for _, icon in ipairs(toReset) do icon:SetVertexColor(1, 1, 1) end
 end
 
 -- ============================================================
