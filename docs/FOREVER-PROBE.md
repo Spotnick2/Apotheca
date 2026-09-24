@@ -67,9 +67,49 @@ On specs: the Priest also has one spec (`1487, "Priest", ..., "DAMAGER"`). The r
 - The bar renders with four empty-slot icons (mana, health, food, drink) and no Lua errors.
 - **Forest Mushroom Cap (4604)** has a tooltip reading *"Restores 58 health over 18 sec."* That's 61 in Vanilla, so **Forever's restore values differ from Vanilla's** and can't be copied from a 1.12 database. Issue #4 reads them from the client's tooltip data instead.
 
+## Run 4: 2026-09-23, IN combat (Priest)
+
+| Question | Result |
+|---|---|
+| `ShouldAurasBeSecret` | **true**. `GetAuraDataByIndex` throws *"Auras cannot be accessed when secret while tainted by 'Apotheca'"*, and `API.PlayerAuras` returns nil, as designed. |
+| `ShouldCooldownsBeSecret` | **true**. Item cooldowns are secret in combat. The swipe hands them straight to `SetCooldown` without comparing them (the `/code-review` fix on #7). |
+| Health / power | secret, the same as at rest. `API.PlayerMissing` = `nil, nil`. |
+| **StatusBar readback** | `bar:SetValue(UnitHealth("player"))`, then `bar:GetValue()`, gives `<secret>`. **There is no readback loophole.** Unit frame addons can *display* health, but no addon can *decide* on it. |
+| Stack counts | readable in combat (`stackCount = 8`) |
+| `GetWeaponEnchantInfo` | readable in combat (plain `false`, 12 returns) |
+| `C_Item.UseItemByName("<bogus>")` in combat | no error, and no blocked event. Still inconclusive: a real item is needed. |
+
+## Run 5: 2026-09-23, the consumable database (`/apo scan` + `/apo scan2`)
+
+`C_Item.GetItemInfoInstant` over item IDs 1 to 300000 finds **2442 consumables** (classID 0). Their tooltips and item spells went into `docs/forever-consumables-69977.tsv`, from which `ApothecaItems.lua` is generated. The shared, readable catalog is `C:/Projects/References/forever-consumables-1.60.1.69977.md`.
+
+- **Tooltips arrive without their "Use:" line until the item's SPELL is loaded.** After the first pass, only 17 of 106 potions had it. `C_Spell.RequestLoadSpellData` in a second pass brought that to 103.
+- **Forever food is a new system.** Most cooked food uses a "Nutritious Food" spell that restores health, gives Well Fed and adds +5% kill XP. Restore values are rescaled (58 / 234 / 530 / 841 / 1338 / 2065 against Vanilla's 61 / 243 / 552 / 874 / 1392 / 2148).
+- **New Forever items include:**
+  - Mountain Spring Water, a **conjured** level-55 water (4903 mana) with no "Conjured" in its name
+  - Teas: mana drinks with +healing
+  - Smoothies: mana drinks with +spirit
+  - Cleric's Elixirs: +healing
+  - Mageblood, Minor to Greater
+  - Elixirs of Spirit, of the Owl, and of the Whale
+  - the Restored and Perishable potions
+  - Darkspear Islands battleground bandages
+- **Base healthstones restore what fully Improved stones did in Vanilla:** 120 / 300 / 600 / 960 / 1440.
+- **Absent from the client:** Demonic Rune, Dark Rune, Lesser Mana Oil and Lesser Wizard Oil.
+- **Wowhead is incomplete.** It lists no Scroll of Protection, but the client has ranks I to IV.
+
+## Run 6: 2026-09-24, clicks (Priest, level 3)
+
+With Forest Mushroom Cap on the Food button (secure button registered for both edges, `AnyUp` + `AnyDown`, and `ActionButtonUseKeyDown = 1`), out of combat:
+
+- **Left click: one item eaten.**
+- **Right click: one item eaten.**
+
+This confirms the both-edges registration in game: the client's secure handler acts on exactly one edge, so one click uses one item.
+
 ## Still to measure
 
-- **Run 3, in combat:** aura secrecy, cooldown and stack-count secrecy, and `GetWeaponEnchantInfo`.
 - **`C_Item.UseItemByName` on a real item** from the right-click alternate "Use X instead?" popup.
-- **Clicks, on a healer-class character:** one use per click, on left and right click, in and out of combat. This needs an item the bar knows, so it moves to #4.
+- **Clicks in combat.** Measured out of combat only, since food can't be eaten in combat. Check once with a potion.
+- **Clicks with `ActionButtonUseKeyDown = 0`**, the other edge. The porting guide measured it with a forced attribute; Apotheca hasn't been checked on it yet.
 - **Elixir and flask stacking.** This needs a character high enough to use them, and waits on issue #4.

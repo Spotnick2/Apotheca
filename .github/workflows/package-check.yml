@@ -26,6 +26,18 @@ jobs:
           files=$(grep -v '^#' Apotheca.toc | tr -d '\r' | sed '/^$/d')
           luac5.1 -p $files
 
+      # ApothecaItems.lua is generated; it must match what the generator
+      # makes from the committed scan, or someone hand-edited it.
+      - name: Item data matches its generator
+        run: |
+          # Items deliberately left out must be in the skipped report, not
+          # lost: Whipper Root Tuber and Full Moonshine (own cooldown),
+          # Restorative Bread (percentage), Scooby Snack (no Use text),
+          # Mana Ruby (mage gem).
+          python3 Tools/build_item_tables.py docs/forever-consumables-69977.tsv \
+            --expect-skipped 11951 1072 282018 8243 8008 > /dev/null
+          git diff --exit-code --ignore-cr-at-eol ApothecaItems.lua
+
       - name: Unit tests
         run: |
           for f in tests/test_*.lua; do

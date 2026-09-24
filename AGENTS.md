@@ -13,12 +13,14 @@ Read `C:\Projects\References\PORTING-TBC-TO-FOREVER.md` before touching an unfam
 ```
 Apotheca.toc           — WoW addon manifest (interface version, files list, SavedVariables)
 ApothecaCompat.lua     — Apotheca.API: every moved or removed API; loads first
+ApothecaItems.lua      — GENERATED item data (Apotheca.DATA); see Item Data
 Apotheca.lua           — Main addon: all logic, item data, frame creation, events
 Apotheca_Options.lua   — In-game options panel: tabbed UI, DB read/write helpers
 ApothecaProbe.lua      — throwaway /apo probe measurement tool (remove before release, #5)
 .pkgmeta               — BigWigs packager config (release packaging only, not used locally)
 tests/                 — Lua 5.1 unit tests against a strict-globals stub; tests/run.ps1
 Tools/deploy.ps1       — deploy to the local Forever AddOns folder
+Tools/*.py, *.lua      — scan export, item-table generator, consumables reference
 docs/FOREVER-PROBE.md  — in-game measurements this addon depends on
 .github/workflows/     — package-check: luac, tests, dry-run package, zip contents
 CHANGELOG.md           — Version history
@@ -64,17 +66,31 @@ The canonical set of button keys (also `Apotheca.DEFAULT_BUTTON_ORDER`):
 `"mana"`, `"health"`, `"healthstone"`, `"rune"`, `"recovery"`, `"food"`, `"drink"`, `"flask"`, `"battle"`, `"guardian"`, `"bufffood"`, `"spiritscroll"`, `"protectionscroll"`, `"weaponoil"`, `"bandage"`
 
 ### Item Data
-All item lists are plain Lua arrays at the top of `Apotheca.lua`:
-`MANA_ITEMS`, `HEALTH_ITEMS`, `RUNE_ITEMS`, `HEALTHSTONE_ITEMS`, `BANDAGE_ITEMS`, `CONJURED_ITEMS`, `FOOD_ITEMS`, `DRINK_ITEMS`, `BUFF_FOOD_BY_STAT`, `SPIRIT_SCROLL_ITEMS`, `PROTECTION_SCROLL_ITEMS`, `MANA_OIL_ITEMS`, `WIZARD_OIL_ITEMS`, `WEAPON_COATING_ITEMS`, `ELIXIRS`. Items are ordered highest-rank → lowest so `FindBestItem` returns the strongest available.
+**The item tables are generated, never hand-written.** Forever changed restore values, buff food and elixirs relative to Vanilla, and adds items no Vanilla list has, so the only trustworthy source is the client itself:
 
-`HEALTHSTONE_ITEMS` is a list of `{ id, healValue }` ordered strongest → weakest. `FindBestHealthstone` returns `itemID, count, texture, healValue, isSmartPick`; with `db.healthstone.smartRank` on it picks the *smallest* stone covering the missing health (all ranks share one cooldown), falling back to the strongest when nothing covers it or health is full. The pick can only change out of combat — it is a secure `item` attribute write.
+1. In game, out of combat, in one session (SavedVariables never load back, so a `/reload` between steps loses the scan): `/apo scan`, then `/apo scan2`, then `/reload` to write the file. `scan` walks every item ID with `C_Item.GetItemInfoInstant` (the client's item DB, no cache needed) and reads each consumable's tooltip and item spell; `scan2` loads the spells whose "Use:" text was missing.
+2. `lua5.1 Tools/export_scan.lua <WTF>/Account/<id>/SavedVariables/Apotheca.lua docs/forever-consumables-<build>.tsv`
+3. `python Tools/build_item_tables.py docs/forever-consumables-<build>.tsv`, which writes `ApothecaItems.lua` (`Apotheca.DATA`). Read its "skipped" report and the diff.
+4. `python Tools/consumables_reference.py docs/forever-consumables-<build>.tsv C:/Projects/References/forever-consumables-<version>.<build>.md` refreshes the shared human-readable catalog, and copy the TSV next to it. Diffing two builds' catalogs shows what Blizzard changed.
 
-`ZONE_RESTRICTED_ITEMS` maps the six reputation-quartermaster potions (Cenarion / Auchenai / Bottled Nethergon) to their instance cluster, matched by `instanceMapID` with a localized-name fallback. `Apotheca.IsItemUsableHere(id)` gates them and is applied inside `FindBestItem`, so any new zone-locked consumable only needs an entry in that table. `ZONE_CHANGED_NEW_AREA` triggers the rescan.
+To change what the addon offers, change the generator or the role profiles, not `ApothecaItems.lua`. `tests/test_items.lua` pins the shape (strongest first, no duplicates) and the decisions (which elixir a healer or caster gets, rejuvenation after pure potions, battleground gates).
 
-Food entries may carry `restoresMana = true` (e.g. Homemade Cherry Pie). `FindBestFood` returns that flag and `ResolveRecovery` exposes it as `rec.foodRestoresMana`, which waste prevention uses to require *both* health and mana to be full before blocking.
+Wowhead's Forever database is useful for names but is not complete: on 2026-09-23 it had no Scroll of Protection at all, while the client has all four ranks.
+
+What the data looks like:
+- Items are classified by what their tooltip says (instant restore, restore over time, "Heals N damage"), **not by subclass**: the client files Dense Runecloth Bandage, some potions and every battleground ration under "Other". A Food & Drink item is always food (Scorpid Surprise "Heals 282 damage" and never says seated). Only real potions and draughts go on the potion buttons, because they share the potion cooldown; instant restoratives with their own cooldown (Whipper Root Tuber, Night Dragon's Breath, Lily Root, Tea with Sugar, mage mana gems) are reported as skipped, as are percentage FOOD and outdoor-zone-locked items. Food whose Well Fed bonus is no Buff Food stat (fishing, herbalism, movement) stays on the plain Food/Drink lists.
+- `MANA_ITEMS`, `HEALTH_ITEMS`, `BANDAGE_ITEMS`: item IDs, strongest first. Percentage potions (Restored Healing / Mana Potion) are in `PERCENT_POTIONS`; `Apotheca.FindBestPotion` compares them with the best fixed potion held (`POTION_VALUE`) using the player's maximum, which is readable (only current health and mana are secret). A potion restoring both ranks as 25% weaker so the pure potion of its tier is used first; Discolored (backlash), sleep and gamble potions are left out.
+- `FOOD_ITEMS` / `DRINK_ITEMS`: plain (no Well Fed) food and drink, `{ id, healthValue|manaValue, conjured?, restoresMana?|restoresHealth? }`. `conjured` comes from the tooltip's "Conjured Item" line, not the name (Mountain Spring Water is conjured). Food restoring both appears on **both** buttons; `CONJURED_ITEMS` (collapse Food and Drink into one button) is empty on Forever, because a low-level combined item would hide a high-level drink.
+- `BUFF_FOOD_BY_STAT`: Well Fed food and drink by stat (`healing`, `spellDmg`, `intellect`, `spirit`, `stamina`, `strength`, `agility`, `attackPower`, `crit`, `armor`). Forever buff food also restores health or mana; the teas are mana drinks with +healing, the smoothies with +spirit. There is no mp5 food.
+- `HEALTHSTONE_ITEMS`: `{ id, healValue }`, strongest first. Base stones now restore what fully Improved stones did in Vanilla. `FindBestHealthstone`'s smart rank is dormant while health is secret.
+- `SCROLLS_BY_STAT`, `ELIXIR_CATALOG`: every scroll, elixir and flask tagged by stat with its buff `spell` ID. Active buffs are matched by spell ID, and also by the spell's localized name (`C_Spell.GetSpellName`), because "item spell ID == aura spell ID" is not measured for every item.
+- `OILS`: `kind = "mana"` (default) or `"wizard"` (opt-in).
+- `ZONE_RESTRICTED_ITEMS`: battleground-only items, `"pvp"` (any battleground) or `{ map = instance map ID, name = enUS name }`. The map ID is compared, so it works on any language; Darkspear Islands has no measured ID yet and falls back to the enUS name. `Apotheca.IsItemUsableHere(id)` gates them in `BuildBagMap`, so every finder (food, drink, bandage, potion) skips an item usable only elsewhere; outdoors `GetInstanceInfo()` returns the continent, so the gate is `instanceType == "pvp"`.
+
+**Role profiles** (`ROLE_PROFILES` in `Apotheca.lua`) decide what each class wants: buff food stat priority and the ordered stats for the Flask, Elixir (`battle` key) and Elixir (regen) (`guardian` key) slots. Forever has no battle/guardian limit, so all three are offered independently. An item fitting both elixir slots goes to the first only; a slot whose buff is running offers nothing (any active flask fills the flask slot, via the generated `ALL_FLASK_SPELLS`, which includes flasks with no catalog stat); only slots with an item get a place on the bar. Classes map to HEALER, CASTER, MELEE or AGILITY; only healer classes see the bar by default, and the other profiles are the starting point for widening Apotheca to other roles.
 
 ### Key Functions
-- `Apotheca.BuildBagMap()` — scans bags 0–4, returns `{ [itemID] = count }`
+- `Apotheca.BuildBagMap()` — scans the carried bags (0–4 plus the reagent bag), returns `{ [itemID] = count }`
 - `Apotheca.FindBestItem(list, bagMap)` — first-match scan
 - `Apotheca.FindBestFood/Drink(bagMap)` — conjured-vs-non-conjured with threshold logic
 - `Apotheca.UpdateAllButtons()` — rebuilds bag map and refreshes all button states
@@ -135,6 +151,7 @@ Installed files have diverged from the repo before (local edits made in the AddO
 - **Fallback icon**: `"Interface\\Icons\\INV_Misc_QuestionMark"`
 - **Options panel**: Built lazily on first `OnShow` in `Apotheca_Options.lua`. DB helpers `DBGet(...)` and `DBSet(value, ...)` accept vararg key paths into the active profile.
 - **No libraries**: Do not introduce LibStub, Ace3, or any other library dependencies.
+- **Buff checks** go through `ReadAuras` / `AurasHave` in `Apotheca.lua`: read the auras once, match by spell ID or by the spell's localized name (cached only once found: `GetSpellName` answers nil until the spell loads). Never add an English-name-only check.
 - **Healer classes**: `PRIEST`, `PALADIN`, `SHAMAN`, `DRUID`, in `HEALER_CLASSES`. Forever has one spec per class and no talent trees, so the class is the only healer signal.
 
 Trust these instructions. Only search the codebase if the information here is incomplete or appears to be incorrect for the specific change you are making.
