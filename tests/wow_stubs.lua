@@ -42,7 +42,18 @@ WoW.events = {}       -- [frame] = { [event] = true }
 ------------------------------------------------------------
 
 local secretMT = {}
-local function Secret() return setmetatable({}, secretMT) end
+-- A secret may carry the real value, hidden from the addon (it can only be
+-- read through WoW.Reveal, i.e. by what the client would draw).
+local hidden = setmetatable({}, { __mode = "k" })
+local function Secret(v)
+    local s = setmetatable({}, secretMT)
+    hidden[s] = v
+    return s
+end
+function WoW.Reveal(v)
+    if getmetatable(v) == secretMT then return hidden[v] end
+    return v
+end
 for _, op in ipairs({ "__add", "__sub", "__mul", "__div", "__unm" }) do
     secretMT[op] = function() return Secret() end
 end
@@ -76,6 +87,7 @@ function WoW.reset()
     WoW.altDown      = false
     WoW.popups       = {}
     WoW.itemsUsed    = {}        -- names passed to C_Item.UseItemByName
+    WoW.curvesRefused = false    -- simulate a client that refuses colour curves
 end
 
 function WoW.AddItem(bag, slot, itemID, count, name)
@@ -174,6 +186,12 @@ function Frame:SetPoint(...) self._points[#self._points + 1] = { ... } end
 function Frame:ClearAllPoints() self._points = {} end
 function Frame:GetPoint() return "CENTER", nil, "CENTER", 0, 0 end
 function Frame:GetFontString() return self._fs end
+-- Records what the texture would be drawn with: a secret channel is
+-- unwrapped here, as the client does, never by the addon.
+function Frame:SetVertexColor(r, g, b)
+    self._vertex = { r, g, b }
+    self._drawn = { WoW.Reveal(r), WoW.Reveal(g), WoW.Reveal(b) }
+end
 
 local function childRegion(self, kind)
     return NewRegion(kind, self)
@@ -364,12 +382,54 @@ function C_SpecializationInfo.GetSpecialization() return 1 end
 function C_SpecializationInfo.GetSpecializationInfo() return 1487, "Priest", "", 626004, "DAMAGER" end
 function C_SpecializationInfo.GetNumSpecializationsForClassID() return 1 end
 
--- Blizzard_UIPanels: UnitHealthMissing / UnitHealthPercent etc. return secrets
--- like UnitHealth. The addon itself must not rely on them.
+-- UnitHealthMissing / UnitHealthPercent etc. return secrets like UnitHealth.
+-- Given a colour CURVE, the Percent functions evaluate it inside the client
+-- and return a colour; the stub evaluates it on the true percentage, and
+-- hands back secret channels when health is secret, as the client may.
 function UnitHealthMissing() return Secret() end
 function UnitPowerMissing() return Secret() end
-function UnitHealthPercent() return Secret() end
-function UnitPowerPercent() return Secret() end
+
+local function curveColor(curve, pct)
+    local r, g, b = curve:_eval(pct)
+    if WoW.healthSecret then r, g, b = Secret(r), Secret(g), Secret(b) end
+    return { GetRGB = function() return r, g, b end }
+end
+-- usePredicted: WoW.incomingHeal counts only when predicted is asked for.
+function UnitHealthPercent(_, usePredicted, curve)
+    if not curve then return Secret() end
+    if WoW.curvesRefused then error("curve refused") end
+    local h = WoW.health
+    if usePredicted ~= false then h = math.min(WoW.healthMax, h + (WoW.incomingHeal or 0)) end
+    WoW.lastPredicted = usePredicted
+    return curveColor(curve, h / WoW.healthMax)
+end
+function UnitPowerPercent(_, _, _, curve)
+    if not curve then return Secret() end
+    if WoW.curvesRefused then error("curve refused") end
+    return curveColor(curve, WoW.power / WoW.powerMax)
+end
+
+-- A linear colour curve, evaluated the way the client does.
+function CreateColor(r, g, b, a) return { r = r, g = g, b = b, a = a } end
+C_CurveUtil = {}
+function C_CurveUtil.CreateColorCurve()
+    local pts = {}
+    local c = {}
+    function c:AddPoint(x, color) pts[#pts + 1] = { x = x, c = color } ; table.sort(pts, function(p, q) return p.x < q.x end) end
+    function c:_eval(x)
+        if x <= pts[1].x then local k = pts[1].c return k.r, k.g, k.b end
+        for i = 2, #pts do
+            local a, b = pts[i - 1], pts[i]
+            if x <= b.x then
+                local t = (x - a.x) / (b.x - a.x)
+                return a.c.r + (b.c.r - a.c.r) * t, a.c.g + (b.c.g - a.c.g) * t, a.c.b + (b.c.b - a.c.b) * t
+            end
+        end
+        local k = pts[#pts].c
+        return k.r, k.g, k.b
+    end
+    return c
+end
 
 Settings = {}
 function Settings.RegisterCanvasLayoutCategory(panel, name)

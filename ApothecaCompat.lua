@@ -151,6 +151,70 @@ function API.PlayerMax()
 end
 
 -- ------------------------------------------------------------
+-- Showing fullness without knowing it (#6)
+--
+-- The client will not tell an addon whether the player is at full health
+-- or mana, but it will COLOUR something by it: UnitHealthPercent /
+-- UnitPowerPercent take a colour curve and evaluate it inside the client,
+-- returning a colour whose channels may be secret. Those go straight into
+-- a setter (SetVertexColor) and are never compared. This is how unit
+-- frame addons draw health on Forever.
+--
+-- The curve is white up to 99.99999% and grey at exactly 100%, linear
+-- (set explicitly when the client has the enum; it is not in the API dump,
+-- and EllesmereUI's Forever port sets it). The 1e-7 ramp is under one
+-- point for any maximum below ten million. Health uses usePredicted =
+-- false: an incoming heal must not grey the icon before it lands.
+-- ------------------------------------------------------------
+
+API.FULL_GREY = 0.4
+
+local fullCurve
+local function FullCurve()
+    if fullCurve == nil then
+        fullCurve = false
+        pcall(function()
+            local c = C_CurveUtil.CreateColorCurve()
+            -- Its own pcall: a SetType this client rejects must not throw
+            -- away the whole curve (linear is the likely default anyway).
+            local linear = Enum and Enum.LuaCurveType and Enum.LuaCurveType.Linear
+            if linear and c.SetType then pcall(c.SetType, c, linear) end
+            local g = API.FULL_GREY
+            c:AddPoint(0,         CreateColor(1, 1, 1, 1))
+            c:AddPoint(0.9999999, CreateColor(1, 1, 1, 1))
+            c:AddPoint(1,         CreateColor(g, g, g, 1))
+            fullCurve = c
+        end)
+    end
+    return fullCurve or nil
+end
+
+-- Paint every texture in `textures` with the fullness colour for
+-- `resource` ("health" or "mana"): white, or grey when full. The colour is
+-- asked for ONCE, and its channels (possibly secret) never leave this
+-- function: they go straight into SetVertexColor. Even `r ~= nil` throws
+-- on a secret (Codex review of #13), and Lua 5.1 tests cannot catch that,
+-- so no caller is ever handed a channel. Returns a plain boolean: false
+-- when the client refused, and nothing was painted.
+local function paint(resource, curve, textures)
+    local color
+    if resource == "health" then
+        color = UnitHealthPercent("player", false, curve)
+    else
+        local mana = Enum and Enum.PowerType and Enum.PowerType.Mana or 0
+        color = UnitPowerPercent("player", mana, false, curve)
+    end
+    local r, g, b = color:GetRGB()
+    for i = 1, #textures do textures[i]:SetVertexColor(r, g, b) end
+end
+
+function API.PaintFullness(resource, textures)
+    local curve = FullCurve()
+    if not curve or #textures == 0 then return false end
+    return (pcall(paint, resource, curve, textures))
+end
+
+-- ------------------------------------------------------------
 -- Using items from insecure code
 --
 -- The UseItemByName global is gone. C_Item.UseItemByName exists but is
