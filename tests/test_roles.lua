@@ -1,13 +1,15 @@
--- #9: the role comes from Apotheca's override, then the game's own role
--- selector, then the class. The group-assigned role is NOT used (Codex).
+-- #9: the role comes from Apotheca's per-character override, then (only if
+-- opted in) the group's assigned role, then the game's own role selector,
+-- then the class. The resolved role is cached; RefreshRole re-reads it.
 
 dofile("tests/wow_stubs.lua")
 local H = dofile("tests/harness.lua")
 H.loadAddon()
 
-local function role() return Apotheca.ResolveRole() end
-local function key() local _, k = Apotheca.ResolveRole() return k end
+local function role() Apotheca.RefreshRole() return (Apotheca.ResolveRole()) end
+local function key() Apotheca.RefreshRole() local _, k = Apotheca.ResolveRole() return k end
 local db = function() return ApothecaDB.profiles[ApothecaDB.activeProfile] end
+local function char(k, v) Apotheca.SetCharSetting(k, v) end
 
 -- Class defaults, with nothing ticked in the selector.
 local defaults = {
@@ -40,31 +42,31 @@ WoW.class = "PRIEST"
 WoW.lfgRoles = { healer = true }
 WoW.inGroup, WoW.assignedRole = true, "DAMAGER"
 H.eq(role(), "HEALER", "by default a group assignment does not override the selector")
-db().useGroupRole = true
+char("useGroupRole", true)
 H.eq(role(), "DAMAGE", "opted in, the group's assigned role wins over the selector")
 WoW.assignedRole = "NONE"
 H.eq(role(), "HEALER", "an unset group role falls back to the selector")
 WoW.inGroup, WoW.assignedRole = false, "DAMAGER"
 H.eq(role(), "HEALER", "outside a group the assigned role is ignored")
 WoW.inGroup = true
-db().role = "TANK"
+char("role", "TANK")
 H.eq(role(), "TANK", "the override still wins over the group role")
-db().role, db().useGroupRole = "AUTO", false
+char("role", "AUTO") ; char("useGroupRole", false)
 WoW.inGroup, WoW.assignedRole = false, nil
 
 -- The override wins over everything.
-db().role = "TANK"
+char("role", "TANK")
 H.eq(role(), "TANK", "Apotheca's own Tank override wins over the selector")
-db().role = "AUTO"
+char("role", "AUTO")
 
 -- Druid and Shaman damage follows the style option.
 WoW.class, WoW.lfgRoles = "DRUID", { damage = true }
 H.eq(key(), "CASTER", "a damage druid defaults to Spell (Balance)")
-db().damageStyle = "PHYSICAL"
+char("damageStyle", "PHYSICAL")
 H.eq(key(), "AGILITY", "Physical makes a damage druid Agility (Feral)")
 WoW.class = "SHAMAN"
 H.eq(key(), "MELEE", "and a Physical damage shaman Melee (Enhancement)")
-db().damageStyle = "SPELL"
+char("damageStyle", "SPELL")
 
 -- Mana gating by class, not by the current form's power type.
 WoW.lfgRoles = nil
@@ -76,19 +78,16 @@ end
 WoW.class = "WARRIOR"
 WoW.AddItem(0, 1, 13444, 3, "Major Mana Potion")
 WoW.AddItem(0, 2, 13446, 3, "Major Healing Potion")
-Apotheca.ResetLayout()
 Apotheca.UpdateAllButtons()
 H.check(not Apotheca.buttons.mana:IsShown(), "a warrior has no Mana button, even holding mana potions")
 H.check(Apotheca.buttons.health:IsShown(), "but keeps the Health button")
 WoW.AddItem(0, 3, 8766, 3, "Morning Glory Dew")
 WoW.AddItem(0, 4, 20748, 3, "Brilliant Mana Oil")
-Apotheca.ResetLayout()
 Apotheca.UpdateAllButtons()
 H.check(not Apotheca.buttons.drink:IsShown(), "a warrior has no Drink button, even holding water")
 H.check(not Apotheca.buttons.weaponoil:IsShown(), "nor a Weapon Oil button holding Brilliant Mana Oil")
 H.check(Apotheca.buttons.food:IsShown(), "but keeps the Food button")
 WoW.class = "PRIEST"
-Apotheca.ResetLayout()
 Apotheca.UpdateAllButtons()
 H.check(Apotheca.buttons.mana:IsShown(), "a priest has the Mana button")
 H.check(Apotheca.buttons.drink:IsShown(), "and the Drink button")
@@ -96,11 +95,12 @@ H.check(Apotheca.buttons.weaponoil:IsShown(), "and the Weapon Oil button")
 
 -- The bar shows for every role by default; "healer only" is opt-in.
 WoW.class = "MAGE"
-H.eq(db().showOnlyHealingSpec, false, "the bar is for every role by default")
+H.eq(db().onlyWhenHealer, false, "the bar is for every role by default")
 
 -- A role change refreshes only when the resolved role changes.
 WoW.class, WoW.lfgRoles = "PRIEST", { healer = true }
 Apotheca.UpdateAllButtons()          -- the bar is built for the healer role
+WoW.tick(1) ; WoW.tick(1)            -- let updates requested earlier in this file run out
 local updates = 0
 local real = Apotheca.UpdateAllButtons
 Apotheca.UpdateAllButtons = function(...) updates = updates + 1 return real(...) end
@@ -112,5 +112,24 @@ WoW.fire("LFG_ROLE_UPDATE")
 WoW.tick(1) ; WoW.tick(1)
 H.eq(updates, 1, "switching to Damage costs one update")
 Apotheca.UpdateAllButtons = real
+
+-- Role settings are per character: another character on the same shared
+-- profile keeps its own role.
+char("role", "TANK")
+local saved = ApothecaCharDB
+rawset(_G, "ApothecaCharDB", {})           -- a second character, same profile
+WoW.class, WoW.lfgRoles = "PRIEST", nil
+H.eq(role(), "HEALER", "a Tank override on one character does not reach another")
+rawset(_G, "ApothecaCharDB", saved)
+H.eq(role(), "TANK", "and the first keeps its own")
+char("role", "AUTO")
+
+-- The role is re-checked without any event (the selector's event is not
+-- measured): the slow out-of-combat poll catches the change.
+WoW.lfgRoles = { healer = true }
+Apotheca.UpdateAllButtons()
+WoW.lfgRoles = { damage = true }            -- no event fired
+for _ = 1, 4 do WoW.tick(1) end
+H.eq((Apotheca.ResolveRole()), "DAMAGE", "the poll picks up a role change with no event")
 
 H.done("test_roles")

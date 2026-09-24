@@ -204,7 +204,6 @@ function Apotheca.BuildOptionsPanelContent(panel)
         cb:SetScript("OnClick", function(self)
             local v = self:GetChecked()
             setter(v == true or v == 1)
-            Apotheca.ResetLayout()
             Apotheca.UpdateAllButtons()
         end)
         refreshCallbacks[#refreshCallbacks + 1] = Sync
@@ -273,7 +272,6 @@ function Apotheca.BuildOptionsPanelContent(panel)
             v = math.floor(v / step + 0.5) * step
             setter(v)
             valText:SetText(fmt(v))
-            Apotheca.ResetLayout()
             Apotheca.UpdateAllButtons()
         end)
         refreshCallbacks[#refreshCallbacks + 1] = function()
@@ -310,7 +308,6 @@ function Apotheca.BuildOptionsPanelContent(panel)
                     info.func    = function()
                         setter(opt.value)
                         UIDropDownMenu_SetText(dd, opt.label)
-                        Apotheca.ResetLayout()
                         Apotheca.UpdateAllButtons()
                     end
                     UIDropDownMenu_AddButton(info)
@@ -357,24 +354,25 @@ function Apotheca.BuildOptionsPanelContent(panel)
             { value = "HEALER", label = "|TInterface\\Icons\\Spell_Holy_FlashHeal:14|t Healer" },
             { value = "DAMAGE", label = "|TInterface\\Icons\\INV_Sword_04:14|t Damage" },
         },
-        function() return DBGet("role") or "AUTO" end,
+        function() return Apotheca.CharSetting("role", "AUTO") end,
         -- The role decides which buff-food priority the dropdowns below
         -- show and write: re-read them, or they display the old role's order.
-        function(v) DBSet(v, "role") ; Apotheca.ResetLayout() ; Apotheca.RefreshOptions() end)
+        function(v) Apotheca.SetCharSetting("role", v) ; Apotheca.RefreshOptions() end)
     Checkbox("In a group, use the role set there  |cff888888(party frame \"Set Role\"; often unset)|r",
-        function() return DBGet("useGroupRole") == true end,
-        function(v) DBSet(v, "useGroupRole") ; Apotheca.ResetLayout() ; Apotheca.RefreshOptions() end)
+        function() return Apotheca.CharSetting("useGroupRole", false) == true end,
+        function(v) Apotheca.SetCharSetting("useGroupRole", v) ; Apotheca.RefreshOptions() end)
     SmallLabel("Druid and Shaman damage:")
     RadioGroup(
         {
             { value = "SPELL",    label = "Spell  |cff888888(Balance, Elemental)|r" },
             { value = "PHYSICAL", label = "Physical  |cff888888(Feral, Enhancement)|r" },
         },
-        function() return DBGet("damageStyle") or "SPELL" end,
-        function(v) DBSet(v, "damageStyle") ; Apotheca.ResetLayout() ; Apotheca.RefreshOptions() end)
+        function() return Apotheca.CharSetting("damageStyle", "SPELL") end,
+        function(v) Apotheca.SetCharSetting("damageStyle", v) ; Apotheca.RefreshOptions() end)
     Checkbox("Only show the bar while my role is Healer",
-        function() return DBGet("showOnlyHealingSpec") == true end,
-        function(v) DBSet(v, "showOnlyHealingSpec") end)
+        function() return DBGet("onlyWhenHealer") == true end,
+        function(v) DBSet(v, "onlyWhenHealer") end)
+    SmallLabel("|cff888888Role, damage style and group-role settings are per character.|r")
     Checkbox("Always show empty buttons  |cff888888(show all slots even if bag is empty)|r",
         function() return DBGet("showEmptyButtons") == true end,
         function(v) DBSet(v, "showEmptyButtons") end)
@@ -591,7 +589,6 @@ function Apotheca.BuildOptionsPanelContent(panel)
         function() return DBGet("healthstone", "enabled") ~= false end,
         function(v)
             DBSet(v, "healthstone", "enabled")
-            Apotheca.ResetLayout()
         end)
     local smartCB = Checkbox("Suggest the stone that fits your missing health",
         function() return DBGet("healthstone", "smartRank") ~= false end,
@@ -641,7 +638,6 @@ function Apotheca.BuildOptionsPanelContent(panel)
         local order = {}
         for _, row in ipairs(orderRows) do order[#order+1] = row.key end
         DBSet(order, "buttonOrder")
-        Apotheca.ResetLayout()
         Apotheca.UpdateAllButtons()
     end
     local function SwapRows(a, b)
@@ -691,7 +687,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
         orderRows = {}
         for i, key in ipairs(Apotheca.GetButtonOrder()) do orderRows[#orderRows+1] = MakeOrderRow(i, key) end
         RepositionOrderRows()
-        Apotheca.ResetLayout(); Apotheca.UpdateAllButtons()
+        Apotheca.UpdateAllButtons()
     end)
     curH = curH + 26
 

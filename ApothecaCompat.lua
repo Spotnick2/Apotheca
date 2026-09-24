@@ -221,8 +221,7 @@ end
 -- own role selector. Read through the typed C_LFGListRoles first, then the
 -- older GetLFGRoles global; each inside a pcall, and only real booleans
 -- are trusted, so an unexpected shape reads as "nothing selected".
--- The group-assigned role is deliberately NOT used (Codex review of #9):
--- joining a group must not silently change what the bar offers.
+-- (The group-assigned role is a separate, opt-in source: API.GroupRole.)
 -- Returns tank, healer, damage (plain booleans), or nil when no source
 -- answered.
 -- ------------------------------------------------------------

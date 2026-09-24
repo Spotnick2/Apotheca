@@ -22,19 +22,11 @@ Apotheca = Apotheca or {}
 local PROFILE_DEFAULTS = {
     enabled             = true,
     debug               = false,
-    -- Only show the bar while the resolved role is Healer. The bar now
-    -- serves every role (#9), so this is off by default; a saved true is
-    -- kept (ApplyDefaults never overwrites).
-    showOnlyHealingSpec = false,
-    -- "AUTO" (the game's role selector, else the class default), or a
-    -- fixed "TANK" / "HEALER" / "DAMAGE".
-    role                = "AUTO",
-    -- Druid / Shaman damage: "SPELL" (caster) or "PHYSICAL". Nothing on
-    -- this client tells Balance from Feral or Elemental from Enhancement.
-    damageStyle         = "SPELL",
-    -- Use the role assigned in the current group (party frame "Set Role")
-    -- when there is one. Off by default: it is often unset or stale.
-    useGroupRole        = false,
+    -- Only show the bar while the resolved role is Healer. Replaces the old
+    -- showOnlyHealingSpec (see InitDB): off by default, the bar serves
+    -- every role (#9). The role settings themselves (override, damage
+    -- style, group role) are PER CHARACTER, in ApothecaCharDB.
+    onlyWhenHealer      = false,
     -- Grey the food, drink, potion and healthstone icons while the resource
     -- they restore is full (#6). Display only: clicks still work.
     fullTint            = true,
@@ -58,8 +50,9 @@ local PROFILE_DEFAULTS = {
         stamina = true, strength = true, agility = true, attackPower = true,
         crit = true, armor = true,
     },
-    -- Ordered stat priority per class (indices 1-4 = slot order). Empty:
-    -- the class's role profile decides (Apotheca.GetRoleProfile).
+    -- Ordered stat priority per ROLE profile key (HEALER, TANK, CASTER,
+    -- MELEE, AGILITY; indices 1-4 = slot order). Empty: the role's profile
+    -- decides (Apotheca.GetRoleProfile).
     buffFoodPriority = {},
     elixirs = {
         enabled        = true,
@@ -149,7 +142,6 @@ function Apotheca.SetProfile(key)
         ApplyDefaults(ApothecaDB.profiles[key], PROFILE_DEFAULTS)
     end
     ApothecaDB.activeProfile = key
-    Apotheca.ResetLayout()
     Apotheca.UpdateAllButtons()
     if Apotheca.RefreshOptions then Apotheca.RefreshOptions() end
 end
@@ -173,30 +165,45 @@ local svLoaded = false
 -- custom order survives. Applied to EVERY profile, whichever route the data
 -- came in by (profile structure, flat-DB migration, or a later SetProfile).
 local function CleanBuffFoodPriority(prof)
-    if type(prof) ~= "table" or type(prof.buffFoodPriority) ~= "table" then return end
+    if type(prof) ~= "table" then return end
+    -- showOnlyHealingSpec was a class check that defaulted to TRUE, so every
+    -- saved profile holds true whether or not anyone chose it. Under the new
+    -- role check it would hide the whole bar for a healer class playing
+    -- Tank or Damage. It is renamed onlyWhenHealer (default false) and the
+    -- old value is dropped, not carried over (/code-review of #14).
+    prof.showOnlyHealingSpec = nil
+    if type(prof.buffFoodPriority) ~= "table" then return end
     local valid = {}
     for k in pairs(Apotheca.DATA.BUFF_FOOD_BY_STAT) do valid[k] = true end
-    -- Priorities are per role profile now (#9). Old per-CLASS entries are
-    -- dropped: they would never be read, and SavedVariables do not load
-    -- back on this client, so no real custom order is lost.
-    local CLASS_TOKENS = { PRIEST = 1, PALADIN = 1, SHAMAN = 1, DRUID = 1, WARRIOR = 1,
-                           MAGE = 1, WARLOCK = 1, ROGUE = 1, HUNTER = 1 }
-    for cls in pairs(CLASS_TOKENS) do prof.buffFoodPriority[cls] = nil end
-    for cls, list in pairs(prof.buffFoodPriority) do
-        -- Anything that is not a list of known stat names is dropped, the
-        -- two old TBC defaults included (their "mp5" and "crit" slots are
-        -- valid stats, so they are matched whole).
-        local legacy = type(list) ~= "table"
-        if not legacy then
-            for _, stat in ipairs(list) do
-                if type(stat) ~= "string" or not valid[stat] then legacy = true end
-            end
+    -- A usable priority: a list of known stat names that is not one of the
+    -- two old TBC defaults (their "mp5" and "crit" are valid stats, so the
+    -- defaults are matched whole).
+    local function usable(list)
+        if type(list) ~= "table" then return false end
+        for _, stat in ipairs(list) do
+            if type(stat) ~= "string" or not valid[stat] then return false end
         end
-        if not legacy then
-            local joined = table.concat(list, ",")
-            legacy = joined == "healing,mp5,crit,stamina" or joined == "healing,crit,mp5,stamina"
+        local joined = table.concat(list, ",")
+        return joined ~= "healing,mp5,crit,stamina" and joined ~= "healing,crit,mp5,stamina"
+    end
+    -- Priorities are per role profile now (#9). A usable per-CLASS entry
+    -- moves to the role that class defaults to, unless that role already
+    -- has a usable order. It is checked BEFORE moving: several classes map
+    -- to HEALER, and an old default must not take the slot of a real one.
+    local CLASS_DEFAULT_KEY = {
+        PRIEST = "HEALER", PALADIN = "HEALER", SHAMAN = "HEALER", DRUID = "HEALER",
+        WARRIOR = "MELEE", MAGE = "CASTER", WARLOCK = "CASTER",
+        ROGUE = "AGILITY", HUNTER = "AGILITY",
+    }
+    for cls, key in pairs(CLASS_DEFAULT_KEY) do
+        local list = prof.buffFoodPriority[cls]
+        prof.buffFoodPriority[cls] = nil
+        if usable(list) and not usable(prof.buffFoodPriority[key]) then
+            prof.buffFoodPriority[key] = list
         end
-        if legacy then prof.buffFoodPriority[cls] = nil end
+    end
+    for key, list in pairs(prof.buffFoodPriority) do
+        if not usable(list) then prof.buffFoodPriority[key] = nil end
     end
 end
 Apotheca._CleanBuffFoodPriority = CleanBuffFoodPriority
@@ -493,14 +500,28 @@ end
 -- role assigned in the current group; then the game's role selector (one
 -- ticked role, or the class's preferred one among several); then the
 -- class default.
-function Apotheca.ResolveRole()
+-- Role settings are PER CHARACTER (ApothecaCharDB): a Tank override on a
+-- warrior must not turn the priest on the same shared profile into a tank.
+function Apotheca.CharSetting(key, default)
+    local c = ApothecaCharDB
+    local v = type(c) == "table" and c[key]
+    if v == nil then return default end
+    return v
+end
+
+function Apotheca.SetCharSetting(key, value)
+    ApothecaCharDB = type(ApothecaCharDB) == "table" and ApothecaCharDB or {}
+    ApothecaCharDB[key] = value
+    Apotheca.RefreshRole()
+end
+
+local function ComputeRole()
     local _, className = UnitClass("player")
     local cls = CLASS_ROLES[className] or CLASS_ROLES.PRIEST
-    local db = DB()
 
-    local role = db.role
+    local role = Apotheca.CharSetting("role", "AUTO")
     if role ~= "TANK" and role ~= "HEALER" and role ~= "DAMAGE" then
-        role = db.useGroupRole == true and Apotheca.API.GroupRole() or nil
+        role = Apotheca.CharSetting("useGroupRole", false) == true and Apotheca.API.GroupRole() or nil
     end
     if not role then
         local t, h, d = Apotheca.API.SelectedRoles()
@@ -517,7 +538,7 @@ function Apotheca.ResolveRole()
     if role == "DAMAGE" then
         key = cls.damage
         if key == "HYBRID_MELEE" or key == "HYBRID_AGILITY" then
-            if db.damageStyle == "PHYSICAL" then
+            if Apotheca.CharSetting("damageStyle", "SPELL") == "PHYSICAL" then
                 key = key == "HYBRID_MELEE" and "MELEE" or "AGILITY"
             else
                 key = "CASTER"
@@ -525,6 +546,35 @@ function Apotheca.ResolveRole()
         end
     end
     return role, key
+end
+
+-- The resolved role is cached: it is read on hot paths (every UNIT_AURA
+-- through the elixir state, several times per update). It is recomputed
+-- by RefreshRole, which role events, role settings, every full update and
+-- a slow out-of-combat check call.
+local roleCache
+function Apotheca.ResolveRole()
+    if not roleCache then
+        local role, key = ComputeRole()
+        roleCache = { role, key }
+    end
+    return roleCache[1], roleCache[2]
+end
+
+-- Recompute; true when the resolved role CHANGED. A change refreshes the
+-- options panel (its buff-food dropdowns follow the role) and, unless
+-- `quiet` (the caller IS the update), asks for an update, which waits out
+-- of combat.
+function Apotheca.RefreshRole(quiet)
+    local old = roleCache and roleCache[2]
+    roleCache = nil
+    local _, key = Apotheca.ResolveRole()
+    if old ~= nil and key ~= old then
+        if Apotheca.RefreshOptions then Apotheca.RefreshOptions() end
+        if not quiet and Apotheca.RequestUpdate then Apotheca.RequestUpdate() end
+        return true
+    end
+    return false
 end
 
 function Apotheca.GetRoleProfile()
@@ -611,6 +661,7 @@ local SCROLL_BUTTON_CONFIG = {
 }
 
 local WEAPONOIL_BUTTON_CONFIG = {
+    requiresMana = true,   -- mana and wizard oils are for casters and healers
     key = "weaponoil", label = "Weapon Oil", emptyIcon = "Interface\\Icons\\INV_Potion_95",
 }
 
@@ -2057,16 +2108,10 @@ end
 -- LAYOUT
 -- ============================================================
 
-local currentRecoveryMode = nil
-local currentElixirMode   = nil
-
 -- RefreshLayout builds the active button list and positions everything.
 -- staticFlags = table keyed by button key → true if that slot should appear
 -- scrollFlags = { spirit=bool, protection=bool, oil=bool, food=bool }
 local function RefreshLayout(recoveryMode, elixirMode, staticFlags, scrollFlags)
-    currentRecoveryMode = recoveryMode
-    currentElixirMode   = elixirMode
-
     -- 1. Determine which keys are active this frame.
     local shouldShow = {}
 
@@ -2080,8 +2125,7 @@ local function RefreshLayout(recoveryMode, elixirMode, staticFlags, scrollFlags)
         shouldShow["recovery"] = true
     elseif recoveryMode == "split" then
         shouldShow["food"]  = true
-        -- Drink restores mana only: no Drink slot for warriors and rogues.
-        shouldShow["drink"] = Apotheca.UsesMana()
+        shouldShow["drink"] = true
     end
 
     if elixirMode then
@@ -2096,6 +2140,17 @@ local function RefreshLayout(recoveryMode, elixirMode, staticFlags, scrollFlags)
     if scrollFlags and scrollFlags.oil        then shouldShow["weaponoil"]        = true end
     if scrollFlags and scrollFlags.bandage    then shouldShow["bandage"]          = true end
     if scrollFlags and scrollFlags.healthstone then shouldShow["healthstone"]      = true end
+
+    -- 1b. Mana gating, in one place: a button that restores mana or needs
+    -- a mana user (cfg.restores == "mana" or cfg.requiresMana) never shows
+    -- for a class without mana (warriors and rogues).
+    if not Apotheca.UsesMana() then
+        for key in pairs(shouldShow) do
+            local btn = Apotheca.buttons[key]
+            local cfg = btn and btn.cfg
+            if cfg and (cfg.restores == "mana" or cfg.requiresMana) then shouldShow[key] = nil end
+        end
+    end
 
     -- 2. Build the active list in the user's custom order.
     local order  = Apotheca.GetButtonOrder()
@@ -2252,10 +2307,9 @@ function Apotheca.UpdateAllButtons()
     -- Secure buttons cannot be shown/hidden/moved/resized during combat.
     -- The bar will refresh automatically when combat ends (PLAYER_REGEN_ENABLED).
     if InCombatLockdown() then return end
-    -- The role this update builds for: a role event only costs another
-    -- update when the resolved role differs from it.
-    local _, roleKey = Apotheca.ResolveRole()
-    Apotheca._lastRoleKey = roleKey
+    -- Resolve the role once, fresh, for this whole update (quietly: this
+    -- IS the update a change would ask for).
+    Apotheca.RefreshRole(true)
     UpdateAllButtonsBody()
     Apotheca.RefreshFullTint()
 end
@@ -2269,7 +2323,7 @@ function UpdateAllButtonsBody()
         return
     end
 
-    local specOk = (not db.showOnlyHealingSpec) or Apotheca.IsHealerSpec()
+    local specOk = (not db.onlyWhenHealer) or Apotheca.IsHealerSpec()
     if not specOk or not Apotheca.IsVisible() then
         ApothecaFrame:Hide()
         return
@@ -2284,9 +2338,7 @@ function UpdateAllButtonsBody()
     -- ── Static slots ─────────────────────────────────────────────
     -- "mana" and "health" are always visible — show greyed out
     -- with the highest-tier icon when nothing is in bags.
-    -- Mana buttons only for classes with mana (warriors and rogues have none).
-    local usesMana = Apotheca.UsesMana()
-    local ALWAYS_VISIBLE_STATIC = { mana = usesMana, health = true }
+    local ALWAYS_VISIBLE_STATIC = { mana = true, health = true }
     local staticFlags = {}
     for _, cfg in ipairs(STATIC_BUTTON_CONFIG) do
         local btn = Apotheca.buttons[cfg.key]
@@ -2302,7 +2354,6 @@ function UpdateAllButtonsBody()
         end
         ApplyItemToButton(btn, id, cnt, tex)
         local show = id ~= nil or showEmpty or ALWAYS_VISIBLE_STATIC[cfg.key]
-        if cfg.restores == "mana" and not usesMana then show = false end
         staticFlags[cfg.key] = show
         if show then btn:Show() else btn:Hide() end
     end
@@ -2346,11 +2397,7 @@ function UpdateAllButtonsBody()
     -- ── Weapon oil ───────────────────────────────────────────────
     local oilID, oilCnt, oilTex
     if not db.weaponOil or db.weaponOil.enabled then
-        -- Mana and wizard oils are for mana users; warriors and rogues get
-        -- stones and poisons instead (#9 part 2/3).
-        if Apotheca.UsesMana() then
-            oilID, oilCnt, oilTex = Apotheca.FindBestWeaponOil(bagMap)
-        end
+        oilID, oilCnt, oilTex = Apotheca.FindBestWeaponOil(bagMap)
     end
 
     -- ── Buff food ────────────────────────────────────────────────
@@ -2376,7 +2423,7 @@ function UpdateAllButtonsBody()
         food        = (buffFoodID ~= nil)          or (db.buffFood and db.buffFood.enabled and showEmpty),
         spirit      = (spiritID   ~= nil)          or (scrollsOn   and (not scrollsDB or scrollsDB.spirit)   and showEmpty),
         protection  = (protID     ~= nil)          or (scrollsOn   and (not scrollsDB or scrollsDB.protection) and showEmpty),
-        oil         = (oilID      ~= nil)          or ((not db.weaponOil or db.weaponOil.enabled) and showEmpty and Apotheca.UsesMana()),
+        oil         = (oilID      ~= nil)          or ((not db.weaponOil or db.weaponOil.enabled) and showEmpty),
         bandage     = (bandageID  ~= nil)          or ((not db.bandage or db.bandage.enabled) and showEmpty),
         healthstone = (hsID       ~= nil)          or ((not db.healthstone or db.healthstone.enabled ~= false) and showEmpty),
     }
@@ -2551,10 +2598,6 @@ end
 
 -- Called by Options.lua when buff food enabled is toggled,
 -- so the bar recalculates its width on the next update.
-function Apotheca.ResetLayout()
-    currentRecoveryMode = nil
-    currentElixirMode   = nil
-end
 
 -- ============================================================
 -- OPTIONS PANEL  (implemented in Apotheca_Options.lua)
@@ -2658,8 +2701,22 @@ local function RequestUpdate()
     deferredPending = true
     deferredElapsed = 0
 end
+Apotheca.RequestUpdate = RequestUpdate
+
+-- Which event the Forever role selector fires is not measured, so the
+-- role is also re-checked every few seconds out of combat. Cheap: a change
+-- is the only thing that costs an update.
+local ROLE_POLL = 3
+local rolePollElapsed = 0
 
 eventFrame:SetScript("OnUpdate", function(self, elapsed)
+    if playerReady and not InCombatLockdown() then
+        rolePollElapsed = rolePollElapsed + elapsed
+        if rolePollElapsed >= ROLE_POLL then
+            rolePollElapsed = 0
+            Apotheca.RefreshRole()
+        end
+    end
     if deferredPending and playerReady then
         deferredElapsed = deferredElapsed + elapsed
         if deferredElapsed >= deferredDelay then
@@ -2792,13 +2849,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         or event == "PLAYER_ROLES_ASSIGNED" or event == "GROUP_ROSTER_UPDATE" then
         -- Only a change of the RESOLVED role costs an update: these can
         -- come in bursts. In combat the update waits for combat's end.
-        if playerReady then
-            local _, key = Apotheca.ResolveRole()
-            if key ~= Apotheca._lastRoleKey then
-                Apotheca.ResetLayout()
-                RequestUpdate()
-            end
-        end
+        if playerReady then Apotheca.RefreshRole() end
 
     elseif event == "UNIT_MAXHEALTH" or event == "UNIT_MAXPOWER" then
         -- Rare, and each changes which potion is best: one deferred update.
