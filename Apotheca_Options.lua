@@ -514,7 +514,8 @@ function Apotheca.BuildOptionsPanelContent(panel)
         function(v) DBSet(v, "elixirs", "enabled") end)
     Gap(4)
     SmallLabel("On WoW: Forever a flask and elixirs all stack, so each slot offers\n"
-        .. "the best item you carry for your role: Flask, Elixir, and Elixir (regen).")
+        .. "the best item you carry for your role: Flask, Elixir, and Elixir 2.\n"
+        .. "A slot whose buff is already running offers nothing.")
 
     SectionHeader("Scrolls & Weapon Oil")
     Gap(4)
@@ -581,7 +582,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
         mana = "Mana Potion", health = "Health Potion", healthstone = "Healthstone",
         rune = "Rune / Battle Res",
         recovery = "Recovery (Conjured)", food = "Food", drink = "Drink",
-        flask = "Flask", battle = "Battle Elixir", guardian = "Guardian Elixir",
+        flask = "Flask", battle = "Elixir", guardian = "Elixir 2",
         bufffood = "Buff Food", spiritscroll = "Spirit Scroll",
         protectionscroll = "Protection Scroll", weaponoil = "Weapon Oil", bandage = "Bandage",
     }

@@ -16,18 +16,14 @@ D.HEALTH_ITEMS = {
     13446,  -- Major Healing Potion (1400)
     18253,  -- Major Rejuvenation Potion (1600)
     17348,  -- Major Healing Draught (1120)
-    15723,  -- Tea with Sugar (1400)
     3928,   -- Superior Healing Potion (800)
-    11951,  -- Whipper Root Tuber (800)
     18839,  -- Combat Healing Potion (800)
     223914, -- Greater Healing Potion (650)
     17349,  -- Superior Healing Draught (640)
     274935, -- Tessa's Tonic (800)
     1710,   -- Greater Healing Potion (520)
-    14894,  -- Lily Root (600)
     268883, -- Perishable Healing Potion (320)
     929,    -- Healing Potion (320)
-    11952,  -- Night Dragon's Breath (425)
     268882, -- Perishable Lesser Healing Potion (160)
     858,    -- Lesser Healing Potion (160)
     2456,   -- Minor Rejuvenation Potion (120)
@@ -43,15 +39,11 @@ D.MANA_ITEMS = {
     18253,  -- Major Rejuvenation Potion (1600)
     18841,  -- Combat Mana Potion (1200)
     17351,  -- Major Mana Draught (1120)
-    15723,  -- Tea with Sugar (1400)
     6149,   -- Greater Mana Potion (800)
     17352,  -- Superior Mana Draught (640)
     274935, -- Tessa's Tonic (800)
     3827,   -- Mana Potion (520)
-    14894,  -- Lily Root (600)
-    1072,   -- Full Moonshine (320)
     3385,   -- Lesser Mana Potion (320)
-    11952,  -- Night Dragon's Breath (425)
     2455,   -- Minor Mana Potion (160)
     3087,   -- Mug of Shimmer Stout (160)
     2456,   -- Minor Rejuvenation Potion (120)
@@ -212,6 +204,7 @@ D.FOOD_ITEMS = {
     { id = 249794, healthValue = 530   },  -- Tel'Abim Plantains
     { id = 278121, healthValue = 530   },  -- Smoked Sausage
     { id = 3448  , healthValue = 282  , restoresMana = true },  -- Senggin Root
+    { id = 5473  , healthValue = 282   },  -- Scorpid Surprise
     { id = 1113  , healthValue = 234  , conjured = true },  -- Conjured Bread
     { id = 414   , healthValue = 234   },  -- Dalaran Sharp
     { id = 1326  , healthValue = 234   },  -- Sauteed Sunfish
@@ -461,7 +454,6 @@ D.BANDAGE_ITEMS = {
     272056, -- Darkspear Islands Silk Bandage (640)
     6450,   -- Silk Bandage (400)
     3531,   -- Heavy Wool Bandage (301)
-    5473,   -- Scorpid Surprise (282)
     3530,   -- Wool Bandage (161)
     2581,   -- Heavy Linen Bandage (114)
     1251,   -- Linen Bandage (66)

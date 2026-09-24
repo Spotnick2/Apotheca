@@ -61,6 +61,9 @@ H.check(not indexOf(D.MANA_ITEMS, 8008), "mage mana gems are not on the potion b
 H.eq(D.BANDAGE_ITEMS[1], 232433, "Dense Runecloth Bandage (3400, subclass Other) is the best bandage")
 H.eq(D.DRINK_ITEMS[1].id, 227813, "Drinkable Stratholme Holy Water (6363 mana) is the best drink")
 H.check(find(D.FOOD_ITEMS, 19060) ~= nil, "a battleground ration (subclass Other) is food")
+H.check(find(D.FOOD_ITEMS, 5473) ~= nil, "Scorpid Surprise ('Heals 282 damage', Food & Drink) is food")
+H.check(not indexOf(D.BANDAGE_ITEMS, 5473), "and not a bandage")
+H.check(not indexOf(D.HEALTH_ITEMS, 11951), "Whipper Root Tuber (own cooldown) is not on the potion button")
 
 ------------------------------------------------------------
 -- Battleground-only items
@@ -74,6 +77,19 @@ H.eq(Apotheca.IsItemUsableHere(19066), false, "a Warsong Gulch bandage is not us
 WoW.instanceName = "Bassin Arathi"   -- a French client
 H.eq(Apotheca.IsItemUsableHere(20065), true, "the gate uses the map ID, so it works on a localized client")
 WoW.instanceName, WoW.instanceType, WoW.instanceMap = "Kalimdor", "none", 1
+
+-- The gate applies to EVERY finder, not only potions: it is in the bag map.
+WoW.AddItem(2, 1, 19060, 3, "Warsong Gulch Enriched Ration")
+WoW.AddItem(2, 2, 8766, 3, "Morning Glory Dew")
+WoW.AddItem(2, 3, 20066, 3, "Arathi Basin Runecloth Bandage")
+local map = Apotheca.BuildBagMap()
+H.eq(map[19060], nil, "outdoors, a Warsong Gulch ration is not in the usable bag map")
+H.eq(Apotheca.FindBestDrink(map), 8766, "so the Drink button offers Morning Glory Dew, not the ration")
+H.eq(Apotheca.FindBestBandage(map), nil, "and an Arathi Basin bandage is not offered outdoors")
+WoW.instanceName, WoW.instanceType, WoW.instanceMap = "Arathi Basin", "pvp", 529
+H.eq(Apotheca.FindBestBandage(Apotheca.BuildBagMap()), 20066, "inside Arathi Basin it is")
+WoW.instanceName, WoW.instanceType, WoW.instanceMap = "Kalimdor", "none", 1
+WoW.bags[2] = nil
 
 ------------------------------------------------------------
 -- Role profiles pick the right elixirs and buff food
@@ -94,8 +110,28 @@ H.eq(res.guardianID, 250341, "healer regen elixir: Greater Mageblood Elixir (20 
 WoW.SetAura("HELPFUL", "Flask of Distilled Wisdom", 17627)
 res = Apotheca.ResolveElixirs(every)
 H.eq(res.hasFlask, true, "an active flask is recognised by its spell ID")
-H.eq(res.battleID, 250333, "and the elixir slots are still offered: they stack on Forever")
+H.eq(res.flaskID, nil, "and the flask slot offers nothing: a second click would only waste one")
+H.eq(res.battleID, 250333, "the elixir slots are still offered: they stack on Forever")
 WoW.auras.HELPFUL = {}
+
+-- Only one flask can be active, so ANY flask fills the slot, even one
+-- that is not the role's own.
+WoW.SetAura("HELPFUL", "Flask of the Titans", 17626)
+res = Apotheca.ResolveElixirs(every)
+H.eq(res.hasFlask, true, "a healer with Flask of the Titans running has a flask")
+H.eq(res.flaskID, nil, "and is not offered Distilled Wisdom on top of it")
+WoW.auras.HELPFUL = {}
+
+-- An elixir fitting both slots goes to the first slot only.
+res = Apotheca.ResolveElixirs(bagWith(13447))
+H.eq(res.battleID, 13447, "Elixir of the Sages (Int + Spi) takes the first elixir slot")
+H.eq(res.guardianID, nil, "and does not also appear on the second")
+
+-- The Enable Elixir / Flask option is honoured.
+ApothecaDB.profiles[ApothecaDB.activeProfile].elixirs.enabled = false
+res = Apotheca.ResolveElixirs(every)
+H.eq(res.flaskID or res.battleID or res.guardianID, nil, "elixirs disabled offers nothing")
+ApothecaDB.profiles[ApothecaDB.activeProfile].elixirs.enabled = true
 
 -- An aura whose spell ID differs from the item's spell is still found by
 -- the spell's localized name.
@@ -124,5 +160,20 @@ WoW.SetAura("HELPFUL", "Spirit", 12177)
 H.eq(Apotheca.HasSpiritBuff(), true, "a spirit scroll buff is recognised by spell ID, whatever its name")
 WoW.auras.HELPFUL = {}
 H.eq(Apotheca.HasSpiritBuff(), false, "and its absence is a confirmed false")
+
+-- Localized clients: Divine Spirit, Well Fed and Recently Bandaged are
+-- matched by the client's own name for the spell.
+WoW.spellNames[14752] = "Göttlicher Willen"
+WoW.SetAura("HELPFUL", "Göttlicher Willen", 27841)   -- another rank
+H.eq(Apotheca.HasSpiritBuff(), true, "a German Divine Spirit (any rank) blocks the spirit scroll")
+WoW.auras.HELPFUL = {}
+WoW.spellNames[19705] = "Satt"
+WoW.SetAura("HELPFUL", "Satt", 1234567)
+H.eq(Apotheca.HasFoodBuff(), true, "German Well Fed is found by its localized name")
+WoW.auras.HELPFUL = {}
+WoW.spellNames[11196] = "Kürzlich bandagiert"
+WoW.SetAura("HARMFUL", "Kürzlich bandagiert", 11196)
+H.eq(Apotheca.HasRecentlyBandaged(), true, "Recently Bandaged is found on any language")
+WoW.auras.HARMFUL = {}
 
 H.done("test_items")

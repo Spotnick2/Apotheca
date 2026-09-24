@@ -35,12 +35,22 @@ def kind(r):
     u = r['use']
     if r['sub'] not in RESTORE_SUBS or not u or r['quest'] or 'Healthstone' in r['name']:
         return None
+    # Food & Drink items are food, and so is anything eaten seated: Scorpid
+    # Surprise (Food & Drink) says "Heals 282 damage over 21 sec" and never
+    # mentions sitting, so the subclass has to decide, not the wording.
+    if r['sub'] == SUB_FOOD or re.search(r'Must remain seated', u) or re.search(
+            r'Restores [\d,]+ (?:health|mana)(?: and [\d,]+ (?:health|mana)| and (?:mana|health))? over', u):
+        return 'food'
     if re.search(r'Heals [\d,]+ damage over', u):
         return 'bandage'
-    if re.search(r'Restores [\d,]+ (?:health|mana)(?: and [\d,]+ (?:health|mana)| and (?:mana|health))? over', u):
-        return 'food'
+    # Only real potions go on the potion buttons: they share the potion
+    # cooldown. Whipper Root Tuber, Night Dragon's Breath, Lily Root and
+    # Tea with Sugar each have their own, and on the button would hide a
+    # potion that is still ready.
     if re.search(r'Restores [\d,]+ to [\d,]+ (?:health|mana)', u):
-        return 'potion'
+        if r['sub'] == SUB_POTION or re.search(r'Potion|Draught', r['name']):
+            return 'potion'
+        return 'other-restore'
     return None
 
 # Items to leave out whatever their tooltip says.
@@ -60,6 +70,12 @@ def load(path):
         tip = p[6]
         lines = [x.strip() for x in tip.split(' | ')]
         use = ' '.join(x for x in lines if x.startswith('Use:'))
+        if not use:
+            # /apo scan2 appends the spell description when the tooltip had
+            # no Use: line; it carries the same text.
+            m = re.search(r'\|\| DESC: (.*)$', tip)
+            if m:
+                use = 'Use: ' + m.group(1).strip()
         m = re.search(r'Requires Level (\d+)', tip)
         rows.append(dict(
             id=int(p[0]), sub=int(p[1]) if p[1] != 'nil' else -1, name=p[3],
@@ -229,6 +245,11 @@ def potion_values(u):
 
 def food_values(u):
     """(health, mana) totals for food/drink eaten over time."""
+    m = re.search(r'Heals ([\d,]+) damage over', u)
+    if m and not re.search(r'Restores [\d,]+ health', u):
+        h = num(m.group(1))
+        mm = re.search(r'Restores ([\d,]+) mana', u)
+        return h, (num(mm.group(1)) if mm else None)
     m = re.search(r'Restores ([\d,]+) (?:health and mana|mana and health) over', u)
     if m:
         return num(m.group(1)), num(m.group(1))
@@ -261,6 +282,9 @@ def build(rows):
         m = re.search(r'Restores (\d+)% (health|mana)\.', u)
         if m and r['sub'] == SUB_POTION:
             (percent_h if m.group(2) == 'health' else percent_m).append(r)
+            continue
+        if kind(r) == 'other-restore':
+            skipped.append((r['id'], r['name'], 'restores instantly but is not a potion (own cooldown)'))
             continue
         if kind(r) != 'potion':
             continue

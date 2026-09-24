@@ -165,6 +165,26 @@ local function InitDB()
             else
                 ApplyDefaults(ApothecaDB.profiles[key], PROFILE_DEFAULTS)
             end
+            -- Buff food priorities saved by TBC builds are the old defaults
+            -- ({healing, mp5, crit, stamina} and the paladin variant), or
+            -- name stats Forever food no longer has. Drop them so the role
+            -- profile decides; a real custom order survives.
+            local prof0 = ApothecaDB.profiles[key]
+            if prof0 and type(prof0.buffFoodPriority) == "table" then
+                local valid = {}
+                for k in pairs(Apotheca.DATA.BUFF_FOOD_BY_STAT) do valid[k] = true end
+                for cls, list in pairs(prof0.buffFoodPriority) do
+                    local legacy = type(list) ~= "table"
+                        or table.concat(list, ",") == "healing,mp5,crit,stamina"
+                        or table.concat(list, ",") == "healing,crit,mp5,stamina"
+                    if not legacy then
+                        for _, stat in ipairs(list) do
+                            if not valid[stat] then legacy = true end
+                        end
+                    end
+                    if legacy then prof0.buffFoodPriority[cls] = nil end
+                end
+            end
             -- Migrate old boolean preventWaste → new preventWasteMode
             local prof = ApothecaDB.profiles[key]
             if prof and prof.preventWaste ~= nil and prof.preventWasteMode == nil then
@@ -333,16 +353,14 @@ local function IDs(list)
     local ids, spells = {}, {}
     for _, e in ipairs(list or {}) do
         ids[#ids + 1] = e.id
-        if e.spell then spells[e.spell] = true end
+        if e.spell then spells[#spells + 1] = e.spell end
     end
     return ids, spells
 end
 local SPIRIT_SCROLL_ITEMS,     SPIRIT_SCROLL_SPELLS     = IDs(DATA.SCROLLS_BY_STAT.spirit)
 local PROTECTION_SCROLL_ITEMS, PROTECTION_SCROLL_SPELLS = IDs(DATA.SCROLLS_BY_STAT.armor)
 
--- Weapon oils, strongest first by kind. WEAPON_COATING_ITEMS always wins
--- when present; nothing on Forever is healer-relevant for it yet.
-local WEAPON_COATING_ITEMS = {}
+-- Weapon oils, strongest first by kind.
 local MANA_OIL_ITEMS, WIZARD_OIL_ITEMS = {}, {}
 for _, oil in ipairs(DATA.OILS) do
     local list = oil.kind == "mana" and MANA_OIL_ITEMS or WIZARD_OIL_ITEMS
@@ -441,10 +459,18 @@ local elixirCache = {}
 local function GetPlayerElixirData()
     local profile = Apotheca.GetRoleProfile()
     if not elixirCache[profile] then
+        local battle, guardian = ElixirSlot(profile.battle, false), ElixirSlot(profile.guardian, false)
+        local function spells(list)
+            local out = {}
+            for _, e in ipairs(list) do out[#out + 1] = e.spell end
+            return out
+        end
         elixirCache[profile] = {
-            flask    = ElixirSlot(profile.flask, true),
-            battle   = ElixirSlot(profile.battle, false),
-            guardian = ElixirSlot(profile.guardian, false),
+            flask          = ElixirSlot(profile.flask, true),
+            battle         = battle,
+            guardian       = guardian,
+            battleSpells   = spells(battle),
+            guardianSpells = spells(guardian),
         }
     end
     return elixirCache[profile]
@@ -476,7 +502,7 @@ local BUFFFOOD_BUTTON_CONFIG = {
 local ELIXIR_BUTTON_CONFIG = {
     { key = "flask",    label = "Flask",    emptyIcon = "Interface\\Icons\\INV_Potion_97"  },
     { key = "battle",   label = "Elixir",   emptyIcon = "Interface\\Icons\\INV_Potion_51"  },
-    { key = "guardian", label = "Elixir (regen)", emptyIcon = "Interface\\Icons\\INV_Potion_Forsaken_01" },
+    { key = "guardian", label = "Elixir 2", emptyIcon = "Interface\\Icons\\INV_Potion_Forsaken_01" },
 }
 
 local SCROLL_BUTTON_CONFIG = {
@@ -508,7 +534,10 @@ function Apotheca.BuildBagMap()
         local numSlots = ContainerGetNumSlots(bag)
         for slot = 1, numSlots do
             local id = ContainerGetItemID(bag, slot)
-            if id then
+            -- Items usable only somewhere else (battleground rations,
+            -- bandages, draughts) are left out here, so every finder skips
+            -- them, not only FindBestItem.
+            if id and Apotheca.IsItemUsableHere(id) then
                 local count = ContainerGetCount(bag, slot)
                 if count > 0 then
                     bagMap[id] = (bagMap[id] or 0) + count
@@ -522,7 +551,7 @@ end
 function Apotheca.FindBestItem(list, bagMap)
     for _, id in ipairs(list) do
         local count = bagMap[id]
-        if count and count > 0 and Apotheca.IsItemUsableHere(id) then
+        if count and count > 0 then
             return id, count, GetCachedTexture(id)
         end
     end
@@ -682,19 +711,66 @@ function Apotheca.FindBestBuffFood(bagMap)
     return nil, 0, nil
 end
 
--- Aura checks return true / false, or nil when the client refused the
--- read (combat secrecy). Callers must treat nil as "unknown", not "missing".
-local function PlayerHasAnyAura(filter, ...)
-    local names = Apotheca.API.PlayerAuras(filter)
-    if not names then return nil end
-    for i = 1, select("#", ...) do
-        if names[select(i, ...)] then return true end
+-- ============================================================
+-- BUFF CHECKS
+-- Every check returns true / false, or nil when the client refused the
+-- read (combat secrecy). Callers must treat nil as "unknown", never as
+-- "missing".
+--
+-- A buff is matched by spell ID, or by the LOCALIZED name of that spell
+-- (C_Spell.GetSpellName), so every check works on any client language.
+-- The name also covers other ranks of the same buff, and an aura whose ID
+-- differs from the item's spell (not measured for every item).
+-- ============================================================
+
+-- Localized spell names are static for the session: look each up once.
+-- Only a found name is cached: GetSpellName answers nil until the spell's
+-- data is loaded, and caching that miss would stop the name ever matching.
+local spellNameCache = {}
+local function SpellName(spellID)
+    local n = spellNameCache[spellID]
+    if n == nil then
+        local ok, name = pcall(C_Spell.GetSpellName, spellID)
+        if ok and name then
+            n = name
+            spellNameCache[spellID] = n
+        end
     end
+    return n
+end
+
+-- One read of the player's auras, or nil when refused.
+local function ReadAuras(filter)
+    local names, ids = Apotheca.API.PlayerAuras(filter)
+    if not names then return nil end
+    return { names = names, ids = ids }
+end
+
+-- Is any of these spells active? `spells` is a list of spell IDs;
+-- `fallback` is an enUS name used only if no ID resolves to a name.
+local function AurasHave(auras, spells, fallback)
+    if not auras then return nil end
+    local named = false
+    for _, id in ipairs(spells) do
+        if auras.ids[id] then return true end
+        local n = SpellName(id)
+        if n then
+            named = true
+            if auras.names[n] then return true end
+        end
+    end
+    if not named and fallback and auras.names[fallback] then return true end
     return false
 end
 
+-- Buffs that are not an item's own spell. Spell IDs are Vanilla's; the
+-- localized name of any one rank matches all of them.
+local WELL_FED_SPELLS          = { 19705 }
+local RECENTLY_BANDAGED_SPELLS = { 11196 }
+local DIVINE_SPIRIT_SPELLS     = { 14752, 14818, 14819, 27841, 27681 }  -- incl. Prayer of Spirit
+
 function Apotheca.HasFoodBuff()
-    return PlayerHasAnyAura("HELPFUL", "Well Fed")
+    return AurasHave(ReadAuras("HELPFUL"), WELL_FED_SPELLS, "Well Fed")
 end
 
 -- ============================================================
@@ -777,32 +853,17 @@ function Apotheca.FindBestScroll(list, bagMap)
     return nil, 0, nil
 end
 
--- Check if the player has a Spirit buff (Divine Spirit or scroll-applied spirit).
--- We check for both the priest spell buff and the scroll buff name.
--- A scroll buff, matched by the scroll's own spell IDs. Divine Spirit and
--- Prayer of Spirit (priest) also block a spirit scroll, matched by name.
-local function HasSpellOrName(spells, ...)
-    local names, ids = Apotheca.API.PlayerAuras("HELPFUL")
-    if not names then return nil end
-    for id in pairs(ids) do if spells[id] then return true end end
-    -- Also by the scroll spell's localized name (see HasBuffFromList).
-    for id in pairs(spells) do
-        local ok, n = pcall(C_Spell.GetSpellName, id)
-        if ok and n and names[n] then return true end
-    end
-    for i = 1, select("#", ...) do
-        if names[select(i, ...)] then return true end
-    end
-    return false
-end
-
+-- A scroll buff, by the scroll's own spell. Divine Spirit and Prayer of
+-- Spirit (priest) also block a spirit scroll.
 function Apotheca.HasSpiritBuff()
-    return HasSpellOrName(SPIRIT_SCROLL_SPELLS, "Divine Spirit", "Prayer of Spirit")
+    local auras = ReadAuras("HELPFUL")
+    if not auras then return nil end
+    return AurasHave(auras, SPIRIT_SCROLL_SPELLS)
+        or AurasHave(auras, DIVINE_SPIRIT_SPELLS, "Divine Spirit") or false
 end
 
--- Check if the player has the Devotion Aura or a protection scroll buff.
 function Apotheca.HasProtectionScrollBuff()
-    return HasSpellOrName(PROTECTION_SCROLL_SPELLS)
+    return AurasHave(ReadAuras("HELPFUL"), PROTECTION_SCROLL_SPELLS)
 end
 
 -- ============================================================
@@ -822,13 +883,6 @@ function Apotheca.HasMainHandTempEnchant()
 end
 
 function Apotheca.FindBestWeaponOil(bagMap)
-    -- Blessed Weapon Coating always first
-    for _, id in ipairs(WEAPON_COATING_ITEMS) do
-        local count = bagMap[id]
-        if count and count > 0 then
-            return id, count, GetCachedTexture(id)
-        end
-    end
     -- Mana oils
     for _, id in ipairs(MANA_OIL_ITEMS) do
         local count = bagMap[id]
@@ -867,70 +921,28 @@ end
 -- Returns true if the player has the "Recently Bandaged" debuff,
 -- which prevents using another bandage for 60 seconds.
 function Apotheca.HasRecentlyBandaged()
-    return PlayerHasAnyAura("HARMFUL", "Recently Bandaged")
+    return AurasHave(ReadAuras("HARMFUL"), RECENTLY_BANDAGED_SPELLS, "Recently Bandaged")
 end
 
 -- ============================================================
 -- ELIXIR BUFF DETECTION
--- Scans UnitBuff for known flask/battle/guardian buff names.
--- Returns separate flags rather than one combined check so the
--- glow system can highlight individual missing slots.
+-- Separate flags per slot so the glow can highlight each missing one.
 -- ============================================================
 
--- Set of active buff spell IDs, or nil when the client refused the read.
--- Aura secrecy and combat lockdown are separate switches, so this can be
--- nil even out of combat.
-local function GetActiveBoneSet()
-    local names, spellIDs = Apotheca.API.PlayerAuras("HELPFUL")
-    return spellIDs, names
+-- Every flask, whatever the role: only one flask can be active, so ANY
+-- active flask fills the slot.
+local ALL_FLASK_SPELLS = {}
+for _, e in ipairs(DATA.ELIXIR_CATALOG) do
+    if e.flask and e.spell then ALL_FLASK_SPELLS[#ALL_FLASK_SPELLS + 1] = e.spell end
 end
 
--- Check if any entry's buff is active.  Tries the stored name first,
--- then common prefixed variants ("Elixir of X", "Flask of X") so the
--- detection works regardless of whether UnitBuff returns the short or
--- long form.
--- The item's spell ID is usually the buff's, but that is not measured for
--- every item. So also match the spell's LOCALIZED name (C_Spell.GetSpellName),
--- which is what the buff is called on this client, in any language.
-local function SpellName(spellID)
-    local ok, name = pcall(C_Spell.GetSpellName, spellID)
-    return ok and name or nil
-end
-
-local function HasBuffFromList(list, active, activeNames)
-    if not active then return nil end     -- unknown, not missing
-    for _, entry in ipairs(list) do
-        if entry.spell and active[entry.spell] then return true end
-        local n = entry.spell and activeNames and SpellName(entry.spell)
-        if n and activeNames[n] then return true end
-    end
-    return false
-end
-
-function Apotheca.HasFlaskBuff()
-    local data = GetPlayerElixirData()
-    if not data then return false end
-    return HasBuffFromList(data.flask, GetActiveBoneSet())
-end
-
-function Apotheca.HasBattleElixirBuff()
-    local data = GetPlayerElixirData()
-    if not data then return false end
-    return HasBuffFromList(data.battle, GetActiveBoneSet())
-end
-
-function Apotheca.HasGuardianElixirBuff()
-    local data = GetPlayerElixirData()
-    if not data then return false end
-    return HasBuffFromList(data.guardian, GetActiveBoneSet())
-end
-
--- Pick the highest-value item from an elixir list that exists in bagMap.
-local function BestElixirItem(list, bagMap)
+-- Pick the highest-value item from an elixir list that exists in bagMap,
+-- other than `exclude` (an item another slot already took).
+local function BestElixirItem(list, bagMap, exclude)
     local bestID, bestVal, bestCount = nil, -1, 0
     for _, entry in ipairs(list) do
         local count = bagMap[entry.id]
-        if count and count > 0 and entry.value > bestVal then
+        if count and count > 0 and entry.id ~= exclude and entry.value > bestVal then
             bestVal   = entry.value
             bestID    = entry.id
             bestCount = count
@@ -959,21 +971,30 @@ function Apotheca.ResolveElixirs(bagMap)
         hasFlask    = false, hasBattle  = false, hasGuardian = false,
     }
 
+    local db = DB()
+    if db.elixirs and db.elixirs.enabled == false then return result end
     local data = GetPlayerElixirData()
-    if not data then return result end
 
-    result.hasFlask   = Apotheca.HasFlaskBuff()
-    result.hasBattle  = Apotheca.HasBattleElixirBuff()
-    result.hasGuardian = Apotheca.HasGuardianElixirBuff()
-    -- Buffs unreadable: an unknown buff is not a missing one. Keep the last
-    -- known answer rather than offering a flask that may already be running.
-    if result.hasFlask == nil then return Apotheca._lastElixRes or result end
+    -- One aura read for all three slots. Unreadable: an unknown buff is not
+    -- a missing one, so keep the last known answer rather than offering a
+    -- flask that may already be running.
+    local auras = ReadAuras("HELPFUL")
+    if not auras then return Apotheca._lastElixRes or result end
+    result.hasFlask    = AurasHave(auras, ALL_FLASK_SPELLS)
+    result.hasBattle   = AurasHave(auras, data.battleSpells)
+    result.hasGuardian = AurasHave(auras, data.guardianSpells)
 
     -- Forever has no battle/guardian limit: a flask and elixirs stack, so
-    -- every slot is offered on its own.
+    -- every slot is offered on its own. An item that fits both elixir
+    -- slots goes to the first one only. A slot whose buff is already
+    -- running offers nothing: a flask lasts two hours, and a second click
+    -- would only spend another one to refresh it.
     local fID, fCnt, fTex = BestElixirItem(data.flask,   bagMap)
     local bID, bCnt, bTex = BestElixirItem(data.battle,  bagMap)
-    local gID, gCnt, gTex = BestElixirItem(data.guardian, bagMap)
+    local gID, gCnt, gTex = BestElixirItem(data.guardian, bagMap, bID)
+    if result.hasFlask    then fID, fCnt, fTex = nil, 0, nil end
+    if result.hasBattle   then bID, bCnt, bTex = nil, 0, nil end
+    if result.hasGuardian then gID, gCnt, gTex = nil, 0, nil end
     result.flaskID    = fID ; result.flaskCount    = fCnt ; result.flaskTex    = fTex
     result.battleID   = bID ; result.battleCount   = bCnt ; result.battleTex   = bTex
     result.guardianID = gID ; result.guardianCount = gCnt ; result.guardianTex = gTex
@@ -1926,10 +1947,10 @@ local function RefreshLayout(recoveryMode, elixirMode, staticFlags, scrollFlags)
         shouldShow["drink"] = true
     end
 
-    if elixirMode == "all" then
-        shouldShow["flask"]    = true
-        shouldShow["battle"]   = true
-        shouldShow["guardian"] = true
+    if elixirMode then
+        shouldShow["flask"]    = elixirMode.flask
+        shouldShow["battle"]   = elixirMode.battle
+        shouldShow["guardian"] = elixirMode.guardian
     end
 
     if scrollFlags and scrollFlags.food       then shouldShow["bufffood"]         = true end
@@ -2088,7 +2109,14 @@ function Apotheca.UpdateAllButtons()
         recovMode = "split"
     end
 
-    local elixMode = (elixRes.mode == "all" or showEmpty) and "all" or "none"
+    -- Which elixir slots get a place on the bar. Only slots that will show:
+    -- a slot hidden after layout would leave a hole in the bar.
+    local elixirsOn = not (db.elixirs and db.elixirs.enabled == false)
+    local elixMode = {
+        flask    = elixirsOn and (elixRes.flaskID    ~= nil or showEmpty),
+        battle   = elixirsOn and (elixRes.battleID   ~= nil or showEmpty),
+        guardian = elixirsOn and (elixRes.guardianID ~= nil or showEmpty),
+    }
 
     -- ── Scrolls ──────────────────────────────────────────────────
     local scrollsDB  = db.scrolls
@@ -2154,13 +2182,14 @@ function Apotheca.UpdateAllButtons()
         -- greyed-out display when itemID is nil.
     end
 
-    if elixMode == "all" then
-        ApplyItemToButton(Apotheca.buttons["flask"],    elixRes.flaskID,    elixRes.flaskCount,    elixRes.flaskTex)
-        ApplyItemToButton(Apotheca.buttons["battle"],   elixRes.battleID,   elixRes.battleCount,   elixRes.battleTex)
+    if elixMode.flask then
+        ApplyItemToButton(Apotheca.buttons["flask"], elixRes.flaskID, elixRes.flaskCount, elixRes.flaskTex)
+    end
+    if elixMode.battle then
+        ApplyItemToButton(Apotheca.buttons["battle"], elixRes.battleID, elixRes.battleCount, elixRes.battleTex)
+    end
+    if elixMode.guardian then
         ApplyItemToButton(Apotheca.buttons["guardian"], elixRes.guardianID, elixRes.guardianCount, elixRes.guardianTex)
-        if not (elixRes.flaskID    or showEmpty) then Apotheca.buttons["flask"]:Hide()    end
-        if not (elixRes.battleID   or showEmpty) then Apotheca.buttons["battle"]:Hide()   end
-        if not (elixRes.guardianID or showEmpty) then Apotheca.buttons["guardian"]:Hide() end
     end
 
     if flags.food then
