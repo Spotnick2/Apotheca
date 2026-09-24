@@ -37,6 +37,14 @@ WoW.class = "PALADIN"
 WoW.lfgRoles = { tank = true, healer = true }
 H.eq(role(), "HEALER", "a paladin ticking Tank and Healer heals")
 
+-- Nothing ticked NOW is a real answer: an older saved pick must not win
+-- over the class default (Codex review of #14).
+-- (A paladin can tank, so a stale saved Tank WOULD be taken if read.)
+WoW.class = "PALADIN"
+WoW.lfgRoles, WoW.lfgSavedRoles = { }, { tank = true }
+H.eq(role(), "HEALER", "a cleared selector gives the class default, not a stale saved Tank")
+WoW.lfgRoles, WoW.lfgSavedRoles = nil, nil
+
 -- The group-assigned role is ignored (Codex review of #9).
 WoW.class = "PRIEST"
 WoW.lfgRoles = { healer = true }

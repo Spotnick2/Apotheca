@@ -251,6 +251,10 @@ function API.GroupRole()
     return nil
 end
 
+-- The FIRST source that answers with a valid shape wins, even when nothing
+-- is ticked: "nothing ticked" is a real answer (the class default then
+-- applies), and a later source may still hold an older pick (Codex review
+-- of #14). The fallbacks are only for a failing call or a wrong shape.
 function API.SelectedRoles()
     local L = C_LFGListRoles
     if L then
@@ -260,14 +264,14 @@ function API.SelectedRoles()
                 local ok, r = pcall(fn)
                 if ok then
                     local t, h, d = fromStruct(r)
-                    if t ~= nil and (t or h or d) then return t, h, d end
+                    if t ~= nil then return t, h, d end
                 end
             end
         end
     end
     if GetLFGRoles then
         local ok, _, t, h, d = pcall(GetLFGRoles)   -- leader, tank, healer, dps
-        if ok and (t == true or h == true or d == true) then
+        if ok and (type(t) == "boolean" or type(h) == "boolean" or type(d) == "boolean") then
             return t == true, h == true, d == true
         end
     end

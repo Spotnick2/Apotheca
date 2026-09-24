@@ -391,7 +391,11 @@ function C_LFGListRoles.GetRoles()
     local r = WoW.lfgRoles or {}
     return { tank = r.tank or false, healer = r.healer or false, dps = r.damage or false }
 end
-function C_LFGListRoles.GetSavedRoles() return C_LFGListRoles.GetRoles() end
+-- Saved roles can differ from the current ones (WoW.lfgSavedRoles).
+function C_LFGListRoles.GetSavedRoles()
+    local r = WoW.lfgSavedRoles or WoW.lfgRoles or {}
+    return { tank = r.tank or false, healer = r.healer or false, dps = r.damage or false }
+end
 function UnitPowerType() return 0, "MANA" end
 function GetInventoryItemID(_, slot) return WoW.equipped and WoW.equipped[slot] end
 
