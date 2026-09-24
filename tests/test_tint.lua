@@ -82,6 +82,56 @@ H.check(ok, "a refused curve does not raise")
 H.check(near(drawn(food), 1), "and the icon is left white")
 WoW.curvesRefused = false
 
+-- Review of #13 -------------------------------------------------------
+
+-- A druid's energy tick is no mana change: nothing is repainted.
+WoW.bags[0] = WoW.bags[0] or {}
+WoW.AddItem(0, 1, 4604, 5, "Forest Mushroom Cap")
+WoW.AddItem(0, 2, 159, 5, "Refreshing Spring Water")
+WoW.health, WoW.power = 1000, 1000
+Apotheca.UpdateAllButtons()
+drink.icon._drawn = nil
+WoW.fire("UNIT_POWER_UPDATE", "player", "ENERGY")
+H.eq(drink.icon._drawn, nil, "an ENERGY update does not repaint the mana buttons")
+WoW.fire("UNIT_POWER_UPDATE", "player", "MANA")
+H.check(near(drawn(drink), grey), "a MANA update does")
+
+-- A new maximum mid-fight ends "full" without any current-value event.
+WoW.enterCombat()
+WoW.powerMax = 1200                  -- Arcane Intellect lands; mana stays 1000
+WoW.fire("UNIT_MAXPOWER", "player", "MANA")
+H.check(near(drawn(drink), 1), "in combat, UNIT_MAXPOWER repaints the drink white")
+WoW.leaveCombat()
+WoW.powerMax = 1000
+
+-- Large pools: one point short of full is not visibly dimmed.
+WoW.powerMax, WoW.power = 14000, 13999
+WoW.fire("UNIT_POWER_UPDATE", "player", "MANA")
+H.check(drawn(drink) > 0.99, "at 13999 / 14000 mana the drink icon is still white")
+WoW.powerMax, WoW.power = 1000, 1000
+
+-- The bandage greys at full health too (it restores health).
+WoW.AddItem(0, 4, 1251, 5, "Linen Bandage")
+Apotheca.UpdateAllButtons()
+local bandage = Apotheca.buttons.bandage
+H.check(bandage and near(drawn(bandage), grey), "at full health the bandage icon is grey")
+
+-- After a right-click alternate swap, the tint follows the item SHOWN.
+-- Primary: Filet o' Flank (2451 health, health only); the biscuit (2065 +
+-- mana) is only the alternate, so the swap is what changes the icon.
+WoW.AddItem(0, 3, 13724, 5, "Enriched Manna Biscuit")
+WoW.AddItem(0, 5, 238638, 5, "Filet o' Flank")
+WoW.power = 400
+Apotheca.UpdateAllButtons()
+H.eq(food.itemID, 238638, "the primary food is the health-only Filet o' Flank")
+H.check(near(drawn(food), grey), "which is greyed at full health")
+StaticPopupDialogs["APOTHECA_ALT_ASK"].OnAccept({ data = { btnKey = "food", altItemID = 13724 } })
+WoW.fire("UNIT_HEALTH", "player")
+H.check(near(drawn(food), 1), "the alt-swapped biscuit (restores both) is not greyed at full health")
+
+-- The unguarded body is not public.
+H.eq(Apotheca._UpdateAllButtons, nil, "the secure-writing body has no public entry point")
+
 -- An empty button is never greyed.
 WoW.bags[0] = nil
 Apotheca.UpdateAllButtons()

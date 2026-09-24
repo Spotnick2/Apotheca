@@ -160,11 +160,11 @@ end
 -- a setter (SetVertexColor) and are never compared. This is how unit
 -- frame addons draw health on Forever.
 --
--- The curve is white up to 99.99% and grey at exactly 100%, linear (set
--- explicitly when the client has the enum; it is not in the API dump, and
--- EllesmereUI's Forever port sets it). The 0.01% ramp is under one hit
--- point for any real maximum. Health uses usePredicted = false: an
--- incoming heal must not grey the icon before it lands.
+-- The curve is white up to 99.99999% and grey at exactly 100%, linear
+-- (set explicitly when the client has the enum; it is not in the API dump,
+-- and EllesmereUI's Forever port sets it). The 1e-7 ramp is under one
+-- point for any maximum below ten million. Health uses usePredicted =
+-- false: an incoming heal must not grey the icon before it lands.
 -- ------------------------------------------------------------
 
 API.FULL_GREY = 0.4
@@ -175,34 +175,40 @@ local function FullCurve()
         fullCurve = false
         pcall(function()
             local c = C_CurveUtil.CreateColorCurve()
+            -- Its own pcall: a SetType this client rejects must not throw
+            -- away the whole curve (linear is the likely default anyway).
             local linear = Enum and Enum.LuaCurveType and Enum.LuaCurveType.Linear
-            if linear and c.SetType then c:SetType(linear) end
+            if linear and c.SetType then pcall(c.SetType, c, linear) end
             local g = API.FULL_GREY
-            c:AddPoint(0,      CreateColor(1, 1, 1, 1))
-            c:AddPoint(0.9999, CreateColor(1, 1, 1, 1))
-            c:AddPoint(1,      CreateColor(g, g, g, 1))
+            c:AddPoint(0,         CreateColor(1, 1, 1, 1))
+            c:AddPoint(0.9999999, CreateColor(1, 1, 1, 1))
+            c:AddPoint(1,         CreateColor(g, g, g, 1))
             fullCurve = c
         end)
     end
     return fullCurve or nil
 end
 
--- Paint `texture` white, or grey when the player's `resource` ("health" or
--- "mana") is full. Returns false when the client refused (the caller then
--- leaves the texture white); nothing here compares the secret colour.
-function API.TintByFullness(texture, resource)
+-- The fullness colour for `resource` ("health" or "mana"): r, g, b, which
+-- may be secret, or nil when the client refused. Ask once per resource
+-- and hand the result to every texture that needs it; never compare it.
+local function fullnessColor(resource, curve)
+    local color
+    if resource == "health" then
+        color = UnitHealthPercent("player", false, curve)
+    else
+        local mana = Enum and Enum.PowerType and Enum.PowerType.Mana or 0
+        color = UnitPowerPercent("player", mana, false, curve)
+    end
+    return color:GetRGB()
+end
+
+function API.FullnessColor(resource)
     local curve = FullCurve()
-    if not curve then return false end
-    return (pcall(function()
-        local color
-        if resource == "health" then
-            color = UnitHealthPercent("player", false, curve)
-        else
-            local mana = Enum and Enum.PowerType and Enum.PowerType.Mana or 0
-            color = UnitPowerPercent("player", mana, false, curve)
-        end
-        texture:SetVertexColor(color:GetRGB())
-    end))
+    if not curve then return nil end
+    local ok, r, g, b = pcall(fullnessColor, resource, curve)
+    if not ok then return nil end
+    return r, g, b
 end
 
 -- ------------------------------------------------------------

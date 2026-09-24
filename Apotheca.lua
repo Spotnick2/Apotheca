@@ -501,18 +501,18 @@ end
 -- ============================================================
 
 local STATIC_BUTTON_CONFIG = {
-    { key = "mana",   label = "Mana",   list = MANA_ITEMS,   emptyIcon = "Interface\\Icons\\INV_Potion_76",
+    { key = "mana",   label = "Mana",   list = MANA_ITEMS,   restores = "mana",   emptyIcon = "Interface\\Icons\\INV_Potion_76",
       emptyTooltip = "No mana potion in bags" },
-    { key = "health", label = "Health", list = HEALTH_ITEMS, emptyIcon = "Interface\\Icons\\INV_Potion_54",
+    { key = "health", label = "Health", list = HEALTH_ITEMS, restores = "health", emptyIcon = "Interface\\Icons\\INV_Potion_54",
       emptyTooltip = "No health potion in bags" },
-    { key = "rune",   label = "Rune",   list = RUNE_ITEMS,   emptyIcon = "Interface\\Icons\\INV_Misc_Rune_01",
+    { key = "rune",   label = "Rune",   list = RUNE_ITEMS,   restores = "mana",   emptyIcon = "Interface\\Icons\\INV_Misc_Rune_01",
       emptyTooltip = "Rune of Portals / Battle Resurrect — none in bags" },
 }
 
 local RECOVERY_BUTTON_CONFIG = {
     { key = "recovery", label = "Recovery", emptyIcon = "Interface\\Icons\\INV_Misc_Food_15" },
-    { key = "food",     label = "Food",     emptyIcon = "Interface\\Icons\\INV_Misc_Food_01" },
-    { key = "drink",    label = "Drink",    emptyIcon = "Interface\\Icons\\INV_Drink_05"     },
+    { key = "food",     label = "Food",     restores = "health", emptyIcon = "Interface\\Icons\\INV_Misc_Food_01" },
+    { key = "drink",    label = "Drink",    restores = "mana",   emptyIcon = "Interface\\Icons\\INV_Drink_05"     },
 }
 
 local BUFFFOOD_BUTTON_CONFIG = {
@@ -535,11 +535,13 @@ local WEAPONOIL_BUTTON_CONFIG = {
 }
 
 local BANDAGE_BUTTON_CONFIG = {
+    restores = "health",
     key = "bandage", label = "Bandage", emptyIcon = "Interface\\Icons\\INV_Misc_Bandage_Netherweave_Heavy",
     emptyTooltip = "No bandage in bags",
 }
 
 local HEALTHSTONE_BUTTON_CONFIG = {
+    restores = "health",
     key = "healthstone", label = "Healthstone", emptyIcon = "Interface\\Icons\\INV_Stone_04",
     emptyTooltip = "No healthstone in bags",
 }
@@ -2112,15 +2114,13 @@ end
 -- secure attribute, so it runs in combat too.
 -- ============================================================
 
-local TINT_RESOURCE = {
-    food = "health", health = "health", healthstone = "health",
-    drink = "mana", mana = "mana",
-}
-
 -- Items that restore BOTH health and mana: Enriched Manna Biscuit, the
 -- rations, rejuvenation potions. They are still useful while only one of
 -- the two is full, and "both full" cannot be shown: it would mean combining
 -- two secret colours, which Lua may not touch. So they are never greyed.
+-- Built from the same DATA flags FindBestFood / FindBestDrink return (the
+-- waste check's rec.foodRestoresMana), plus potions on both potion tables;
+-- a lookup by item, because an alt-swapped item needs it too.
 local RESTORES_BOTH = {}
 for _, e in ipairs(DATA.FOOD_ITEMS)  do if e.restoresMana   then RESTORES_BOTH[e.id] = true end end
 for _, e in ipairs(DATA.DRINK_ITEMS) do if e.restoresHealth then RESTORES_BOTH[e.id] = true end end
@@ -2129,14 +2129,30 @@ for id in pairs(DATA.POTION_VALUE.health) do
 end
 Apotheca._RESTORES_BOTH = RESTORES_BOTH
 
-function Apotheca.RefreshFullTint()
+-- Repaint every button whose `cfg.restores` is `only` (or every button when
+-- `only` is nil): the fullness colour is asked once per resource. The item
+-- judged is the one the icon SHOWS, which is the alternate after an alt
+-- swap. Safe in combat: no secure attribute is touched.
+function Apotheca.RefreshFullTint(only)
     local on = DB().fullTint ~= false
-    for key, resource in pairs(TINT_RESOURCE) do
-        local btn = Apotheca.buttons[key]
-        if btn and btn.icon then
-            local id = btn.itemID
-            local tinted = on and id and not RESTORES_BOTH[id]
-                and Apotheca.API.TintByFullness(btn.icon, resource)
+    local colours = {}
+    for key, btn in pairs(Apotheca.buttons) do
+        local resource = btn.cfg and btn.cfg.restores
+        if resource and btn.icon and (not only or only == resource) then
+            local id = altSwap[key] or btn.itemID
+            local tinted = false
+            if on and id and not RESTORES_BOTH[id] then
+                local c = colours[resource]
+                if c == nil then
+                    local r, g, b = Apotheca.API.FullnessColor(resource)
+                    c = r ~= nil and { r, g, b } or false
+                    colours[resource] = c
+                end
+                if c then
+                    btn.icon:SetVertexColor(c[1], c[2], c[3])
+                    tinted = true
+                end
+            end
             if not tinted then btn.icon:SetVertexColor(1, 1, 1) end
         end
     end
@@ -2146,15 +2162,19 @@ end
 -- MAIN UPDATE
 -- ============================================================
 
+-- The body writes secure attributes, so it stays file-local: the only way
+-- in is the guarded Apotheca.UpdateAllButtons below.
+local UpdateAllButtonsBody
+
 function Apotheca.UpdateAllButtons()
     -- Secure buttons cannot be shown/hidden/moved/resized during combat.
     -- The bar will refresh automatically when combat ends (PLAYER_REGEN_ENABLED).
     if InCombatLockdown() then return end
-    Apotheca._UpdateAllButtons()
+    UpdateAllButtonsBody()
     Apotheca.RefreshFullTint()
 end
 
-function Apotheca._UpdateAllButtons()
+function UpdateAllButtonsBody()
 
     local db = DB()
 
@@ -2573,7 +2593,7 @@ eventFrame:SetScript("OnUpdate", function(self, elapsed)
     end
 end)
 
-eventFrame:SetScript("OnEvent", function(self, event, arg1)
+eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
     if event == "ADDON_LOADED" and arg1 == "Apotheca" then
         InitDB()
 
@@ -2677,11 +2697,23 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
     elseif event == "UNIT_MAXHEALTH" or event == "UNIT_MAXPOWER" then
         -- Rare, and each changes which potion is best: one deferred update.
         -- In combat UpdateAllButtons waits; PLAYER_REGEN_ENABLED updates.
-        if playerReady then RequestUpdate() end
+        -- The tint does not wait: a new maximum can end "full" mid-fight.
+        if playerReady then
+            RequestUpdate()
+            Apotheca.RefreshFullTint(event == "UNIT_MAXHEALTH" and "health" or "mana")
+        end
 
     elseif event == "UNIT_HEALTH" or event == "UNIT_POWER_UPDATE" then
-        -- The full tint follows health and mana live, in combat too.
-        if playerReady then Apotheca.RefreshFullTint() end
+        -- The full tint follows health and mana live, in combat too. Only
+        -- the changed resource's buttons, and only mana among the power
+        -- types (a druid's energy or rage ticks change nothing here).
+        if playerReady then
+            if event == "UNIT_HEALTH" then
+                Apotheca.RefreshFullTint("health")
+            elseif arg2 == nil or arg2 == "MANA" then
+                Apotheca.RefreshFullTint("mana")
+            end
+        end
         -- Everything this rescan feeds reads health or mana. While both are
         -- secret (always, on 69977), the rescan cannot change anything.
         local missHP, missMana = Apotheca.API.PlayerMissing()

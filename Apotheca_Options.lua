@@ -373,7 +373,11 @@ function Apotheca.BuildOptionsPanelContent(panel)
     SectionHeader("Full Health / Mana")
     Checkbox("Grey out food, drink, potions and healthstones when you are full",
         function() return DBGet("fullTint") ~= false end,
-        function(v) DBSet(v, "fullTint") end)
+        function(v)
+            DBSet(v, "fullTint")
+            -- UpdateAllButtons waits in combat; the tint is safe to repaint now.
+            Apotheca.RefreshFullTint()
+        end)
     SmallLabel("|cff888888Display only: the client lets addons colour an icon by your health\n"
         .. "and mana, but not read them, so a click still uses the item. Items that\n"
         .. "restore both (Enriched Manna Biscuit, rejuvenation potions) are never greyed.|r")
