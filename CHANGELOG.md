@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2026-09-24
+
+**Apotheca now runs on World of Warcraft: Forever.** It is no longer for TBC Classic Anniversary: Anniversary players should stay on 1.0.5, which remains on CurseForge.
+
+### Read this after updating
+- **Your settings reset at every login.** The WoW: Forever client doesn't load addon settings back yet, and this is true for every addon. Apotheca tells you so in chat. When Blizzard fixes it, settings will stick without an update.
+- **Waste prevention, the right-click alternate and smart healthstone rank are greyed out.** WoW: Forever doesn't let addons read your current health or mana, even out of combat, so Apotheca can't tell whether you're full. The options come back by themselves if that ever changes. Until then, food and water are never blocked, and the Healthstone button offers your strongest stone.
+- **"Only show in healing spec" is now "Only show on healer classes".** Forever has one spec per class and no talent trees, so the class is all there is to go on.
+- **The Battle and Guardian elixir buttons are now Flask, Elixir and Elixir 2**, and they work differently: see below.
+
+### Added
+- Every table is rebuilt from what the Forever client itself reports. That brings in:
+  - the teas (mana with +healing) and smoothies (mana with +spirit)
+  - Cleric's Elixirs, the Mageblood tiers, and the Owl and Whale elixirs
+  - Mountain Spring Water, the new conjured water
+  - Drinkable Stratholme Holy Water
+  - Dense Runecloth Bandage
+  - the Restored and Perishable potions
+  - Forever's new cooking
+- Restore values are Forever's own, which often differ from Vanilla's.
+- Flask, Elixir and Elixir 2 are offered side by side, because on Forever a flask and elixirs stack. A slot whose buff is already running offers nothing, and any active flask counts, so a misclick can't waste a two-hour flask.
+- Percentage potions (Restored Healing Potion 30%, Restored Mana Potion 20%) are compared with your other potions using your own maximum health and mana. The choice updates when your maximum changes.
+- Battleground-only items (PvP draughts, and the Warsong Gulch, Arathi Basin, Alterac Valley and Darkspear Islands rations and bandages) are offered only inside their battleground.
+- Buff food priorities now cover Healing Power, Spell Damage, Intellect, Spirit, Stamina, Strength, Agility, Attack Power, Crit and Armor. Forever buff food has no mp5.
+- A login note when your game build differs from the one Apotheca was tested on.
+
+### Fixed
+- Buffs are recognised on every client language. Previously the ready-check glows only worked in English.
+- Buttons respond however your client is set to act, on press or on release. One click still uses one item.
+- Food that restores both health and mana appears on both the Food and Drink buttons. It no longer merges them into a single button.
+- The addon list shows an icon instead of a question mark.
+
 ## [1.0.5] - 2026-09-23
 
 **This is the final release for TBC Classic Anniversary.** From 2.0.0, Apotheca targets World of Warcraft: Forever. 1.0.5 stays available on CurseForge for Anniversary players, but it will not get further updates.

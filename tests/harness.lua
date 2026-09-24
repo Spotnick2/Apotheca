@@ -46,7 +46,10 @@ end
 -- Load every TOC file in order, then run the client's login sequence.
 function H.loadAddon(opts)
     opts = opts or {}
-    for _, f in ipairs(H.tocFiles()) do
+    local files = H.tocFiles()
+    -- The dev-only probe addon loads after Apotheca, as its TOC requires.
+    if opts.probe then files[#files + 1] = "Tools/ApothecaProbe/ApothecaProbe.lua" end
+    for _, f in ipairs(files) do
         local chunk, err = loadfile(f)
         if not chunk then error(err) end
         chunk()

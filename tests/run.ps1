@@ -27,9 +27,9 @@ Push-Location $RepoRoot
 try {
     $shipping = Get-Content "Apotheca.toc" |
         Where-Object { $_ -and -not $_.StartsWith("#") } | ForEach-Object { $_.Trim() }
-    & $Luac -p @shipping
+    & $Luac -p @shipping "Tools\ApothecaProbe\ApothecaProbe.lua"
     if ($LASTEXITCODE -ne 0) { Write-Error "luac -p failed"; exit 1 }
-    Write-Host "luac -p: $($shipping.Count) files OK"
+    Write-Host "luac -p: $($shipping.Count) shipped files + the dev probe OK"
 
     $failed = 0
     foreach ($t in Get-ChildItem "tests\test_*.lua" | Sort-Object Name) {

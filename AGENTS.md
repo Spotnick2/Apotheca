@@ -16,7 +16,7 @@ ApothecaCompat.lua     — Apotheca.API: every moved or removed API; loads first
 ApothecaItems.lua      — GENERATED item data (Apotheca.DATA); see Item Data
 Apotheca.lua           — Main addon: all logic, item data, frame creation, events
 Apotheca_Options.lua   — In-game options panel: tabbed UI, DB read/write helpers
-ApothecaProbe.lua      — throwaway /apo probe measurement tool (remove before release, #5)
+Tools/ApothecaProbe/   — DEV-ONLY addon (never packaged): /apo probe, /apo scan, /apo scan2; `deploy.ps1 -Probe`
 .pkgmeta               — BigWigs packager config (release packaging only, not used locally)
 tests/                 — Lua 5.1 unit tests against a strict-globals stub; tests/run.ps1
 Tools/deploy.ps1       — deploy to the local Forever AddOns folder
@@ -68,7 +68,7 @@ The canonical set of button keys (also `Apotheca.DEFAULT_BUTTON_ORDER`):
 ### Item Data
 **The item tables are generated, never hand-written.** Forever changed restore values, buff food and elixirs relative to Vanilla, and adds items no Vanilla list has, so the only trustworthy source is the client itself:
 
-1. In game, out of combat, in one session (SavedVariables never load back, so a `/reload` between steps loses the scan): `/apo scan`, then `/apo scan2`, then `/reload` to write the file. `scan` walks every item ID with `C_Item.GetItemInfoInstant` (the client's item DB, no cache needed) and reads each consumable's tooltip and item spell; `scan2` loads the spells whose "Use:" text was missing.
+1. `pwsh Tools/deploy.ps1 -Probe` (the scan lives in the dev-only probe addon). In game, out of combat, in one session (SavedVariables never load back, so a `/reload` between steps loses the scan): `/apo scan`, then `/apo scan2`, then `/reload` to write the file. `scan` walks every item ID with `C_Item.GetItemInfoInstant` (the client's item DB, no cache needed) and reads each consumable's tooltip and item spell; `scan2` loads the spells whose "Use:" text was missing.
 2. `lua5.1 Tools/export_scan.lua <WTF>/Account/<id>/SavedVariables/Apotheca.lua docs/forever-consumables-<build>.tsv`
 3. `python Tools/build_item_tables.py docs/forever-consumables-<build>.tsv`, which writes `ApothecaItems.lua` (`Apotheca.DATA`). Read its "skipped" report and the diff.
 4. `python Tools/consumables_reference.py docs/forever-consumables-<build>.tsv C:/Projects/References/forever-consumables-<version>.<build>.md` refreshes the shared human-readable catalog, and copy the TSV next to it. Diffing two builds' catalogs shows what Blizzard changed.
@@ -144,6 +144,41 @@ C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns\Apothec
 Deploy with `pwsh Tools/deploy.ps1`. It copies the TOC and every Lua file it lists, and writes `## Version: dev` into the installed TOC only.
 
 Installed files have diverged from the repo before (local edits made in the AddOns folder that existed nowhere in git). The script records a hash of everything it writes and refuses to overwrite a file changed since. Bring such edits into git first; `-Force` overrides.
+
+## Workflow
+
+Work is tracked on GitHub and lands through pull requests.
+
+1. **Open an issue first** describing the change.
+2. **Branch** off `main` (`fix/<n>-...`, `forever/<n>-...`). Never commit to `main` directly.
+3. **Open a PR** with `Closes #N`. The `package-check` workflow runs `luac`, the tests, the item-data drift and skipped-report checks, a dry-run package, and the zip-contents check.
+4. **Run a Codex adversarial review** (`.claude/skills/codex-consult`) with the diff, `AGENTS.md`, `docs/FOREVER-PROBE.md` and the porting guide. Codex's sandbox has no network, so give it the PR discussion as a local file. Post the verdict on the PR, and address or rebut every finding there.
+5. **Before merging, check the PR's reviews** (`gh api repos/Spotnick2/Apotheca/pulls/<N>/reviews`), not only its comments. The owner's own Codex posts follow-up reviews there, sometimes minutes after the last push.
+6. Squash-merge, then delete the branch.
+
+## Releasing
+
+CurseForge builds from the repository webhook (project `1498195`) when it sees a tag, and publishes `CHANGELOG.md` as the release notes.
+
+**Every tag needs a `CHANGELOG.md` entry, committed before the tag is pushed.** A tag without one publishes the *previous* release's notes against the new build.
+
+1. Add a `## [<version>] - <date>` section at the top. Write it for players, not from the diff: what changed for someone using the addon, in their words. Anything that resets or behaves differently after updating goes under its own heading.
+2. Commit, then tag and push: `git tag v2.0.1 && git push origin v2.0.1`.
+3. **The release type comes from the tag name**: `alpha` → Alpha, `beta` → Beta, anything else → Release. This is a distribution channel, not a stability claim. CurseForge defaults every user to Release, so tag `beta` only to hold a build back on purpose. The game client being in beta is not a reason: say that in the notes and ship a Release.
+4. Check the published file on CurseForge: the game flavor is **Forever** (derived from `## Interface: 16001`), and the zip holds exactly `Apotheca/` with the TOC and the files it lists. There is no probe and no `Tools`.
+
+**Do not add a release workflow.** The webhook publishes; a packager workflow on tags would publish a second time, and without a secret it would silently skip CurseForge while still cutting a GitHub release. The `package-check` workflow's `-d` dry run publishes nothing.
+
+TBC Classic Anniversary is archived on the `tbc-anniversary` branch (`v1.0.5`). Do not tag it again.
+
+## Changing client builds
+
+On a new Forever build, the login note tells players the build differs from `Apotheca.API.MEASURED_ON_BUILD` (`ApothecaCompat.lua`). To re-measure:
+
+1. `/apidump` → `C:/Projects/References/forever-api-<version>.<build>.md` (see the porting guide).
+2. `pwsh Tools/deploy.ps1 -Probe`, then `/apo probe` in and out of combat. Update `docs/FOREVER-PROBE.md`.
+3. Re-scan the consumables and regenerate: see Item Data. Write the new `forever-consumables-<version>.<build>.md` to References and diff it against the previous build.
+4. Bump `MEASURED_ON_BUILD`, and `WoW.build` in `tests/wow_stubs.lua`. Bumping without re-measuring silences the only reminder that the notes are stale.
 
 ## Key Conventions
 

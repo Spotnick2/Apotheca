@@ -1,101 +1,53 @@
 # Apotheca
 
-**Apotheca** is a smart consumable bar for **World of Warcraft: The Burning Crusade Classic / Classic Anniversary** focused on healer-friendly recovery and buff upkeep.
+**Apotheca** is a smart consumable bar for **World of Warcraft: Forever**. It scans your bags and shows the best potion, food, drink, buff food, flask, elixir, scroll, weapon oil, healthstone and bandage you carry as clickable buttons. The bar updates as your bags change.
 
-It builds a compact on-screen bar that automatically selects the best available consumables from your bags and presents them as clickable buttons.
+It is built for healers (Priest, Paladin, Shaman, Druid). Casters and other roles are next ([#9](https://github.com/Spotnick2/Apotheca/issues/9)).
 
-## Features
+> **TBC Classic Anniversary** players: 1.0.5 was the last Anniversary release. It stays available on CurseForge, but won't get updates.
 
-- Smart consumable bar with automatic bag scanning
-- Healer-focused recovery and maintenance items
-- Support for:
-  - Recovery potions / runes / stones
-  - Food and drink
-  - Buff food
-  - Flasks and elixirs
-  - Spirit scrolls
-  - Protection scrolls
-  - Weapon oils
-- Character-specific or global profiles
-- Options panel with configurable layout and behavior
-- Horizontal or vertical layout
-- Adjustable rows, icon size, and padding
-- Visibility rules:
-  - Always visible
-  - In combat only
-  - Out of combat only
-  - Hidden
-- Optional healer-spec-only display
-- Optional empty button display
-- Optional anti-waste behavior to avoid using food/drink at full health or mana
-- Ready check glow support for missing buffs:
-  - Buff food
-  - Scrolls
-  - Weapon oil
-- Debug mode for safe testing
+## Known limitation: settings reset at login
 
----
+The WoW: Forever client doesn't load addon settings back yet. This affects every addon, not only Apotheca. Your Apotheca settings therefore go back to defaults each time you log in, and Apotheca says so in chat at login. Once Blizzard fixes the client, settings will stick without any change on your side.
 
-## Supported Button Types
+## What it offers
 
-Apotheca dynamically shows buttons based on your settings and what is available in your bags.
+| Button | Picks |
+|---|---|
+| Mana / Health | The strongest potion you carry. Rejuvenation potions come after plain potions of the same strength. Percentage potions (Restored Healing 30%, Restored Mana 20%) are compared using your own maximum health and mana. |
+| Healthstone | The strongest stone. |
+| Food / Drink | The best plain food and water. Conjured items are preferred unless vendor food is clearly better; the threshold is configurable. Food that restores both health and mana can appear on both buttons. |
+| Buff food | Well Fed food for your stat priority. On Forever that means the teas (mana + healing), the smoothies (mana + spirit), and the new cooking. |
+| Flask / Elixir / Elixir 2 | On Forever a flask and elixirs all stack, so each slot offers its best item on its own: Distilled Wisdom, Cleric's Elixirs, Mageblood… A slot whose buff is already running offers nothing, so a misclick can't waste a two-hour flask. |
+| Spirit / Protection scroll | The strongest scroll. |
+| Weapon oil | Mana oils; wizard oils are optional. |
+| Bandage | The strongest bandage. Battleground bandages are only offered inside their battleground. |
 
-### Core Recovery
-- Mana consumables
-- Health consumables
-- Runes / equivalent recovery items
-- Food
-- Drink
+Every value comes from the WoW: Forever client itself, not from a Vanilla database, because Forever changed many of them. For example, Nightfin Soup now gives spell damage, and a plain healthstone restores what an Improved one did in Vanilla.
 
-### Buff Maintenance
-- Buff food
-- Spirit scrolls
-- Protection scrolls
-- Weapon oils
+Battleground-only items (PvP draughts, Warsong Gulch, Arathi Basin, Alterac Valley and Darkspear Islands rations and bandages) are offered only inside their battleground.
 
-### Elixirs and Flasks
-Depending on your settings, Apotheca can:
-- prefer flasks
-- prefer separate elixirs
-- auto-pick the best available option
+Buffs are recognised on every client language.
 
----
+## Also
 
-## Profiles
+- Ready check: missing buffs glow (buff food, flask and elixirs, scrolls, weapon oil).
+- Global or per-character profiles.
+- Horizontal or vertical layout, rows, icon size and padding.
+- Visibility: always, in combat only, out of combat only, or hidden.
+- Hold **Alt** to drag the bar (unless locked).
+- Debug mode: clicks don't consume anything.
 
-Apotheca supports:
+**Waste prevention** (not using food or water at full health or mana) and **smart healthstone rank** are greyed out on WoW: Forever. The client doesn't let addons read your current health or mana, even out of combat. They switch back on by themselves if Blizzard ever allows it.
 
-- **Global profile**
-- **Character-specific profile**
-
-This lets you keep different settings on different characters while still having a shared default if you want one.
-
----
-
-## Options
-
-Apotheca includes an in-game options panel where you can configure:
-
-- Enable / disable the addon
-- Only show in healing spec
-- Show empty buttons
-- Lock bar position
-- Prevent waste
-- Visibility mode
-- Orientation
-- Number of rows
-- Icon size
-- Icon padding
-- Buff food behavior and priority
-- Elixir / flask mode
-- Scroll toggles
-- Weapon oil behavior
-- Debug mode
-
----
-
-## Slash Commands
+## Slash commands
 
 ```text
-/apotheca
-/apo
+/apo          open the options
+/apo status   explain, per button, why it is or isn't clickable
+/apo debug    toggle debug mode (clicks don't consume items)
+```
+
+## Issues
+
+Report bugs at <https://github.com/Spotnick2/Apotheca/issues>. For something wrong with a button, `/apo status` output helps.

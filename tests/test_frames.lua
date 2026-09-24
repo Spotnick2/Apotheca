@@ -9,7 +9,7 @@ WoW.AddItem(0, 1, 13444, 5, "Major Mana Potion")
 WoW.AddItem(0, 2, 8079, 20, "Conjured Crystal Water")
 WoW.AddItem(5, 1, 14530, 10, "Heavy Runecloth Bandage")   -- reagent bag
 
-H.loadAddon()
+H.loadAddon({ probe = true })
 
 local EVENTS = {
     "BAG_UPDATE_DELAYED", "BAG_UPDATE_COOLDOWN", "GET_ITEM_INFO_RECEIVED",
