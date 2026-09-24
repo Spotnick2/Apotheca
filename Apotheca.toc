@@ -23,4 +23,3 @@ ApothecaCompat.lua
 ApothecaItems.lua
 Apotheca.lua
 Apotheca_Options.lua
-ApothecaProbe.lua

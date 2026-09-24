@@ -8,7 +8,9 @@
 -- be read off the SavedVariables file. Run it once out of combat and
 -- once in combat.
 --
--- Delete this file, and its TOC line, once docs/FOREVER-PROBE.md is settled.
+-- A separate, development-only addon (Tools/ApothecaProbe, loaded after
+-- Apotheca): it is never packaged, and `pwsh Tools/deploy.ps1 -Probe`
+-- installs it. /apo probe, /apo scan and /apo scan2 do nothing without it.
 -- ============================================================
 
 Apotheca = Apotheca or {}

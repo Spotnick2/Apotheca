@@ -24,7 +24,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq lua5.1
           files=$(grep -v '^#' Apotheca.toc | tr -d '\r' | sed '/^$/d')
-          luac5.1 -p $files
+          luac5.1 -p $files Tools/ApothecaProbe/ApothecaProbe.lua
 
       # ApothecaItems.lua is generated; it must match what the generator
       # makes from the committed scan, or someone hand-edited it.
@@ -59,6 +59,9 @@ jobs:
           { echo Apotheca.toc; grep -v '^#' Apotheca.toc | tr -d '\r' | sed '/^$/d'; } | sort > expected.txt
           (cd unpacked/Apotheca && find . -type f | sed 's|^\./||' | sort) > actual.txt
           diff -u expected.txt actual.txt
+          # ...and nothing outside Apotheca/ (no ApothecaProbe, no Tools).
+          extra=$(cd unpacked && find . -mindepth 1 -maxdepth 1 ! -name Apotheca)
+          test -z "$extra" || { echo "zip has entries outside Apotheca/: $extra"; exit 1; }
 
       # .release is hidden; upload-artifact skips hidden content by default.
       - name: Keep the zip for inspection

@@ -16,15 +16,25 @@
     install with no record, from before this script, is compared against the
     repo instead. -Force overwrites anyway.
 
+    -Probe also installs the development-only probe addon (Tools/ApothecaProbe:
+    /apo probe, /apo scan, /apo scan2) as its own AddOns folder. It is never
+    packaged for players.
+
+    A file this script installed earlier that the TOC no longer lists (the
+    probe used to live inside Apotheca) is removed, but only if it is
+    unchanged since it was deployed.
+
     Usage:
         pwsh Tools/deploy.ps1
+        pwsh Tools/deploy.ps1 -Probe
         pwsh Tools/deploy.ps1 -Force
         pwsh Tools/deploy.ps1 -AddOnsPath "D:\...\_classic_beta_\Interface\AddOns"
 #>
 
 param(
     [string]$AddOnsPath = "C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns",
-    [switch]$Force
+    [switch]$Force,
+    [switch]$Probe
 )
 
 $ErrorActionPreference = "Stop"
@@ -89,7 +99,13 @@ if ($changed.Count -gt 0 -and -not $Force) {
 Get-ChildItem $dest -File | Where-Object {
     $shipped -notcontains $_.Name -and $_.Name -ne ".apotheca-deploy.txt"
 } | ForEach-Object {
-    Write-Warning "Installed file not in the repo's TOC: $($_.Name) (left in place)"
+    # Ours and untouched: a file an earlier deploy wrote that is no longer shipped.
+    if ($recorded.ContainsKey($_.Name) -and (Get-Hash $_.FullName) -eq $recorded[$_.Name]) {
+        Remove-Item $_.FullName
+        Write-Host "Removed $($_.Name): no longer in the TOC, unchanged since it was deployed"
+    } else {
+        Write-Warning "Installed file not in the repo's TOC: $($_.Name) (left in place)"
+    }
 }
 
 foreach ($f in $luaFiles) {
@@ -100,3 +116,11 @@ Set-Content -Path (Join-Path $dest "Apotheca.toc") -Value $tocText -NoNewline
 $shipped | ForEach-Object { "$_ $(Get-Hash (Join-Path $dest $_))" } | Set-Content $manifest
 
 Write-Host "Deployed Apotheca ($($luaFiles.Count) Lua files) to $dest"
+
+if ($Probe) {
+    $probeSrc  = Join-Path $RepoRoot "Tools\ApothecaProbe"
+    $probeDest = Join-Path $AddOnsPath "ApothecaProbe"
+    New-Item -ItemType Directory -Force $probeDest | Out-Null
+    Copy-Item (Join-Path $probeSrc "*") $probeDest -Force
+    Write-Host "Deployed the dev-only ApothecaProbe addon to $probeDest"
+}

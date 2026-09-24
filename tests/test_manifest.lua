@@ -21,6 +21,8 @@ for _, f in ipairs(files) do
     H.check(io.open(f) ~= nil, "TOC file exists: " .. f)
 end
 H.check(seen["Apotheca.lua"] and seen["Apotheca_Options.lua"], "both main files are listed")
+H.check(not seen["ApothecaProbe.lua"], "the dev-only probe is not in the shipped TOC")
+H.check(io.open("Tools/ApothecaProbe/ApothecaProbe.toc") ~= nil, "the probe lives in its own dev addon under Tools/")
 
 local pkg = assert(io.open(".pkgmeta")):read("*a"):gsub("\r", "")
 H.check(pkg:find("package%-as: Apotheca\n"), ".pkgmeta packages as Apotheca")
