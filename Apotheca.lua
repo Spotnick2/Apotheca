@@ -57,11 +57,21 @@ local PROFILE_DEFAULTS = {
     elixirs = {
         enabled        = true,
     },
+    -- Scroll buttons: each role shows the scrolls it wants (the profile's
+    -- `scrolls`); these switch one kind off for every role.
     scrolls = {
         enabled           = true,
         spirit            = true,
         protection        = true,
+        intellect         = true,
+        stamina           = true,
+        strength          = true,
+        agility           = true,
         glowOnMissingBuff = true,
+    },
+    -- Mage mana gem button (#9).
+    manaGem = {
+        enabled = true,
     },
     weaponOil = {
         enabled           = true,
@@ -400,8 +410,25 @@ local function IDs(list)
     end
     return ids, spells
 end
-local SPIRIT_SCROLL_ITEMS,     SPIRIT_SCROLL_SPELLS     = IDs(DATA.SCROLLS_BY_STAT.spirit)
-local PROTECTION_SCROLL_ITEMS, PROTECTION_SCROLL_SPELLS = IDs(DATA.SCROLLS_BY_STAT.armor)
+-- Every scroll button, by the stat its scroll grants. `setting` is the
+-- db.scrolls switch; `blockers` are buffs the scroll does not stack with
+-- (spell IDs of any rank; their localized name matches every rank).
+local SCROLL_KINDS = {
+    { key = "spiritscroll",     stat = "spirit",    setting = "spirit",     label = "Spirit",
+      blockers = { 14752, 14818, 14819, 27841, 27681 }, blockerName = "Divine Spirit" },
+    { key = "protectionscroll", stat = "armor",     setting = "protection", label = "Protection" },
+    { key = "intellectscroll",  stat = "intellect", setting = "intellect",  label = "Intellect",
+      blockers = { 1459, 1460, 1461, 10156, 10157, 23028 }, blockerName = "Arcane Intellect" },
+    { key = "staminascroll",    stat = "stamina",   setting = "stamina",    label = "Stamina",
+      blockers = { 1243, 1244, 1245, 2791, 10937, 10938, 21562, 21564 },
+      blockerName = "Power Word: Fortitude" },
+    { key = "strengthscroll",   stat = "strength",  setting = "strength",   label = "Strength" },
+    { key = "agilityscroll",    stat = "agility",   setting = "agility",    label = "Agility" },
+}
+for _, kind in ipairs(SCROLL_KINDS) do
+    kind.items, kind.spells = IDs(DATA.SCROLLS_BY_STAT[kind.stat])
+end
+Apotheca.SCROLL_KINDS = SCROLL_KINDS
 
 -- Weapon oils, strongest first by kind.
 local MANA_OIL_ITEMS, WIZARD_OIL_ITEMS = {}, {}
@@ -439,30 +466,35 @@ end
 
 local ROLE_PROFILES = {
     TANK = {
+        scrolls  = { "armor", "stamina" },
         buffFood = { "stamina", "armor", "strength", "agility" },
         flask    = { "maxHealth" },
         battle   = { "armor", "maxHealth", "stamina" },
         guardian = { "stamina", "strength", "agility" },
     },
     HEALER = {
+        scrolls  = { "spirit", "intellect", "armor" },
         buffFood = { "healing", "intellect", "spirit", "stamina" },
         flask    = { "maxMana", "healing" },
         battle   = { "healing", "intellect" },    -- first elixir slot
         guardian = { "mp5", "spirit" },           -- second elixir slot
     },
     CASTER = {
+        scrolls  = { "intellect", "spirit", "armor" },
         buffFood = { "spellDmg", "intellect", "spirit", "stamina" },
         flask    = { "spellDmg", "maxMana" },
         battle   = { "spellDmg", "intellect" },
         guardian = { "mp5", "spirit" },
     },
     MELEE = {
+        scrolls  = { "strength", "agility", "armor" },
         buffFood = { "strength", "agility", "attackPower", "stamina" },
         flask    = { "maxHealth" },
         battle   = { "strength", "agility", "attackPower" },
         guardian = { "crit", "stamina", "armor" },
     },
     AGILITY = {
+        scrolls  = { "agility", "strength", "armor" },
         buffFood = { "agility", "attackPower", "crit", "stamina" },
         flask    = { "maxHealth" },
         battle   = { "agility", "attackPower" },
@@ -658,6 +690,17 @@ local ELIXIR_BUTTON_CONFIG = {
 local SCROLL_BUTTON_CONFIG = {
     { key = "spiritscroll",     label = "Spirit",     emptyIcon = "Interface\\Icons\\INV_Scroll_03" },
     { key = "protectionscroll", label = "Protection", emptyIcon = "Interface\\Icons\\INV_Scroll_06" },
+    { key = "intellectscroll",  label = "Intellect",  emptyIcon = "Interface\\Icons\\INV_Scroll_01" },
+    { key = "staminascroll",    label = "Stamina",    emptyIcon = "Interface\\Icons\\INV_Scroll_07" },
+    { key = "strengthscroll",   label = "Strength",   emptyIcon = "Interface\\Icons\\INV_Scroll_02" },
+    { key = "agilityscroll",    label = "Agility",    emptyIcon = "Interface\\Icons\\INV_Scroll_04" },
+}
+
+-- Mage mana gem: its own cooldown, so its own button. Mages only.
+local MANAGEM_BUTTON_CONFIG = {
+    key = "managem", label = "Mana Gem", restores = "mana", classOnly = "MAGE",
+    emptyIcon = "Interface\\Icons\\INV_Misc_Gem_Stone_01",
+    emptyTooltip = "No mana gem in bags",
 }
 
 local WEAPONOIL_BUTTON_CONFIG = {
@@ -1027,18 +1070,23 @@ function Apotheca.FindBestScroll(list, bagMap)
     return nil, 0, nil
 end
 
--- A scroll buff, by the scroll's own spell. Divine Spirit and Prayer of
--- Spirit (priest) also block a spirit scroll.
-function Apotheca.HasSpiritBuff()
+-- A scroll's buff is present: the scroll's own spell, or a buff it does not
+-- stack with (Divine Spirit for Spirit, Arcane Intellect for Intellect,
+-- Power Word: Fortitude for Stamina). nil = unreadable (combat).
+function Apotheca.HasScrollBuff(kind)
     local auras = ReadAuras("HELPFUL")
     if not auras then return nil end
-    return AurasHave(auras, SPIRIT_SCROLL_SPELLS)
-        or AurasHave(auras, DIVINE_SPIRIT_SPELLS, "Divine Spirit") or false
+    if AurasHave(auras, kind.spells) then return true end
+    if kind.blockers and AurasHave(auras, kind.blockers, kind.blockerName) then return true end
+    return false
 end
 
-function Apotheca.HasProtectionScrollBuff()
-    return AurasHave(ReadAuras("HELPFUL"), PROTECTION_SCROLL_SPELLS)
+local function ScrollKind(key)
+    for _, k in ipairs(SCROLL_KINDS) do if k.key == key then return k end end
 end
+
+function Apotheca.HasSpiritBuff()           return Apotheca.HasScrollBuff(ScrollKind("spiritscroll")) end
+function Apotheca.HasProtectionScrollBuff() return Apotheca.HasScrollBuff(ScrollKind("protectionscroll")) end
 
 -- ============================================================
 -- WEAPON OIL HELPERS
@@ -1499,22 +1547,14 @@ end
 local function UpdateScrollGlow()
     local db = DB()
     local glowEnabled = db.scrolls and db.scrolls.glowOnMissingBuff
-
-    local spiritBtn = Apotheca.buttons["spiritscroll"]
-    if spiritBtn then
-        if readyCheckActive and glowEnabled and spiritBtn.itemID and Apotheca.HasSpiritBuff() == false then
-            ShowGlow(spiritBtn)
-        else
-            HideGlow(spiritBtn)
-        end
-    end
-
-    local protBtn = Apotheca.buttons["protectionscroll"]
-    if protBtn then
-        if readyCheckActive and glowEnabled and protBtn.itemID and Apotheca.HasProtectionScrollBuff() == false then
-            ShowGlow(protBtn)
-        else
-            HideGlow(protBtn)
+    for _, kind in ipairs(SCROLL_KINDS) do
+        local btn = Apotheca.buttons[kind.key]
+        if btn then
+            if readyCheckActive and glowEnabled and btn.itemID and Apotheca.HasScrollBuff(kind) == false then
+                ShowGlow(btn)
+            else
+                HideGlow(btn)
+            end
         end
     end
 end
@@ -1860,6 +1900,9 @@ end
 for _, cfg in ipairs(SCROLL_BUTTON_CONFIG) do
     Apotheca.buttons[cfg.key] = CreateApothecaButton(cfg)
 end
+for _, cfg in ipairs({ MANAGEM_BUTTON_CONFIG }) do
+    Apotheca.buttons[cfg.key] = CreateApothecaButton(cfg)
+end
 Apotheca.buttons["bufffood"]    = CreateApothecaButton(BUFFFOOD_BUTTON_CONFIG)
 Apotheca.buttons["weaponoil"]   = CreateApothecaButton(WEAPONOIL_BUTTON_CONFIG)
 Apotheca.buttons["bandage"]     = CreateApothecaButton(BANDAGE_BUTTON_CONFIG)
@@ -2064,11 +2107,12 @@ end
 -- ============================================================
 
 Apotheca.DEFAULT_BUTTON_ORDER = {
-    "mana", "health", "healthstone", "rune",
+    "mana", "managem", "health", "healthstone", "rune",
     "recovery", "food", "drink",
     "flask", "battle", "guardian",
     "bufffood",
     "spiritscroll", "protectionscroll",
+    "intellectscroll", "staminascroll", "strengthscroll", "agilityscroll",
     "weaponoil",
     "bandage",
 }
@@ -2135,8 +2179,12 @@ local function RefreshLayout(recoveryMode, elixirMode, staticFlags, scrollFlags)
     end
 
     if scrollFlags and scrollFlags.food       then shouldShow["bufffood"]         = true end
-    if scrollFlags and scrollFlags.spirit     then shouldShow["spiritscroll"]     = true end
-    if scrollFlags and scrollFlags.protection then shouldShow["protectionscroll"] = true end
+    if scrollFlags and scrollFlags.scrolls then
+        for key, r in pairs(scrollFlags.scrolls) do
+            if r.show then shouldShow[key] = true end
+        end
+    end
+    if scrollFlags and scrollFlags.managem then shouldShow["managem"] = true end
     if scrollFlags and scrollFlags.oil        then shouldShow["weaponoil"]        = true end
     if scrollFlags and scrollFlags.bandage    then shouldShow["bandage"]          = true end
     if scrollFlags and scrollFlags.healthstone then shouldShow["healthstone"]      = true end
@@ -2172,7 +2220,8 @@ local function RefreshLayout(recoveryMode, elixirMode, staticFlags, scrollFlags)
     end
     -- Dynamic buttons
     for _, k in ipairs({ "recovery", "food", "drink", "flask", "battle", "guardian",
-                         "bufffood", "spiritscroll", "protectionscroll", "weaponoil",
+                         "bufffood", "spiritscroll", "protectionscroll", "intellectscroll", "staminascroll",
+                         "strengthscroll", "agilityscroll", "managem", "weaponoil",
                          "bandage", "healthstone" }) do
         if not activeSet[k] then Apotheca.buttons[k]:Hide() end
     end
@@ -2380,19 +2429,28 @@ function UpdateAllButtonsBody()
         guardian = elixirsOn and (elixRes.guardianID ~= nil or showEmpty),
     }
 
-    -- ── Scrolls ──────────────────────────────────────────────────
+    -- ── Scrolls: the kinds the role wants, minus those switched off ──
     local scrollsDB  = db.scrolls
     local scrollsOn  = not scrollsDB or scrollsDB.enabled
-    local spiritID,  spiritCnt,  spiritTex
-    local protID,    protCnt,    protTex
-    if scrollsOn then
-        if not scrollsDB or scrollsDB.spirit then
-            spiritID, spiritCnt, spiritTex = Apotheca.FindBestScroll(SPIRIT_SCROLL_ITEMS, bagMap)
+    local wanted = {}
+    for _, stat in ipairs(Apotheca.GetRoleProfile().scrolls or {}) do wanted[stat] = true end
+    local scrollRes = {}      -- key -> { id, count, tex, show }
+    for _, kind in ipairs(SCROLL_KINDS) do
+        local on = scrollsOn and wanted[kind.stat]
+            and (not scrollsDB or scrollsDB[kind.setting] ~= false)
+        local r = { show = false }
+        if on then
+            r.id, r.count, r.tex = Apotheca.FindBestScroll(kind.items, bagMap)
+            r.show = r.id ~= nil or showEmpty
         end
-        if not scrollsDB or scrollsDB.protection then
-            protID, protCnt, protTex = Apotheca.FindBestScroll(PROTECTION_SCROLL_ITEMS, bagMap)
-        end
+        scrollRes[kind.key] = r
     end
+
+    -- ── Mana gem (mages) ─────────────────────────────────────────
+    local _, playerClass = UnitClass("player")
+    local gemOn = playerClass == "MAGE" and not (db.manaGem and db.manaGem.enabled == false)
+    local gemID, gemCnt, gemTex
+    if gemOn then gemID, gemCnt, gemTex = Apotheca.FindBestItem(DATA.MANA_GEMS, bagMap) end
 
     -- ── Weapon oil ───────────────────────────────────────────────
     local oilID, oilCnt, oilTex
@@ -2421,8 +2479,8 @@ function UpdateAllButtonsBody()
     -- ── Build layout flags — only include a slot if it has content (or showEmpty) ──
     local flags = {
         food        = (buffFoodID ~= nil)          or (db.buffFood and db.buffFood.enabled and showEmpty),
-        spirit      = (spiritID   ~= nil)          or (scrollsOn   and (not scrollsDB or scrollsDB.spirit)   and showEmpty),
-        protection  = (protID     ~= nil)          or (scrollsOn   and (not scrollsDB or scrollsDB.protection) and showEmpty),
+        scrolls     = scrollRes,
+        managem     = gemOn and (gemID ~= nil or showEmpty),
         oil         = (oilID      ~= nil)          or ((not db.weaponOil or db.weaponOil.enabled) and showEmpty),
         bandage     = (bandageID  ~= nil)          or ((not db.bandage or db.bandage.enabled) and showEmpty),
         healthstone = (hsID       ~= nil)          or ((not db.healthstone or db.healthstone.enabled ~= false) and showEmpty),
@@ -2457,11 +2515,11 @@ function UpdateAllButtonsBody()
     if flags.food then
         ApplyItemToButton(Apotheca.buttons["bufffood"], buffFoodID, buffFoodCnt, buffFoodTex)
     end
-    if flags.spirit then
-        ApplyItemToButton(Apotheca.buttons["spiritscroll"], spiritID, spiritCnt, spiritTex)
+    for key, r in pairs(flags.scrolls or {}) do
+        if r.show then ApplyItemToButton(Apotheca.buttons[key], r.id, r.count, r.tex) end
     end
-    if flags.protection then
-        ApplyItemToButton(Apotheca.buttons["protectionscroll"], protID, protCnt, protTex)
+    if flags.managem then
+        ApplyItemToButton(Apotheca.buttons["managem"], gemID, gemCnt, gemTex)
     end
     if flags.oil then
         ApplyItemToButton(Apotheca.buttons["weaponoil"], oilID, oilCnt, oilTex)

@@ -277,11 +277,19 @@ def build(rows):
     # sleep potions stun you, Wildvine is a 0-1500 gamble: none of those
     # belong on a "best potion" button.
     health, mana, percent_h, percent_m = [], [], [], []
+    gems = []
     for r in rows:
         u = r['use']
         m = re.search(r'Restores (\d+)% (health|mana)\.', u)
         if m and r['sub'] == SUB_POTION:
             (percent_h if m.group(2) == 'health' else percent_m).append((r, int(m.group(1))))
+            continue
+        # Mage mana gems (subclass Other): class-only, their own cooldown,
+        # their own button. Checked first: they are not potions.
+        if re.match(r'Mana (Agate|Jade|Citrine|Ruby)$', r['name']) and u:
+            _, gm = potion_values(u)
+            if gm: gems.append((-gm, r['id'], r['name'], gm))
+            skipped.append((r['id'], r['name'], 'mage mana gem: its own button, not a potion'))
             continue
         if kind(r) == 'other-restore':
             skipped.append((r['id'], r['name'], 'restores instantly but is not a potion (own cooldown)'))
@@ -292,9 +300,6 @@ def build(rows):
             continue
         # Mage mana gems: class-only, their own cooldown. On the potion
         # button they would hide real potions; a mage button is future work.
-        if re.match(r'Mana (Agate|Jade|Citrine|Ruby)$', r['name']):
-            skipped.append((r['id'], r['name'], 'mage mana gem: separate cooldown, not a potion'))
-            continue
         if outdoor_locked(r):
             skipped.append((r['id'], r['name'], 'usable only in an outdoor zone'))
             continue
@@ -313,6 +318,7 @@ def build(rows):
     # Fixed-value potions, strongest first. Percentage potions cannot be
     # ranked here (it depends on the player's maximum), so they are listed
     # apart and ranked in game against the player's readable maximum.
+    out['MANA_GEMS'] = sorted(gems)
     out['HEALTH_ITEMS'] = sorted(health)
     out['MANA_ITEMS'] = sorted(mana)
     out['PERCENT_POTIONS'] = [(r['id'], r['name'], 'health', pct) for r, pct in percent_h] + \
@@ -485,6 +491,9 @@ def emit(out, build_id, src):
         w('    { id = %d, resource = "%s", percent = %d },  -- %s' % (t[0], t[2], t[3], t[1]))
     w('}')
     w('')
+    id_list('MANA_GEMS', out['MANA_GEMS'],
+            lambda t: '    %-7s -- %s (%d mana)' % ('%d,' % t[1], t[2], t[3]),
+            'Mage mana gems, strongest first: their own cooldown, their own button.')
     w('-- Demonic Rune (12662) and Dark Rune (20520) were NOT in the client scan on')
     w('-- this build. Kept so the button works if they exist; they never match if not.')
     w('D.RUNE_ITEMS = { 20520, 12662 }')
