@@ -554,12 +554,17 @@ function Apotheca.BuildOptionsPanelContent(panel)
 
     SectionHeader("Scrolls & Weapon Oil")
     Gap(4)
-    Checkbox("Enable Spirit Scroll button",
-        function() return DBGet("scrolls", "spirit") ~= false end,
-        function(v) DBSet(v, "scrolls", "spirit") end)
-    Checkbox("Enable Protection Scroll button",
-        function() return DBGet("scrolls", "protection") ~= false end,
-        function(v) DBSet(v, "scrolls", "protection") end)
+    for _, kind in ipairs(Apotheca.SCROLL_KINDS) do
+        Checkbox("Enable " .. kind.label .. " Scroll button",
+            function() return DBGet("scrolls", kind.setting) ~= false end,
+            function(v) DBSet(v, "scrolls", kind.setting) end)
+    end
+    SmallLabel("|cff888888Each role shows the scrolls it uses: Spirit and Intellect for healers\n"
+        .. "and casters, Stamina for tanks, Strength and Agility for melee, Protection\n"
+        .. "for all, and Intellect for every class with mana.|r")
+    Checkbox("Enable Mana Gem button  |cff888888(mages)|r",
+        function() return DBGet("manaGem", "enabled") ~= false end,
+        function(v) DBSet(v, "manaGem", "enabled") end)
     Checkbox("Glow scrolls when buff is missing  |cff888888(ready check)|r",
         function() return DBGet("scrolls", "glowOnMissingBuff") ~= false end,
         function(v) DBSet(v, "scrolls", "glowOnMissingBuff") end)
@@ -614,11 +619,13 @@ function Apotheca.BuildOptionsPanelContent(panel)
 
     local BUTTON_LABELS = {
         mana = "Mana Potion", health = "Health Potion", healthstone = "Healthstone",
-        rune = "Rune / Battle Res",
+        rune = "Rune (mana)", managem = "Mana Gem",
         recovery = "Recovery (Conjured)", food = "Food", drink = "Drink",
         flask = "Flask", battle = "Elixir", guardian = "Elixir 2",
         bufffood = "Buff Food", spiritscroll = "Spirit Scroll",
-        protectionscroll = "Protection Scroll", weaponoil = "Weapon Oil", bandage = "Bandage",
+        protectionscroll = "Protection Scroll", intellectscroll = "Intellect Scroll",
+        staminascroll = "Stamina Scroll", strengthscroll = "Strength Scroll",
+        agilityscroll = "Agility Scroll", weaponoil = "Weapon Oil", bandage = "Bandage",
     }
     local ROW_HEIGHT, ROW_WIDTH = 22, CONTENT_W - PAD * 2
     local orderContainer = CreateFrame("Frame", nil, curContent)
