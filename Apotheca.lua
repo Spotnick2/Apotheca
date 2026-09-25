@@ -152,10 +152,10 @@ end
 
 -- Initialize ApothecaDB on ADDON_LOADED.
 -- Wrapped in pcall so a corrupted SavedVariables file never crashes the addon.
--- SavedVariables are written but never read back on this client
--- (PORTING-TBC-TO-FOREVER.md section 1). svLoadCheck is written every
--- session and is never in PROFILE_DEFAULTS, so finding it at load means
--- the client really read the file, which makes it the "is it fixed yet" check.
+-- SavedVariables were written but never read back through build 69977
+-- (PORTING-TBC-TO-FOREVER.md section 1); 70009 fixed it. svLoadCheck is
+-- written every session and is never in PROFILE_DEFAULTS, so finding it at
+-- load proves the client really read the file, at every login.
 -- It must never be given a default.
 local svLoaded = false
 
@@ -2754,10 +2754,13 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- DB is already initialised by ADDON_LOADED above.
         Apotheca.CreateOptionsPanel()
 
-        if not svLoaded then
-            -- Also true on a first install, which the sentinel cannot tell apart.
+        -- Settings not loaded is only worth saying on the builds where the
+        -- client failed to load them (fixed in 70009). On a fixed build it
+        -- just means a first install, and says nothing.
+        local build = Apotheca.API.ClientBuild()
+        if not svLoaded and build and build <= Apotheca.API.SV_BROKEN_THROUGH_BUILD then
             print("|cff9966ffApotheca:|r no saved settings were loaded, so defaults are in use. "
-                  .. "WoW: Forever does not load addon settings yet.")
+                  .. "This client build does not load addon settings.")
         end
         ApothecaDB.svLoadCheck = time()
 

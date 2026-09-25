@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - **Full health / mana tint:** food, drink, potions, healthstones, bandages and runes turn grey while what they restore is full. Display only: a click still uses the item.
 
 ### Changed
+- **Your settings are kept between sessions again.** The Forever client fixed its saved-settings bug in build 1.60.1.70009, so the "settings reset at login" notice is gone. The bar's position, your options and your role choices now stick.
 - The bar shows for every class. "Only show on healer classes" became "Only show the bar while my role is Healer", and it's off by default.
 - Warriors and rogues no longer see mana buttons.
 - Buff food priority is saved per role, so switching from Healer to Damage switches your food too.

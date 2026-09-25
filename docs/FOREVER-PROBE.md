@@ -133,6 +133,12 @@ This confirms the both-edges registration in game: the client's secure handler a
 
 Talent-based detection would need a hand-made role map of every class's new tree; it isn't attempted.
 
+## Build 1.60.1.70009 (client built Sep 23), 2026-09-25
+
+- **SavedVariables load back.** The owner confirmed it with a **full exit and relaunch**: settings, the bar position and options survive. On disk, `svLoadCheck` was written as before; what changed is that the client now reads it. Through 69977 nothing loaded (account-wide or per-character). `API.SV_BROKEN_THROUGH_BUILD = 69977` limits the "not loaded" login line to those builds.
+- **API dump** `C:/Projects/References/forever-api-1.60.1.70009.md`: 6596 documented functions (69977: 6577). Of 220 changed or removed lines against 69977, **none touches an API Apotheca or the probe calls**. The changes are UI mixins, LFG frames, a role-poll popup, and `C_UnitAuras.GetRefreshCarryOverDuration` (new).
+- Still to redo on 70009: `/apo probe` (in and out of combat) and the consumable scan. `MEASURED_ON_BUILD` stays 69977 until they are done.
+
 ## Still to measure
 
 - **`C_Item.UseItemByName` on a real item** from the right-click alternate "Use X instead?" popup.

@@ -6,9 +6,9 @@ It is built for healers (Priest, Paladin, Shaman, Druid). Casters and other role
 
 > **TBC Classic Anniversary** players: 1.0.5 was the last Anniversary release. It stays available on CurseForge, but won't get updates.
 
-## Known limitation: settings reset at login
+## Settings
 
-The WoW: Forever client doesn't load addon settings back yet. This affects every addon, not only Apotheca. Your Apotheca settings therefore go back to defaults each time you log in, and Apotheca says so in chat at login. Once Blizzard fixes the client, settings will stick without any change on your side.
+Your settings are saved per profile (global or per character), and your role choices are saved per character. The first WoW: Forever beta builds didn't load addon settings back at all. That was a client bug, fixed in build 1.60.1.70009.
 
 ## What it offers
 
