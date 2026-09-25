@@ -18,7 +18,7 @@ Apotheca.API = API
 
 -- The client build these adapters were measured against. On any other
 -- build players get a one-line note at login (see Apotheca.lua).
-API.MEASURED_ON_BUILD = 69977
+API.MEASURED_ON_BUILD = 70009
 
 -- The last client build on which SavedVariables were written but never
 -- read back. Build 70009 fixed it (confirmed with a full exit and relaunch,

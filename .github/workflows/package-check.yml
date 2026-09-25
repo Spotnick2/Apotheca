@@ -36,7 +36,7 @@ jobs:
           # Mana Ruby (mage gem). And items the bar must offer are present:
           # potions, healthstones, a ration, Holy Water, Dense Runecloth
           # and Forest Mushroom Cap (add a mana gem, 8008, once #15 is in).
-          python3 Tools/build_item_tables.py docs/forever-consumables-69977.tsv \
+          python3 Tools/build_item_tables.py docs/forever-consumables-70009.tsv \
             --expect-skipped 11951 1072 282018 8243 8008 \
             --expect-present 13446 13444 9421 19013 19060 227813 232433 4604 > /dev/null
           git diff --exit-code --ignore-cr-at-eol ApothecaItems.lua

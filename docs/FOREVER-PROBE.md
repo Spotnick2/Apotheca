@@ -137,7 +137,17 @@ Talent-based detection would need a hand-made role map of every class's new tree
 
 - **SavedVariables load back.** The owner confirmed it with a **full exit and relaunch**: settings, the bar position and options survive. On disk, `svLoadCheck` was written as before; what changed is that the client now reads it. Through 69977 nothing loaded (account-wide or per-character). `API.SV_BROKEN_THROUGH_BUILD = 69977` limits the "not loaded" login line to those builds.
 - **API dump** `C:/Projects/References/forever-api-1.60.1.70009.md`: 6596 documented functions (69977: 6577). Of 220 changed or removed lines against 69977, **none touches an API Apotheca or the probe calls**. The changes are UI mixins, LFG frames, a role-poll popup, and `C_UnitAuras.GetRefreshCarryOverDuration` (new).
-- Still to redo on 70009: `/apo probe` (in and out of combat) and the consumable scan. `MEASURED_ON_BUILD` stays 69977 until they are done.
+- **Probe on 70009:** identical to 69977. Health and power are secret (max readable), cooldowns and auras are not secret out of combat, the role selector and talents read the same, and templates, bags and weapon slots are unchanged.
+- **Consumable scan on 70009** (`docs/forever-consumables-70009.tsv`, catalog `C:/Projects/References/forever-consumables-1.60.1.70009.md`):
+  - The first scan exposed a tool gap: `/apo scan2` skipped subclass 8 ("Other"), so healthstones, rations, mana gems, Holy Water and Dense Runecloth had no Use text, and regenerating would have dropped them silently. scan2 now covers subclass 8, and the generator's `--expect-present` (in CI) fails the build if a must-have item is missing.
+  - Five Forever fruits (249791 to 249795: Shiny Green Apple, Sweetsour Grapes, Wayward Pomegranate, Tel'Abim Plantains, Flame Papaya) never loaded their item data. Their 69977 rows are carried over and marked `CARRIED FROM 69977`.
+  - **Real changes vs 69977:**
+    - Prowler Steak and Filet o' Flank became Well Fed food (+25).
+    - Specklefin Feast and Grand Lobster Banquet became plain food (2451).
+    - Wizard Oil went from +30 to +24, and Minor Wizard Oil from +15 to +8.
+    - The Spellblasting, Frenzy and Mender's combat potions were retuned (not on the bar).
+    - New: Shiny Silver Coin (286732).
+- `MEASURED_ON_BUILD` is bumped to **70009**.
 
 ## Still to measure
 
