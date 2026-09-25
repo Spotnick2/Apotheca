@@ -9,7 +9,7 @@
 --
 -- Measured facts behind these adapters:
 --   C:\Projects\References\PORTING-TBC-TO-FOREVER.md
---   C:\Projects\References\forever-api-1.60.1.69977.md
+--   C:\Projects\References\forever-api-1.60.1.70009.md
 -- ============================================================
 
 Apotheca = Apotheca or {}

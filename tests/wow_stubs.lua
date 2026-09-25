@@ -6,7 +6,7 @@
 --
 -- The important rule: READING AN UNSTUBBED GLOBAL IS AN ERROR. This file is
 -- the list of APIs verified present on builds 1.60.1.69977 and 70009
--- (C:\Projects\References\forever-api-1.60.1.69977.md). Stub a global only
+-- (C:\Projects\References\forever-api-1.60.1.70009.md). Stub a global only
 -- after confirming it there, with the client's signature. Names the client
 -- does NOT have go in KNOWN_ABSENT, so the addon has to cope without them.
 -- A forgiving stub quietly certifies calls the client will reject.
