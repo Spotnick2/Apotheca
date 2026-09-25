@@ -11,7 +11,10 @@ H.loadAddon({ savedDB = {
     profiles = {
       -- an inactive profile: cleaned too, not only the active one
       ["Realm-Alt"] = { buffFoodPriority = { PRIEST = { "healing", "mp5", "crit", "stamina" } } },
+      -- An old profile that turned waste prevention OFF with the boolean.
+      ["Realm-Frugal"] = { preventWaste = false, preventWasteMode = "BLOCK" },
       Global = {
+        preventWaste = false,          -- old boolean, off: must stay off
         showOnlyHealingSpec = true,   -- saved by every earlier profile, as the old default
         buffFoodPriority = {
             PRIEST  = { "healing", "mp5", "crit", "stamina" },     -- old default
@@ -35,13 +38,21 @@ H.eq(ApothecaDB.profiles.Global.onlyWhenHealer, false, "its replacement defaults
 H.eq(Apotheca.GetStatPriority()[1], "spirit", "a priest (healer role) gets the healer role's saved order")
 H.eq(ApothecaDB.profiles["Realm-Alt"].buffFoodPriority.PRIEST, nil, "an inactive profile is cleaned as well")
 
+-- preventWaste = false must become DO_NOTHING, not the "BLOCK" default that
+-- ApplyDefaults fills in first (Codex review of #17).
+H.eq(ApothecaDB.profiles.Global.preventWasteMode, "DO_NOTHING", "preventWaste = false becomes Do nothing")
+H.eq(ApothecaDB.profiles.Global.preventWaste, nil, "and the old key is gone")
+H.eq(ApothecaDB.profiles["Realm-Frugal"].preventWasteMode, "DO_NOTHING",
+    "even where an older version already wrote the BLOCK default next to it")
+
 -- The flat (pre-profile) database route.
-local flat = { buffFoodPriority = { PRIEST = { "healing", "mp5", "crit", "stamina" } } }
+local flat = { preventWaste = false, buffFoodPriority = { PRIEST = { "healing", "mp5", "crit", "stamina" } } }
 rawset(_G, "ApothecaDB", flat)
 WoW.fire("ADDON_LOADED", "Apotheca")
 local g = ApothecaDB.profiles and ApothecaDB.profiles.Global
 H.check(g ~= nil, "a flat database is migrated into profiles")
 H.eq(g and g.buffFoodPriority and g.buffFoodPriority.PRIEST, nil, "and its old priority is cleaned on that route too")
+H.eq(g and g.preventWasteMode, "DO_NOTHING", "a flat database's preventWaste = false becomes Do nothing too")
 
 -- A malformed saved priority must not escape InitDB's guard: the database
 -- resets instead of throwing out of ADDON_LOADED.

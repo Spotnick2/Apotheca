@@ -3,9 +3,8 @@
 --
 -- A throwaway measurement tool for the port (issue #3). It prints what
 -- the client actually does for each API the port depends on and keeps the
--- last run in ApothecaDB.lastProbe. That table is written to disk at
--- logout even though this client never reads it back, so the results can
--- be read off the SavedVariables file. Run it once out of combat and
+-- last run in ApothecaDB.lastProbe, which is written to disk at logout,
+-- so the results can be read off the SavedVariables file. Run it once out of combat and
 -- once in combat.
 --
 -- A separate, development-only addon (Tools/ApothecaProbe, loaded after
@@ -81,8 +80,8 @@ local TEMPLATES = {
 -- C_Item.GetItemInfoInstant (it reads the client's item DB, no cache
 -- needed), keep the consumables (classID 0), then read each one's tooltip
 -- text and item spell. The result lands in ApothecaDB.itemScan, which the
--- client writes to disk at logout even though it never reads it back;
--- the item tables are built from that file.
+-- client writes to disk at logout; the item tables are built from that
+-- file.
 -- ============================================================
 
 local SCAN_MAX_ID    = 300000   -- Wowhead's highest Forever consumable is ~286k

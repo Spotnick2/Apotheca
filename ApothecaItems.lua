@@ -160,8 +160,6 @@ D.FOOD_ITEMS = {
     { id = 22895 , healthValue = 3057 , conjured = true },  -- Conjured Cinnamon Roll
     { id = 20031 , healthValue = 2451 , restoresMana = true },  -- Essence Mango
     { id = 238639, healthValue = 2451  },  -- Sunrise Omelette
-    { id = 238641, healthValue = 2451  },  -- Specklefin Feast
-    { id = 238642, healthValue = 2451  },  -- Grand Lobster Banquet
     { id = 8076  , healthValue = 2065 , conjured = true },  -- Conjured Sweet Roll
     { id = 8932  , healthValue = 2065  },  -- Alterac Swiss
     { id = 8948  , healthValue = 2065  },  -- Dried King Bolete

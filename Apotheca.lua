@@ -159,13 +159,24 @@ end
 -- It must never be given a default.
 local svLoaded = false
 
--- Buff food priorities saved by TBC builds are the old defaults
+-- Legacy keys and buff food priorities saved by older builds. Buff food
+-- priorities saved by TBC builds are the old defaults
 -- ({healing, mp5, crit, stamina} and the paladin variant), or name stats
 -- Forever food no longer has. Drop them so the role profile decides; a real
 -- custom order survives. Applied to EVERY profile, whichever route the data
 -- came in by (profile structure, flat-DB migration, or a later SetProfile).
 local function CleanBuffFoodPriority(prof)
     if type(prof) ~= "table" then return end
+    -- The old boolean preventWaste becomes preventWasteMode. It OVERRIDES
+    -- the mode: ApplyDefaults runs first and fills preventWasteMode with
+    -- "BLOCK", and older versions had exactly that order, so a profile that
+    -- still holds preventWaste never had a real mode chosen. Without this,
+    -- a saved `preventWaste = false` silently became blocking once 70009
+    -- started loading saved data (Codex review of #17).
+    if prof.preventWaste ~= nil then
+        prof.preventWasteMode = prof.preventWaste and "BLOCK" or "DO_NOTHING"
+        prof.preventWaste     = nil
+    end
     -- showOnlyHealingSpec was a class check that defaulted to TRUE, so every
     -- saved profile holds true whether or not anyone chose it. Under the new
     -- role check it would hide the whole bar for a healer class playing
@@ -221,12 +232,8 @@ local function InitDB()
             else
                 ApplyDefaults(ApothecaDB.profiles[key], PROFILE_DEFAULTS)
             end
-            -- Migrate old boolean preventWaste → new preventWasteMode
-            local prof = ApothecaDB.profiles[key]
-            if prof and prof.preventWaste ~= nil and prof.preventWasteMode == nil then
-                prof.preventWasteMode = prof.preventWaste and "BLOCK" or "DO_NOTHING"
-                prof.preventWaste     = nil
-            end
+            -- The old boolean preventWaste is converted in the cleanup pass
+            -- below, for every profile (CleanBuffFoodPriority).
             return
         end
 
@@ -241,7 +248,7 @@ local function InitDB()
         ApothecaDB.profiles      = { Global = DeepCopy(PROFILE_DEFAULTS) }
         ApothecaDB.activeProfile = "Global"
         -- Salvage flat keys that match known profile fields
-        local safe = { "debug","showOnlyHealingSpec","visibility",
+        local safe = { "debug","showOnlyHealingSpec","preventWaste","visibility",
                        "showEmptyButtons","orientation","rows",
                        "iconSize","iconPadding","buffFood","categories",
                        "buffFoodPriority","elixirs","lockPosition","enabled",
