@@ -94,6 +94,13 @@ D.PERCENT_POTIONS = {
     { id = 282013, resource = "mana", percent = 20 },  -- Restored Mana Potion
 }
 
+-- Mage mana gems, strongest first: their own cooldown, their own button.
+D.MANA_GEMS = {
+    8008,   -- Mana Ruby (1100 mana)
+    8007,   -- Mana Citrine (850 mana)
+    5513,   -- Mana Jade (600 mana)
+}
+
 -- Demonic Rune (12662) and Dark Rune (20520) were NOT in the client scan on
 -- this build. Kept so the button works if they exist; they never match if not.
 D.RUNE_ITEMS = { 20520, 12662 }
