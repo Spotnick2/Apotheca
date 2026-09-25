@@ -149,6 +149,10 @@ Talent-based detection would need a hand-made role map of every class's new tree
     - New: Shiny Silver Coin (286732).
 - `MEASURED_ON_BUILD` is bumped to **70009**.
 
+## Full health / mana tint in game (#6), 2026-09-25, build 70009
+
+Measured on a level 3 Undead at full health and mana: the Food and Drink buttons were grey, while the same items on the default action bar stayed in full colour. The client evaluates the colour curve itself (`UnitHealthPercent` / `UnitPowerPercent`), so the tint works although current health and mana are secret.
+
 ## Still to measure
 
 - **`C_Item.UseItemByName` on a real item** from the right-click alternate "Use X instead?" popup.
