@@ -162,20 +162,36 @@ end
 
 -- Initialize ApothecaDB on ADDON_LOADED.
 -- Wrapped in pcall so a corrupted SavedVariables file never crashes the addon.
--- SavedVariables are written but never read back on this client
--- (PORTING-TBC-TO-FOREVER.md section 1). svLoadCheck is written every
--- session and is never in PROFILE_DEFAULTS, so finding it at load means
--- the client really read the file, which makes it the "is it fixed yet" check.
+-- SavedVariables were written but never read back through build 69977
+-- (PORTING-TBC-TO-FOREVER.md section 1); 70009 fixed it. svLoadCheck is
+-- written every session and is never in PROFILE_DEFAULTS, so finding it at
+-- load proves the client really read the file, at every login. Missing on a
+-- new build, the login line says the bug may be back.
 -- It must never be given a default.
 local svLoaded = false
 
--- Buff food priorities saved by TBC builds are the old defaults
+-- The migration pass for one saved profile: legacy keys, and buff food
+-- priorities saved by older builds. Buff food priorities saved by TBC builds
+-- are the old defaults
 -- ({healing, mp5, crit, stamina} and the paladin variant), or name stats
 -- Forever food no longer has. Drop them so the role profile decides; a real
 -- custom order survives. Applied to EVERY profile, whichever route the data
 -- came in by (profile structure, flat-DB migration, or a later SetProfile).
-local function CleanBuffFoodPriority(prof)
+local function MigrateProfile(prof)
     if type(prof) ~= "table" then return end
+    -- The old boolean preventWaste becomes preventWasteMode. v1.0.0 saved
+    -- preventWaste = true in every profile, and from v1.0.2 ApplyDefaults
+    -- filled preventWasteMode = "BLOCK" before the old migration looked, so
+    -- the old key was never removed. So the boolean's presence says nothing:
+    -- - ASK or DO_NOTHING can only be the player's choice: keep it.
+    -- - BLOCK may be that filled-in default over a saved `false`: the
+    --   boolean is the better evidence (Codex and /code-review of #17).
+    if prof.preventWaste ~= nil then
+        if prof.preventWasteMode == nil or prof.preventWasteMode == "BLOCK" then
+            prof.preventWasteMode = prof.preventWaste and "BLOCK" or "DO_NOTHING"
+        end
+        prof.preventWaste = nil
+    end
     -- showOnlyHealingSpec was a class check that defaulted to TRUE, so every
     -- saved profile holds true whether or not anyone chose it. Under the new
     -- role check it would hide the whole bar for a healer class playing
@@ -216,7 +232,7 @@ local function CleanBuffFoodPriority(prof)
         if not usable(list) then prof.buffFoodPriority[key] = nil end
     end
 end
-Apotheca._CleanBuffFoodPriority = CleanBuffFoodPriority
+Apotheca._MigrateProfile = MigrateProfile
 
 local function InitDB()
     svLoaded = type(ApothecaDB) == "table" and ApothecaDB.svLoadCheck ~= nil
@@ -231,12 +247,8 @@ local function InitDB()
             else
                 ApplyDefaults(ApothecaDB.profiles[key], PROFILE_DEFAULTS)
             end
-            -- Migrate old boolean preventWaste → new preventWasteMode
-            local prof = ApothecaDB.profiles[key]
-            if prof and prof.preventWaste ~= nil and prof.preventWasteMode == nil then
-                prof.preventWasteMode = prof.preventWaste and "BLOCK" or "DO_NOTHING"
-                prof.preventWaste     = nil
-            end
+            -- The old boolean preventWaste is converted in the cleanup pass
+            -- below, for every profile (MigrateProfile).
             return
         end
 
@@ -251,7 +263,7 @@ local function InitDB()
         ApothecaDB.profiles      = { Global = DeepCopy(PROFILE_DEFAULTS) }
         ApothecaDB.activeProfile = "Global"
         -- Salvage flat keys that match known profile fields
-        local safe = { "debug","showOnlyHealingSpec","visibility",
+        local safe = { "debug","showOnlyHealingSpec","preventWaste","visibility",
                        "showEmptyButtons","orientation","rows",
                        "iconSize","iconPadding","buffFood","categories",
                        "buffFoodPriority","elixirs","lockPosition","enabled",
@@ -267,7 +279,7 @@ local function InitDB()
     -- saved priority must fall into the reset below, never escape it.
     if ok then
         ok, err = pcall(function()
-            for _, prof in pairs(ApothecaDB.profiles) do CleanBuffFoodPriority(prof) end
+            for _, prof in pairs(ApothecaDB.profiles) do MigrateProfile(prof) end
         end)
     end
 
@@ -2877,16 +2889,26 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- DB is already initialised by ADDON_LOADED above.
         Apotheca.CreateOptionsPanel()
 
-        if not svLoaded then
-            -- Also true on a first install, which the sentinel cannot tell apart.
-            print("|cff9966ffApotheca:|r no saved settings were loaded, so defaults are in use. "
-                  .. "WoW: Forever does not load addon settings yet.")
+        -- No saved settings loaded is a first install, or the client bug
+        -- fixed in 70009; the sentinel can't tell them apart.
+        -- - Through 69977 it is the bug: say so.
+        -- - On the measured build, which loads settings: a first install,
+        --   and nothing to say.
+        -- - On any other build, the bug may be back: say it may be either.
+        local build = Apotheca.API.ClientBuild()
+        if not svLoaded and build then
+            if build <= Apotheca.API.SV_BROKEN_THROUGH_BUILD then
+                print("|cff9966ffApotheca:|r no saved settings were loaded, so defaults are in use. "
+                      .. "This client build does not load addon settings.")
+            elseif build ~= Apotheca.API.MEASURED_ON_BUILD then
+                print("|cff9966ffApotheca:|r no saved settings were loaded. On a first install that's "
+                      .. "expected; if your settings were reset, this client build may not load addon settings.")
+            end
         end
         ApothecaDB.svLoadCheck = time()
 
         -- The adapters were measured on one client build. On any other,
         -- say so: the findings behind them may be stale.
-        local build = Apotheca.API.ClientBuild()
         if build and build ~= Apotheca.API.MEASURED_ON_BUILD then
             print("|cff9966ffApotheca:|r this client build (" .. build .. ") is different from "
                   .. "the one Apotheca was tested on (" .. Apotheca.API.MEASURED_ON_BUILD

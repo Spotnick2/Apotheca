@@ -56,6 +56,7 @@ function H.loadAddon(opts)
     end
     if opts.savedDB then rawset(_G, "ApothecaDB", opts.savedDB) end
     WoW.fire("ADDON_LOADED", "Apotheca")
+    if opts.probe then WoW.fire("ADDON_LOADED", "ApothecaProbe") end
     WoW.fire("PLAYER_LOGIN")
     WoW.fire("PLAYER_ENTERING_WORLD")
     WoW.tick(1)

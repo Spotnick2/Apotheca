@@ -6,7 +6,7 @@
 
 **TBC Classic Anniversary is no longer supported.** v1.0.5 was the final TBC release; it stays on CurseForge for Anniversary players, and the code is archived on the `tbc-anniversary` branch / `v1.0.5` tag. Do not add flavor branching for it.
 
-Read `C:\Projects\References\PORTING-TBC-TO-FOREVER.md` before touching an unfamiliar API, and `docs/FOREVER-PROBE.md` for what was measured in game for this addon. The full declared API surface is `C:\Projects\References\forever-api-1.60.1.69977.md`.
+Read `C:\Projects\References\PORTING-TBC-TO-FOREVER.md` before touching an unfamiliar API, and `docs/FOREVER-PROBE.md` for what was measured in game for this addon. The full declared API surface is `C:\Projects\References\forever-api-1.60.1.70009.md`.
 
 ## Repository Layout
 
@@ -36,9 +36,9 @@ No external libraries. No generated files.
 - **Language**: Lua 5.1 (WoW's embedded Lua engine)
 - **WoW API target**: WoW: Forever, Retail/Mainline API (`Interface: 16001`; the format is `%d%02d%02d`, and `11601` is a transposed-digit bug)
 - **Compat layer**: every moved API goes through `Apotheca.API` in `ApothecaCompat.lua` (item info/icon, container reads, item cooldown, auras, health/mana, event registration, click edges). Call through the table at call time; `Apotheca.lua` keeps thin local wrappers (`ContainerGetNumSlots`, `ContainerGetItemID`, `ContainerGetCount`, `SafeGetItemCooldown`, `GetItemInfo`) that do exactly that. Never call a removed global, and never call a WoW container or item global directly in new code.
-- **Secret values**: the player's current health and mana are secret **even out of combat** on build 69977, and comparing one throws. Auras throw in combat. `API.PlayerMissing()` and `API.PlayerAuras()` return nil for "unknown"; callers must treat nil as unknown, never as missing or full (`== false`, not `not`). Health-dependent features (waste prevention, right-click alternate, smart healthstone) stay in the code but are dormant and greyed out while the read is refused.
+- **Secret values**: the player's current health and mana are secret **even out of combat** (builds 69977 and 70009), and comparing one throws. Auras throw in combat. `API.PlayerMissing()` and `API.PlayerAuras()` return nil for "unknown"; callers must treat nil as unknown, never as missing or full (`== false`, not `not`). Health-dependent features (waste prevention, right-click alternate, smart healthstone) stay in the code but are dormant and greyed out while the read is refused.
 - **Showing fullness (`fullTint`, #6)**: the client colours a texture by current health or mana through a colour curve it evaluates itself (`UnitHealthPercent` / `UnitPowerPercent` with a curve). The returned channels may be secret, and **even `r ~= nil` throws on a secret**. So the channels never leave `ApothecaCompat.lua`: `API.PaintFullness(resource, textures)` paints and returns a plain boolean. `tests/test_tint.lua` fails if any other file calls the curve functions or `GetRGB`.
-- **SavedVariables do not load back on this client.** Everything resets at login. `ApothecaDB.svLoadCheck` is written every session and must never be given a default: finding it at load is how the fix will be noticed.
+- **SavedVariables load back since build 1.60.1.70009** (confirmed with a full exit and relaunch, 2026-09-25). Through 69977 they were written but never read, and everything reset at login. `API.SV_BROKEN_THROUGH_BUILD` keeps the definite "not loaded" login line to those builds. The sentinel stays: it proves the load at every login. On a build other than `MEASURED_ON_BUILD`, a missing sentinel prints a hedged line (first install, or the bug is back), so a regression reaches players. Migrations in `InitDB` now run on real saved data, so every settings change needs one. `ApothecaDB.svLoadCheck` is written every session and must never be given a default: finding it at load is how the fix will be noticed.
 - **No external dependencies**: No LibStub, no AceDB, no Ace3 libraries.
 
 ## Architecture
@@ -69,8 +69,8 @@ The canonical set of button keys (also `Apotheca.DEFAULT_BUTTON_ORDER`):
 ### Item Data
 **The item tables are generated, never hand-written.** Forever changed restore values, buff food and elixirs relative to Vanilla, and adds items no Vanilla list has, so the only trustworthy source is the client itself:
 
-1. `pwsh Tools/deploy.ps1 -Probe` (the scan lives in the dev-only probe addon). In game, out of combat, in one session (SavedVariables never load back, so a `/reload` between steps loses the scan): `/apo scan`, then `/apo scan2`, then `/reload` to write the file. `scan` walks every item ID with `C_Item.GetItemInfoInstant` (the client's item DB, no cache needed) and reads each consumable's tooltip and item spell; `scan2` loads the spells whose "Use:" text was missing.
-2. `lua5.1 Tools/export_scan.lua <WTF>/Account/<id>/SavedVariables/Apotheca.lua docs/forever-consumables-<build>.tsv`
+1. `pwsh Tools/deploy.ps1 -Probe` (the scan lives in the dev-only probe addon). In game, out of combat, in one session (the scan is written to disk only at logout). The probe keeps its results in its own SavedVariable, `ApothecaProbeDB` (`SavedVariables/ApothecaProbe.lua`), never in Apotheca's settings; `scan2` refuses a saved scan from another build: `/apo scan`, then `/apo scan2`, then `/reload` to write the file. `scan` walks every item ID with `C_Item.GetItemInfoInstant` (the client's item DB, no cache needed) and reads each consumable's tooltip and item spell; `scan2` loads the spells whose "Use:" text was missing.
+2. `lua5.1 Tools/export_scan.lua <WTF>/Account/<id>/SavedVariables/ApothecaProbe.lua docs/forever-consumables-<build>.tsv`
 3. `python Tools/build_item_tables.py docs/forever-consumables-<build>.tsv`, which writes `ApothecaItems.lua` (`Apotheca.DATA`). Read its "skipped" report and the diff.
 4. `python Tools/consumables_reference.py docs/forever-consumables-<build>.tsv C:/Projects/References/forever-consumables-<version>.<build>.md` refreshes the shared human-readable catalog, and copy the TSV next to it. Diffing two builds' catalogs shows what Blizzard changed.
 

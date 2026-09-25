@@ -9,7 +9,7 @@
 --
 -- Measured facts behind these adapters:
 --   C:\Projects\References\PORTING-TBC-TO-FOREVER.md
---   C:\Projects\References\forever-api-1.60.1.69977.md
+--   C:\Projects\References\forever-api-1.60.1.70009.md
 -- ============================================================
 
 Apotheca = Apotheca or {}
@@ -18,7 +18,13 @@ Apotheca.API = API
 
 -- The client build these adapters were measured against. On any other
 -- build players get a one-line note at login (see Apotheca.lua).
-API.MEASURED_ON_BUILD = 69977
+API.MEASURED_ON_BUILD = 70009
+
+-- The last client build on which SavedVariables were written but never
+-- read back. Build 70009 fixed it (confirmed with a full exit and relaunch,
+-- 2026-09-25). On a build at or below this one, "no saved settings were
+-- loaded" is the client bug; above it, it only means a first install.
+API.SV_BROKEN_THROUGH_BUILD = 69977
 
 local PREFIX = "|cff9966ffApotheca:|r "
 

@@ -117,13 +117,15 @@ local bandage = Apotheca.buttons.bandage
 H.check(bandage and near(drawn(bandage), grey), "at full health the bandage icon is grey")
 
 -- After a right-click alternate swap, the tint follows the item SHOWN.
--- Primary: Filet o' Flank (2451 health, health only); the biscuit (2065 +
--- mana) is only the alternate, so the swap is what changes the icon.
+-- Primary: Sunrise Omelette (2451 health, health only, plain food on 70009;
+-- Filet o' Flank became Well Fed food, and feasts are not food); the
+-- biscuit (2065 + mana) is only the alternate, so the swap is what changes
+-- the icon.
 WoW.AddItem(0, 3, 13724, 5, "Enriched Manna Biscuit")
-WoW.AddItem(0, 5, 238638, 5, "Filet o' Flank")
+WoW.AddItem(0, 5, 238639, 5, "Sunrise Omelette")
 WoW.power = 400
 Apotheca.UpdateAllButtons()
-H.eq(food.itemID, 238638, "the primary food is the health-only Filet o' Flank")
+H.eq(food.itemID, 238639, "the primary food is the health-only Sunrise Omelette")
 H.check(near(drawn(food), grey), "which is greyed at full health")
 StaticPopupDialogs["APOTHECA_ALT_ASK"].OnAccept({ data = { btnKey = "food", altItemID = 13724 } })
 WoW.fire("UNIT_HEALTH", "player")

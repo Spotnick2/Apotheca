@@ -5,8 +5,8 @@
 -- under stock Lua 5.1 with no game client.
 --
 -- The important rule: READING AN UNSTUBBED GLOBAL IS AN ERROR. This file is
--- the list of APIs verified present on build 1.60.1.69977
--- (C:\Projects\References\forever-api-1.60.1.69977.md). Stub a global only
+-- the list of APIs verified present on builds 1.60.1.69977 and 70009
+-- (C:\Projects\References\forever-api-1.60.1.70009.md). Stub a global only
 -- after confirming it there, with the client's signature. Names the client
 -- does NOT have go in KNOWN_ABSENT, so the addon has to cope without them.
 -- A forgiving stub quietly certifies calls the client will reject.
@@ -69,12 +69,12 @@ function WoW.IsSecret(v) return getmetatable(v) == secretMT end
 function WoW.reset()
     WoW.time         = 10000
     WoW.inCombat     = false
-    WoW.build        = "69977"
+    WoW.build        = "70009"
     WoW.class        = "PRIEST"
     WoW.instanceName, WoW.instanceType, WoW.instanceMap = "Kalimdor", "none", 1
     WoW.health, WoW.healthMax = 1000, 1000
     WoW.power,  WoW.powerMax  = 1000, 1000
-    WoW.healthSecret = true      -- measured: secret at rest on 69977
+    WoW.healthSecret = true      -- measured: secret at rest on 69977 and 70009
     WoW.aurasThrow   = false     -- combat: index reads throw
     WoW.combatSecret = false     -- cooldowns and stack counts secret (unmeasured; worst case)
     WoW.auras        = { HELPFUL = {}, HARMFUL = {} }
@@ -263,7 +263,7 @@ function WoW.leaveCombat()
 end
 
 ------------------------------------------------------------
--- Globals present on 1.60.1.69977
+-- Globals present on 1.60.1.69977 and 70009
 ------------------------------------------------------------
 
 function print(...)
@@ -481,7 +481,7 @@ function UIDropDownMenu_SetText(dd, t) dd._ddText = t end
 -- Names the client does not have, or that start nil. Reading one returns
 -- nil instead of failing the test, so guarded feature checks still run.
 local KNOWN_ABSENT = {
-    -- Removed on Forever (forever-api-1.60.1.69977.md).
+    -- Removed on Forever (forever-api-1.60.1.70009.md).
     AnimateTexCoords = true, InterfaceOptions_AddCategory = true,
     InterfaceOptionsFrame_OpenToCategory = true, GetItemInfo = true,
     GetItemIcon = true, UnitBuff = true, UnitDebuff = true, UnitAura = true,
@@ -489,7 +489,7 @@ local KNOWN_ABSENT = {
     MouseIsOver = true, GetContainerNumSlots = true, GetContainerItemLink = true,
     GetContainerItemInfo = true, GetItemCooldown = true, MAX_PLAYER_LEVEL = true,
     -- SavedVariables, nil until the client would have loaded them.
-    ApothecaDB = true, ApothecaCharDB = true,
+    ApothecaDB = true, ApothecaCharDB = true, ApothecaProbeDB = true,
     -- The addon namespace, nil until ApothecaCompat.lua creates it.
     Apotheca = true,
     -- Frames the addon names itself; nil until created.
@@ -501,7 +501,7 @@ setmetatable(_G, {
     __index = function(_, k)
         if KNOWN_ABSENT[k] then return nil end
         error("read of undefined global '" .. tostring(k) .. "': stub it only if "
-              .. "forever-api-1.60.1.69977.md confirms it exists, or list it in KNOWN_ABSENT", 2)
+              .. "forever-api-1.60.1.70009.md confirms it exists, or list it in KNOWN_ABSENT", 2)
     end,
 })
 

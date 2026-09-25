@@ -12,7 +12,7 @@ Input:  docs/forever-consumables-<build>.tsv, exported from an in-game
 Output: ApothecaItems.lua (Apotheca.DATA), loaded before Apotheca.lua.
 
 Usage:
-    python Tools/build_item_tables.py docs/forever-consumables-69977.tsv
+    python Tools/build_item_tables.py docs/forever-consumables-70009.tsv
 
 Rerun after a new client build: re-scan in game, re-export, regenerate,
 and review the diff. Anything the parser does not recognise is simply
@@ -35,6 +35,11 @@ def kind(r):
     u = r['use']
     if r['sub'] not in RESTORE_SUBS or not u or r['quest'] or 'Healthstone' in r['name']:
         return None
+    # A feast is PLACED for the group ("Serve a delicious feast...", "Lay
+    # out Cookie's Feast..."); its tooltip quotes the food it serves, which
+    # must not make the feast itself look like food in the bag.
+    if re.match(r'Use: (Serve|Lay out|Set out)\b', u):
+        return 'feast'
     # Food & Drink items are food, and so is anything eaten seated: Scorpid
     # Surprise (Food & Drink) says "Heals 282 damage over 21 sec" and never
     # mentions sitting, so the subclass has to decide, not the wording.
@@ -331,6 +336,9 @@ def build(rows):
         if r['sub'] == SUB_FOOD and u and PERCENT.search(u):
             skipped.append((r['id'], r['name'], 'restores a percentage: not rankable against fixed amounts'))
             continue
+        if kind(r) == 'feast':
+            skipped.append((r['id'], r['name'], 'feast: placed for the group, not eaten from the bag'))
+            continue
         if kind(r) != 'food':
             if r['sub'] == SUB_FOOD and not r['quest']:
                 skipped.append((r['id'], r['name'], 'Food & Drink with no Use text in the scan'))
@@ -431,6 +439,23 @@ def build(rows):
 
     out['ZONE_RESTRICTED_ITEMS'] = zone
     return out, skipped
+
+
+def offered_item_ids(out):
+    """Every ITEM id the generated tables can put on a button: only the item
+    positions of each collection, never spell IDs, values or map IDs."""
+    ids = set()
+    for key, pos in (('HEALTH_ITEMS', 2), ('MANA_ITEMS', 2), ('FOOD_ITEMS', 2), ('DRINK_ITEMS', 2),
+                     ('MANA_GEMS', 1), ('HEALTHSTONE_ITEMS', 1), ('BANDAGE_ITEMS', 1)):
+        ids.update(t[pos] for t in out[key])
+    for lst in out['BUFF_FOOD_BY_STAT'].values():
+        ids.update(t[2] for t in lst)
+    for lst in out['SCROLLS_BY_STAT'].values():
+        ids.update(t[1] for t in lst)
+    ids.update(t[0] for t in out['ELIXIR_CATALOG'])
+    ids.update(t[0] for t in out['OILS'])
+    ids.update(t[0] for t in out['PERCENT_POTIONS'])
+    return ids
 
 
 # ------------------------------------------------------------------
@@ -582,12 +607,24 @@ def emit(out, build_id, src):
 
 if __name__ == '__main__':
     # --expect-skipped ID ...: fail unless each ID is in the skipped report.
-    # CI uses it to prove that items left out are accounted for, not lost.
-    expect = []
-    if '--expect-skipped' in sys.argv:
-        i = sys.argv.index('--expect-skipped')
-        expect = [int(x) for x in sys.argv[i + 1:]]
-        sys.argv = sys.argv[:i]
+    # --expect-present ID ...: fail unless each ID is in a generated table.
+    # CI uses both: items left out are accounted for, and the items the bar
+    # must offer are really there. A scan that missed their tooltip text
+    # (70009: every "Other" item) would otherwise drop them silently.
+    def take(flag):
+        if flag not in sys.argv:
+            return []
+        i = sys.argv.index(flag)
+        vals = []
+        j = i + 1
+        # Only numbers: the TSV path may come after the flag's IDs.
+        while j < len(sys.argv) and sys.argv[j].isdigit():
+            vals.append(int(sys.argv[j]))
+            j += 1
+        del sys.argv[i:j]
+        return vals
+    expect = take('--expect-skipped')
+    present = take('--expect-present')
     src = sys.argv[1]
     build_id = re.search(r'(\d{5,})', src)
     rows = load(src)
@@ -603,4 +640,8 @@ if __name__ == '__main__':
     missing = [x for x in expect if x not in reported]
     if missing:
         print('NOT REPORTED as skipped: %s' % missing)
+        sys.exit(1)
+    absent = [x for x in present if x not in offered_item_ids(out)]
+    if absent:
+        print('MISSING from the generated tables: %s' % absent)
         sys.exit(1)

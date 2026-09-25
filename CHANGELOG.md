@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Read this after updating
+- **Your settings are kept between sessions again.** The Forever client fixed its saved-settings bug in build 1.60.1.70009, so the "settings reset at login" notice is gone. The bar's position, your options and your role choices now stick.
+- **Some items moved buttons, because the client changed them:**
+  - Prowler Steak and Filet o' Flank now give Well Fed, so they're on the Buff Food button instead of Food.
+  - Specklefin Feast and Grand Lobster Banquet are no longer offered: they're feasts you set out for the group, not food you eat from your bags.
+- **Wizard Oil is weaker on this client build:** +24 spell damage (was +30), and Minor Wizard Oil +8 (was +15).
+- An old "prevent waste" on/off setting from Apotheca 1.0.1 or earlier is now read correctly, and a mode you chose later is kept.
+
 ### Added
 - **Apotheca is for every role now, not just healers.** It follows the role you tick in the game's own role selector (Tank / Healer / Damage), or your class if you haven't picked one. You can also set the role yourself in the options. That's handy for a healer questing solo who wants caster food. In a group, you can opt in to use the role set on the party frame.
 - **A Tank role:** stamina and armor buff food, Flask of the Titans, and armor and stamina elixirs.

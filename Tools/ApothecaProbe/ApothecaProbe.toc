@@ -4,5 +4,6 @@
 ## Author: Spotnick
 ## Version: dev
 ## RequiredDeps: Apotheca
+## SavedVariables: ApothecaProbeDB
 
 ApothecaProbe.lua

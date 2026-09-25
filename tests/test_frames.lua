@@ -55,7 +55,8 @@ H.check(true, "every slash command runs, in and out of combat")
 -- /apo scan walks the whole item-ID range over many frames.
 SlashCmdList["APOTHECA"]("scan")
 for _ = 1, 200 do WoW.tick(1) end
-local scan = ApothecaDB.itemScan
+local scan = ApothecaProbeDB.itemScan
+H.eq(ApothecaDB.itemScan, nil, "the scan is kept in the probe's own SavedVariable, not Apotheca's settings")
 H.check(scan and scan.items[13444] and scan.items[13444].t, "the scan records a known consumable with its tooltip")
 H.eq(scan and scan.items[13444].t[2], "Use: Restores 61 health over 18 sec.", "tooltip text is kept verbatim")
 
@@ -64,6 +65,24 @@ scan.items[13444].t = { "Major Mana Potion" }
 SlashCmdList["APOTHECA"]("scan2")
 for _ = 1, 200 do WoW.tick(1) end
 H.eq(scan.items[13444].d, "Restores 61 health over 18 sec.", "the second pass records the spell description")
+
+-- Saved data loads back since 70009, so a saved scan may be an older
+-- build's: scan2 must not add this build's text to it (/code-review of #17).
+scan.build = "69977"
+scan.items[13444].t, scan.items[13444].d = { "Major Mana Potion" }, nil
+WoW.messages = {}
+SlashCmdList["APOTHECA"]("scan2")
+for _ = 1, 20 do WoW.tick(1) end
+H.eq(scan.items[13444].d, nil, "scan2 leaves another build's scan alone")
+H.eq(H.messagesMatching("from build 69977"), 1, "and says to scan again")
+
+-- A scan an older probe left in Apotheca's own settings moves to the probe's.
+local old = { build = "69977", items = {} }
+ApothecaDB.itemScan = old
+rawset(_G, "ApothecaProbeDB", nil)
+SlashCmdList["APOTHECA"]("scan2")
+H.check(ApothecaProbeDB and ApothecaProbeDB.itemScan == old, "an old scan in ApothecaDB moves to ApothecaProbeDB")
+H.eq(ApothecaDB.itemScan, nil, "and leaves Apotheca's settings")
 
 -- Every button's scripts.
 for key, btn in pairs(Apotheca.buttons) do
