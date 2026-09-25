@@ -447,7 +447,7 @@ def offered_item_ids(out):
     ids = set()
     for key, pos in (('HEALTH_ITEMS', 2), ('MANA_ITEMS', 2), ('FOOD_ITEMS', 2), ('DRINK_ITEMS', 2),
                      ('MANA_GEMS', 1), ('HEALTHSTONE_ITEMS', 1), ('BANDAGE_ITEMS', 1)):
-        ids.update(t[pos] for t in out.get(key, []))   # MANA_GEMS arrives with #15
+        ids.update(t[pos] for t in out[key])
     for lst in out['BUFF_FOOD_BY_STAT'].values():
         ids.update(t[2] for t in lst)
     for lst in out['SCROLLS_BY_STAT'].values():
@@ -617,7 +617,8 @@ if __name__ == '__main__':
         i = sys.argv.index(flag)
         vals = []
         j = i + 1
-        while j < len(sys.argv) and not sys.argv[j].startswith('--'):
+        # Only numbers: the TSV path may come after the flag's IDs.
+        while j < len(sys.argv) and sys.argv[j].isdigit():
             vals.append(int(sys.argv[j]))
             j += 1
         del sys.argv[i:j]

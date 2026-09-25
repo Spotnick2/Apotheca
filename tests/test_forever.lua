@@ -138,6 +138,22 @@ H.check(H.messagesMatching("no saved settings were loaded") == 1,
 WoW.build, WoW.messages = "70009", {}
 WoW.fire("PLAYER_LOGIN")
 H.eq(H.messagesMatching("no saved settings were loaded"), 0,
-    "on a fixed build, a first install prints no settings warning")
+    "on the measured, fixed build, a first install prints no settings warning")
+
+-- On a newer, unmeasured build the bug may be back: say it may be either
+-- (/code-review of #17: a regression must reach players).
+WoW.build, WoW.messages = "70100", {}
+WoW.fire("PLAYER_LOGIN")
+H.eq(H.messagesMatching("may not load addon settings"), 1,
+    "on an unmeasured build, missing settings say the client may not load them")
+
+-- Settings that did load print nothing about it, on any build.
+rawset(_G, "ApothecaDB", { svLoadCheck = 1 })
+WoW.fire("ADDON_LOADED", "Apotheca")
+WoW.messages = {}
+WoW.fire("PLAYER_LOGIN")
+H.eq(H.messagesMatching("no saved settings were loaded"), 0,
+    "loaded settings print no warning, even on an unmeasured build")
+WoW.build = "70009"
 
 H.done("test_forever")

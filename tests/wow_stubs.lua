@@ -489,7 +489,7 @@ local KNOWN_ABSENT = {
     MouseIsOver = true, GetContainerNumSlots = true, GetContainerItemLink = true,
     GetContainerItemInfo = true, GetItemCooldown = true, MAX_PLAYER_LEVEL = true,
     -- SavedVariables, nil until the client would have loaded them.
-    ApothecaDB = true, ApothecaCharDB = true,
+    ApothecaDB = true, ApothecaCharDB = true, ApothecaProbeDB = true,
     -- The addon namespace, nil until ApothecaCompat.lua creates it.
     Apotheca = true,
     -- Frames the addon names itself; nil until created.

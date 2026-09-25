@@ -1,7 +1,6 @@
--- Settings saved by earlier (TBC) builds. SavedVariables do not load back on
--- Forever yet, but when the client is fixed these profiles will arrive, and
--- InitDB must turn them into something that works here (AGENTS.md: always
--- migrate a changed setting).
+-- Settings saved by earlier (TBC) builds. SavedVariables load back since
+-- build 70009, so these profiles arrive, and InitDB must turn them into
+-- something that works here (AGENTS.md: always migrate a changed setting).
 
 dofile("tests/wow_stubs.lua")
 local H = dofile("tests/harness.lua")
@@ -13,6 +12,11 @@ H.loadAddon({ savedDB = {
       ["Realm-Alt"] = { buffFoodPriority = { PRIEST = { "healing", "mp5", "crit", "stamina" } } },
       -- An old profile that turned waste prevention OFF with the boolean.
       ["Realm-Frugal"] = { preventWaste = false, preventWasteMode = "BLOCK" },
+      -- v1.0.0 saved preventWaste = true everywhere and nothing removed it;
+      -- the player later chose a mode. Their choice must survive.
+      ["Realm-Asker"]  = { preventWaste = true,  preventWasteMode = "ASK" },
+      ["Realm-Calm"]   = { preventWaste = true,  preventWasteMode = "DO_NOTHING" },
+      ["Realm-Old"]    = { preventWaste = true,  preventWasteMode = "BLOCK" },
       Global = {
         preventWaste = false,          -- old boolean, off: must stay off
         showOnlyHealingSpec = true,   -- saved by every earlier profile, as the old default
@@ -44,6 +48,13 @@ H.eq(ApothecaDB.profiles.Global.preventWasteMode, "DO_NOTHING", "preventWaste = 
 H.eq(ApothecaDB.profiles.Global.preventWaste, nil, "and the old key is gone")
 H.eq(ApothecaDB.profiles["Realm-Frugal"].preventWasteMode, "DO_NOTHING",
     "even where an older version already wrote the BLOCK default next to it")
+-- A mode other than the BLOCK default can only be the player's choice
+-- (/code-review of #17).
+H.eq(ApothecaDB.profiles["Realm-Asker"].preventWasteMode, "ASK",
+    "a mode chosen later (Ask) is kept, not reset by the stale v1.0.0 boolean")
+H.eq(ApothecaDB.profiles["Realm-Calm"].preventWasteMode, "DO_NOTHING", "and so is Do nothing")
+H.eq(ApothecaDB.profiles["Realm-Asker"].preventWaste, nil, "the stale boolean is removed there too")
+H.eq(ApothecaDB.profiles["Realm-Old"].preventWasteMode, "BLOCK", "the old default, true, stays Block")
 
 -- The flat (pre-profile) database route.
 local flat = { preventWaste = false, buffFoodPriority = { PRIEST = { "healing", "mp5", "crit", "stamina" } } }

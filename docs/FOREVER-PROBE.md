@@ -143,7 +143,7 @@ Talent-based detection would need a hand-made role map of every class's new tree
   - Five Forever fruits (249791 to 249795: Shiny Green Apple, Sweetsour Grapes, Wayward Pomegranate, Tel'Abim Plantains, Flame Papaya) never loaded their item data. Their 69977 rows are carried over and marked `CARRIED FROM 69977`.
   - **Real changes vs 69977:**
     - Prowler Steak and Filet o' Flank became Well Fed food (+25).
-    - Specklefin Feast and Grand Lobster Banquet became plain food (2451).
+    - Specklefin Feast and Grand Lobster Banquet lost their Well Fed bonus. They are feasts ("Use: Serve a delicious feast..."), placed for the group rather than eaten from the bag, so the generator skips them.
     - Wizard Oil went from +30 to +24, and Minor Wizard Oil from +15 to +8.
     - The Spellblasting, Frenzy and Mender's combat potions were retuned (not on the bar).
     - New: Shiny Silver Coin (286732).

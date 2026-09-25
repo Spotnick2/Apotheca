@@ -3,9 +3,10 @@
 --
 -- A throwaway measurement tool for the port (issue #3). It prints what
 -- the client actually does for each API the port depends on and keeps the
--- last run in ApothecaDB.lastProbe, which is written to disk at logout,
--- so the results can be read off the SavedVariables file. Run it once out of combat and
--- once in combat.
+-- last run in ApothecaProbeDB.lastProbe, which is written to disk at
+-- logout, so the results can be read off the probe's SavedVariables file
+-- (SavedVariables/ApothecaProbe.lua). Run it once out of combat and once
+-- in combat.
 --
 -- A separate, development-only addon (Tools/ApothecaProbe, loaded after
 -- Apotheca): it is never packaged, and `pwsh Tools/deploy.ps1 -Probe`
@@ -16,6 +17,32 @@ Apotheca = Apotheca or {}
 
 local PREFIX = "|cff9966ffApotheca probe:|r "
 local log
+
+-- The probe keeps its results in its own SavedVariable, not in Apotheca's
+-- settings: the item scan is large, and now that saved data loads back it
+-- would be parsed and rewritten with Apotheca's settings at every login.
+-- Results an older probe left in ApothecaDB move here.
+local function ProbeDB()
+    if type(ApothecaProbeDB) ~= "table" then ApothecaProbeDB = {} end
+    if type(ApothecaDB) == "table" then
+        for _, k in ipairs({ "itemScan", "lastProbe" }) do
+            if ApothecaDB[k] ~= nil then
+                if ApothecaProbeDB[k] == nil then ApothecaProbeDB[k] = ApothecaDB[k] end
+                ApothecaDB[k] = nil
+            end
+        end
+    end
+    return ApothecaProbeDB
+end
+
+local loader = CreateFrame("Frame")
+loader:RegisterEvent("ADDON_LOADED")
+loader:SetScript("OnEvent", function(self, _, name)
+    if name == "ApothecaProbe" then
+        ProbeDB()
+        self:UnregisterEvent("ADDON_LOADED")
+    end
+end)
 
 local function out(key, value)
     local text = tostring(value)
@@ -79,8 +106,8 @@ local TEMPLATES = {
 -- values, and a database can miss items. So walk every item ID with
 -- C_Item.GetItemInfoInstant (it reads the client's item DB, no cache
 -- needed), keep the consumables (classID 0), then read each one's tooltip
--- text and item spell. The result lands in ApothecaDB.itemScan, which the
--- client writes to disk at logout; the item tables are built from that
+-- text and item spell. The result lands in ApothecaProbeDB.itemScan, which
+-- the client writes to disk at logout; the item tables are built from that
 -- file.
 -- ============================================================
 
@@ -161,7 +188,7 @@ function Apotheca.RunItemScan()
                 Apotheca._scanRunning = false
                 local missing = 0
                 for _, e in pairs(found) do if not e.t then missing = missing + 1 end end
-                ApothecaDB.itemScan = { build = select(2, GetBuildInfo()), items = found }
+                ProbeDB().itemScan = { build = select(2, GetBuildInfo()), items = found }
                 print(PREFIX .. "scan done: " .. #order .. " consumables, " .. missing
                       .. " without tooltip text. /reload or log out to write the file.")
             end
@@ -173,7 +200,7 @@ end
 -- line until the item's SPELL is loaded, and on the first run most
 -- potions, elixirs, flasks, scrolls and bandages had none. For the
 -- healer-relevant categories, load each item's spell and read its
--- description directly. Results merge into ApothecaDB.itemScan (as `d`).
+-- description directly. Results merge into ApothecaProbeDB.itemScan (as `d`).
 -- 8 = "Other": healthstones, battleground rations, mana gems, Stratholme
 -- Holy Water and Dense Runecloth Bandage all live there. On 70009 they came
 -- back without spell text because this list left them out (#16).
@@ -189,8 +216,17 @@ end
 
 function Apotheca.RunSpellScan()
     if Apotheca._scanRunning then print(PREFIX .. "scan already running") return end
-    local scan = ApothecaDB and ApothecaDB.itemScan
+    local scan = ProbeDB().itemScan
     if not scan then print(PREFIX .. "run /apo scan first") return end
+    -- Saved data loads back since 70009, so the scan found here may be a
+    -- previous build's. Adding this build's spell text to it would export
+    -- two builds under one name (/code-review of #17).
+    local build = select(2, GetBuildInfo())
+    if tostring(scan.build) ~= tostring(build) then
+        print(PREFIX .. "the saved scan is from build " .. tostring(scan.build)
+              .. ", this client is " .. tostring(build) .. ": run /apo scan first")
+        return
+    end
     Apotheca._scanRunning = true
 
     local queue = {}
@@ -487,9 +523,8 @@ function Apotheca.RunProbe()
         return #rows > 0 and table.concat(rows, "; ") or "none"
     end)
 
-    if ApothecaDB then
-        ApothecaDB.lastProbe = ApothecaDB.lastProbe or {}
-        ApothecaDB.lastProbe[InCombatLockdown() and "combat" or "idle"] = log
-    end
+    local db = ProbeDB()
+    db.lastProbe = db.lastProbe or {}
+    db.lastProbe[InCombatLockdown() and "combat" or "idle"] = log
     print(PREFIX .. "done. Results are also stored for the SavedVariables file on logout.")
 end
