@@ -573,12 +573,23 @@ def emit(out, build_id, src):
 
 if __name__ == '__main__':
     # --expect-skipped ID ...: fail unless each ID is in the skipped report.
-    # CI uses it to prove that items left out are accounted for, not lost.
-    expect = []
-    if '--expect-skipped' in sys.argv:
-        i = sys.argv.index('--expect-skipped')
-        expect = [int(x) for x in sys.argv[i + 1:]]
-        sys.argv = sys.argv[:i]
+    # --expect-present ID ...: fail unless each ID is in a generated table.
+    # CI uses both: items left out are accounted for, and the items the bar
+    # must offer are really there. A scan that missed their tooltip text
+    # (70009: every "Other" item) would otherwise drop them silently.
+    def take(flag):
+        if flag not in sys.argv:
+            return []
+        i = sys.argv.index(flag)
+        vals = []
+        j = i + 1
+        while j < len(sys.argv) and not sys.argv[j].startswith('--'):
+            vals.append(int(sys.argv[j]))
+            j += 1
+        del sys.argv[i:j]
+        return vals
+    expect = take('--expect-skipped')
+    present = take('--expect-present')
     src = sys.argv[1]
     build_id = re.search(r'(\d{5,})', src)
     rows = load(src)
@@ -594,4 +605,9 @@ if __name__ == '__main__':
     missing = [x for x in expect if x not in reported]
     if missing:
         print('NOT REPORTED as skipped: %s' % missing)
+        sys.exit(1)
+    ids_in_lua = set(int(x) for x in re.findall(r'\b(\d{3,7})\b', lua))
+    absent = [x for x in present if x not in ids_in_lua]
+    if absent:
+        print('MISSING from the generated tables: %s' % absent)
         sys.exit(1)

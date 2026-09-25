@@ -175,7 +175,10 @@ end
 -- potions, elixirs, flasks, scrolls and bandages had none. For the
 -- healer-relevant categories, load each item's spell and read its
 -- description directly. Results merge into ApothecaDB.itemScan (as `d`).
-local RELEVANT_SUB = { [1] = true, [2] = true, [3] = true, [4] = true, [5] = true, [7] = true }
+-- 8 = "Other": healthstones, battleground rations, mana gems, Stratholme
+-- Holy Water and Dense Runecloth Bandage all live there. On 70009 they came
+-- back without spell text because this list left them out (#16).
+local RELEVANT_SUB = { [1] = true, [2] = true, [3] = true, [4] = true, [5] = true, [7] = true, [8] = true }
 local DESC_TRIES   = 40         -- 0.5 s apart: ~20 s
 
 local function HasUseLine(lines)
