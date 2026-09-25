@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [2.1.0] - 2026-09-25
 
 ### Read this after updating
 - **Your settings are kept between sessions again.** The Forever client fixed its saved-settings bug in build 1.60.1.70009, so the "settings reset at login" notice is gone. The bar's position, your options and your role choices now stick.
