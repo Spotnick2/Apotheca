@@ -376,6 +376,15 @@ function GetMaxLevelForPlayerExpansion() return WoW.maxLevel end
 function IsXPUserDisabled() return WoW.xpDisabled end
 
 C_TooltipInfo = {}
+-- Spell tooltips by spell ID (lines of left text).
+WoW.spellTooltips = {}
+function C_TooltipInfo.GetSpellByID(spellID)
+    local t = WoW.spellTooltips[spellID]
+    if not t then return nil end
+    local lines = {}
+    for _, l in ipairs(t) do lines[#lines + 1] = { leftText = l } end
+    return { lines = lines }
+end
 function C_TooltipInfo.GetItemByID(itemID)
     local name = WoW.items[itemID]
     if not name then return nil end

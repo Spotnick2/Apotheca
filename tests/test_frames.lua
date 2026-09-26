@@ -95,7 +95,9 @@ WoW.spellLoadAfter[1300002] = { name = "Well Fed", n = math.huge } -- never load
 WoW.spellNames[1450000] = "Some Spell"    -- near the 1.5M floor: the sweep goes on
 WoW.spellNames[1640000] = "Well Fed"      -- so this one, past 1.5M, is found
 WoW.spellDescriptions[19705]   = "Stamina increased by 12."
-WoW.spellDescriptions[1248422] = "Your Strength is increased by 1. Experience gained from kills increased by 5%."
+-- Measured on 70009: the XP aura's DESCRIPTION does not mention experience.
+WoW.spellDescriptions[1248422] = "A nutritious meal has made you Well Fed, increasing your Strength."
+WoW.spellTooltips[1248422] = { "Well Fed", "Your Strength is increased by 1. Experience gained from kills increased by 5%." }
 WoW.spellDescriptions[1300001] = "Your Intellect is increased by 6. Experience gained from kills increased by 5%."
 WoW.spellDescriptions[1640000] = "Your Spirit is increased by 4. Experience gained from kills increased by 5%."
 local function runScan3()
@@ -117,6 +119,9 @@ H.eq(wf and wf.spells[1640000], WoW.spellDescriptions[1640000], "the sweep follo
 H.eq(wf and wf.scannedTo, 1840000, "and stops 200k past the highest spell")
 H.eq(wf and wf.spells[1248380], nil, "other spells are not kept")
 H.eq(wf and wf.unnamedNeverLoaded, 1, "a name that never loads is counted")
+H.eq(wf and wf.neverLoaded[1], 1300002, "and its ID is recorded")
+H.eq(wf and wf.tooltips[1248422], WoW.spellTooltips[1248422][1] .. " | " .. WoW.spellTooltips[1248422][2],
+    "the spell tooltip is kept, where the XP line may be")
 H.eq(wf and wf.noDescription, 1, "a missing description is counted")
 H.eq(wf and wf.complete, false, "so the result is marked incomplete")
 H.eq(H.messagesMatching("INCOMPLETE"), 1, "and the summary says so")

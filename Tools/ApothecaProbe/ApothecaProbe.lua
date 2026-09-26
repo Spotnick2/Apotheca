@@ -303,7 +303,7 @@ local SPELL_SCAN_MIN        = 1500000
 local SPELL_SCAN_TAIL       = 200000
 local SPELL_LOAD_ALL_LIMIT  = 60000
 local SPELL_LOAD_FROM, SPELL_LOAD_TO = 1200000, 1400000
-local SPELL_LOAD_TRIES      = 10      -- 0.5 s apart
+local SPELL_LOAD_TRIES      = 30      -- 0.5 s apart: 13 names outlasted 10 on 70009
 local SPELL_FRAME_MS        = 8
 local WELL_FED = "Well Fed"
 
@@ -312,7 +312,7 @@ function Apotheca.RunWellFedScan()
     Apotheca._scanRunning = true
     local result = { build = select(2, GetBuildInfo()), highest = 0, scannedTo = 0, exist = 0,
                      unnamedSkipped = 0, unnamedNeverLoaded = 0, noDescription = 0,
-                     complete = false, spells = {} }
+                     complete = false, spells = {}, tooltips = {}, neverLoaded = {} }
     local unnamed, candidates = {}, {}
     local phase, nextID, head, tries, retryAt = 1, 1, 1, {}, {}
 
@@ -380,6 +380,7 @@ function Apotheca.RunWellFedScan()
                 if named(id) then return true end
                 if tries[id] >= SPELL_LOAD_TRIES then
                     result.unnamedNeverLoaded = result.unnamedNeverLoaded + 1
+                    result.neverLoaded[#result.neverLoaded + 1] = id
                     return true
                 end
                 C_Spell.RequestLoadSpellData(id)
@@ -391,9 +392,21 @@ function Apotheca.RunWellFedScan()
                 print(PREFIX .. #candidates .. " spells named " .. WELL_FED .. "; loading their descriptions...")
             end
         else
-            -- Descriptions of the Well Fed spells.
+            -- Descriptions of the Well Fed spells. On 70009 the description
+            -- of the measured XP aura (1248422) does not mention experience;
+            -- the buff's tooltip does. So the spell tooltip is kept too, in
+            -- case it carries the aura text.
             local done = drain(candidates, function(id)
                 local ok, desc = pcall(C_Spell.GetSpellDescription, id)
+                local okT, tip = pcall(function()
+                    local data = C_TooltipInfo.GetSpellByID(id)
+                    local lines = {}
+                    for _, line in ipairs(data and data.lines or {}) do
+                        if line.leftText and line.leftText ~= "" then lines[#lines + 1] = line.leftText end
+                    end
+                    return #lines > 0 and table.concat(lines, " | ") or nil
+                end)
+                if okT and tip then result.tooltips[id] = tip end
                 if ok and desc and desc ~= "" then
                     result.spells[id] = desc
                     return true
@@ -410,8 +423,8 @@ function Apotheca.RunWellFedScan()
                 self:SetScript("OnUpdate", nil)
                 Apotheca._scanRunning = false
                 local xp = 0
-                for _, d in pairs(result.spells) do
-                    if d:find("[Ee]xperience gained from kills") then xp = xp + 1 end
+                for id, d in pairs(result.spells) do
+                    if (d .. (result.tooltips[id] or "")):find("[Ee]xperience gained from kills") then xp = xp + 1 end
                 end
                 result.complete = result.unnamedSkipped == 0 and result.unnamedNeverLoaded == 0
                                   and result.noDescription == 0
@@ -420,6 +433,8 @@ function Apotheca.RunWellFedScan()
                       .. "): " .. #candidates .. " Well Fed spells, " .. xp .. " with the XP bonus; "
                       .. result.exist .. " spells to " .. result.scannedTo .. "; names skipped "
                       .. result.unnamedSkipped .. ", never loaded " .. result.unnamedNeverLoaded
+                      .. (#result.neverLoaded > 0 and (" (" .. table.concat(result.neverLoaded, ", ", 1,
+                          math.min(#result.neverLoaded, 20)) .. ")") or "")
                       .. "; without description " .. result.noDescription .. ". /reload to write the file.")
             end
         end
