@@ -340,11 +340,14 @@ function C_Item.GetItemSpell(itemID)
 end
 
 C_Spell = C_Spell or {}
--- Spells whose name only appears once their data is requested.
-WoW.spellNamesOnLoad = {}
+-- Spells whose name only appears after `n` load requests, like the client,
+-- which answers nil until the data arrives (n = math.huge: never loads).
+WoW.spellLoadAfter = {}
 function C_Spell.RequestLoadSpellData(spellID)
-    if WoW.spellNamesOnLoad[spellID] then
-        WoW.spellNames[spellID], WoW.spellNamesOnLoad[spellID] = WoW.spellNamesOnLoad[spellID], nil
+    local e = WoW.spellLoadAfter[spellID]
+    if e then
+        e.n = e.n - 1
+        if e.n <= 0 then WoW.spellNames[spellID], WoW.spellLoadAfter[spellID] = e.name, nil end
     end
 end
 -- Localized buff names by spell ID; tests install entries to simulate a
@@ -352,13 +355,18 @@ end
 WoW.spellNames = {}
 function C_Spell.GetSpellName(spellID) return WoW.spellNames[spellID] end
 function C_Spell.DoesSpellExist(spellID)
-    return WoW.spellNames[spellID] ~= nil or WoW.spellNamesOnLoad[spellID] ~= nil
+    return WoW.spellNames[spellID] ~= nil or WoW.spellLoadAfter[spellID] ~= nil
 end
 WoW.spellDescriptions = {}
 function C_Spell.GetSpellDescription(spellID)
     if spellID == 433 then return "Restores 61 health over 18 sec." end
     return WoW.spellDescriptions[spellID] or ""
 end
+
+-- A profiling clock that advances with every read, so a per-frame time
+-- budget really ends a frame's work in tests.
+WoW.profileMs = 0
+function debugprofilestop() WoW.profileMs = WoW.profileMs + 0.0005 return WoW.profileMs end
 
 -- Levels (XP food, #19).
 WoW.level, WoW.maxLevel, WoW.xpDisabled = 3, 60, false

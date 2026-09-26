@@ -4,7 +4,9 @@
 --   lua5.1 Tools/export_wellfed.lua <WTF>/Account/<id>/SavedVariables/ApothecaProbe.lua docs/forever-wellfed-<build>.tsv
 --
 -- Columns: spellID, xp (1 if the description has the kill-XP bonus), description.
--- The first line is a "#" comment with the scan's coverage counts.
+-- The first line is a "#" comment: COMPLETE or INCOMPLETE, and the scan's
+-- coverage counts. An incomplete scan is still written, so it can be read,
+-- but the exit status is 2 and the generator refuses it as a source.
 dofile(arg[1])
 local scan = ApothecaProbeDB and ApothecaProbeDB.wellFedScan
 assert(scan, "no wellFedScan in " .. arg[1] .. " - run /apo scan3, then /reload")
@@ -12,8 +14,9 @@ local ids = {}
 for id in pairs(scan.spells) do ids[#ids + 1] = id end
 table.sort(ids)
 local out = assert(io.open(arg[2], "w"))
-out:write(string.format("# build %s, spell IDs 1..%d: %d exist, names never loaded %d in range and %d outside it, %d without description\n",
-    tostring(scan.build), scan.max, scan.exist, scan.unnamedNeverLoaded, scan.unnamedOutside, scan.noDescription))
+out:write(string.format("# %s build %s: %d spells exist, highest %d, scanned to %d; names skipped %d, never loaded %d; %d without description\n",
+    scan.complete and "COMPLETE" or "INCOMPLETE", tostring(scan.build), scan.exist, scan.highest,
+    scan.scannedTo, scan.unnamedSkipped, scan.unnamedNeverLoaded, scan.noDescription))
 local xp = 0
 for _, id in ipairs(ids) do
     local d = scan.spells[id]
@@ -23,3 +26,7 @@ for _, id in ipairs(ids) do
 end
 out:close()
 print(#ids .. " Well Fed spells (" .. xp .. " with XP) from build " .. tostring(scan.build))
+if not scan.complete then
+    print("INCOMPLETE scan: some names or descriptions never loaded. Run /apo scan3 again.")
+    os.exit(2)
+end

@@ -287,122 +287,140 @@ end
 -- way to tell an XP Well Fed from an ordinary one is its aura spell ID, so
 -- this pass collects every spell named "Well Fed" with its description.
 --
--- It walks EVERY spell ID up to SPELL_SCAN_MAX, not only the range of the
--- XP food's item spells, which is where the aura IDs are expected but not
--- proven to be (Codex review of #19). It records its own coverage: how many
--- IDs exist, how many names never loaded, and which descriptions stayed
--- empty, so an incomplete result is visible instead of silently short.
--- Names are compared in English: run it on an enUS client.
-local SPELL_SCAN_MAX       = 1500000
-local SPELL_EXIST_PER_FRAME = 5000
-local SPELL_LOAD_PER_FRAME  = 200
-local SPELL_LOAD_TRIES      = 10      -- 0.5 s apart
--- Unnamed spells are retried with a load request only in this range, where
--- Forever's new food spells are; elsewhere they are counted, not loaded
--- (a sweep of every unnamed spell in the client would take very long).
+-- Nothing assumes where those IDs are (Codex reviews of #19 and #20):
+-- - the sweep goes on until SPELL_SCAN_TAIL IDs past the highest spell that
+--   exists, and at least to SPELL_SCAN_MIN;
+-- - every spell whose name was not loaded is requested and retried, unless
+--   there are more than SPELL_LOAD_ALL_LIMIT of them; then only those in
+--   SPELL_LOAD_FROM..SPELL_LOAD_TO (Forever's new food spells) are, and the
+--   rest are counted as skipped;
+-- - the result is `complete` only if no name was skipped or never loaded
+--   and every Well Fed spell has a description. export_wellfed.lua refuses
+--   to call an incomplete scan complete.
+-- Each frame stops after SPELL_FRAME_MS of work. Names are compared in
+-- English: run it on an enUS client.
+local SPELL_SCAN_MIN        = 1500000
+local SPELL_SCAN_TAIL       = 200000
+local SPELL_LOAD_ALL_LIMIT  = 60000
 local SPELL_LOAD_FROM, SPELL_LOAD_TO = 1200000, 1400000
+local SPELL_LOAD_TRIES      = 10      -- 0.5 s apart
+local SPELL_FRAME_MS        = 8
 local WELL_FED = "Well Fed"
 
 function Apotheca.RunWellFedScan()
     if Apotheca._scanRunning then print(PREFIX .. "scan already running") return end
     Apotheca._scanRunning = true
-    local build = select(2, GetBuildInfo())
-    local result = { build = build, max = SPELL_SCAN_MAX, exist = 0, unnamedOutside = 0,
-                     unnamedNeverLoaded = 0, noDescription = 0, spells = {} }
+    local result = { build = select(2, GetBuildInfo()), highest = 0, scannedTo = 0, exist = 0,
+                     unnamedSkipped = 0, unnamedNeverLoaded = 0, noDescription = 0,
+                     complete = false, spells = {} }
     local unnamed, candidates = {}, {}
     local phase, nextID, head, tries, retryAt = 1, 1, 1, {}, {}
 
-    local function isWellFed(id)
+    local function named(id)
         local name = C_Spell.GetSpellName(id)
         if name == WELL_FED then candidates[#candidates + 1] = id end
         return name ~= nil
     end
 
-    print(PREFIX .. "Well Fed scan: walking spell IDs 1.." .. SPELL_SCAN_MAX .. "...")
+    -- Work through a retry queue: `step(id)` returns true when the entry is
+    -- settled, false to retry it later. Returns true when the queue is done.
+    local function drain(queue, step, deadline)
+        while head <= #queue do
+            if debugprofilestop() > deadline then return false end
+            local id = queue[head]
+            if retryAt[id] and retryAt[id] > GetTime() then return false end
+            tries[id] = (tries[id] or 0) + 1
+            if step(id) then
+                head = head + 1
+            else
+                retryAt[id] = GetTime() + 0.5
+                table.remove(queue, head)
+                queue[#queue + 1] = id
+            end
+        end
+        return true
+    end
+
+    print(PREFIX .. "Well Fed scan: walking spell IDs...")
     local f = CreateFrame("Frame")
     f:SetScript("OnUpdate", function(self)
+        local deadline = debugprofilestop() + SPELL_FRAME_MS
         if phase == 1 then
             -- Which spells exist, and the names that are already loaded.
-            local last = math.min(nextID + SPELL_EXIST_PER_FRAME - 1, SPELL_SCAN_MAX)
-            for id = nextID, last do
+            while debugprofilestop() <= deadline do
+                local last = math.max(SPELL_SCAN_MIN, result.highest + SPELL_SCAN_TAIL)
+                if nextID > last then break end
+                local id = nextID
+                nextID = nextID + 1
                 if C_Spell.DoesSpellExist(id) then
-                    result.exist = result.exist + 1
-                    if not isWellFed(id) then
-                        if id >= SPELL_LOAD_FROM and id <= SPELL_LOAD_TO then
-                            unnamed[#unnamed + 1] = id
-                            C_Spell.RequestLoadSpellData(id)
-                        else
-                            result.unnamedOutside = result.unnamedOutside + 1
-                        end
-                    end
+                    result.exist, result.highest = result.exist + 1, id
+                    if not named(id) then unnamed[#unnamed + 1] = id end
                 end
             end
-            nextID = last + 1
-            if nextID > SPELL_SCAN_MAX then
+            if nextID > math.max(SPELL_SCAN_MIN, result.highest + SPELL_SCAN_TAIL) then
+                result.scannedTo = nextID - 1
+                if #unnamed > SPELL_LOAD_ALL_LIMIT then
+                    local keep = {}
+                    for _, id in ipairs(unnamed) do
+                        if id >= SPELL_LOAD_FROM and id <= SPELL_LOAD_TO then keep[#keep + 1] = id
+                        else result.unnamedSkipped = result.unnamedSkipped + 1 end
+                    end
+                    unnamed = keep
+                end
+                for _, id in ipairs(unnamed) do C_Spell.RequestLoadSpellData(id) end
                 phase, head = 2, 1
-                print(PREFIX .. result.exist .. " spells exist; loading " .. #unnamed
-                      .. " unnamed ones in " .. SPELL_LOAD_FROM .. ".." .. SPELL_LOAD_TO .. "...")
+                print(PREFIX .. result.exist .. " spells exist (highest " .. result.highest .. "); loading "
+                      .. #unnamed .. " unnamed ones" .. (result.unnamedSkipped > 0
+                      and (", skipping " .. result.unnamedSkipped .. " outside " .. SPELL_LOAD_FROM
+                           .. ".." .. SPELL_LOAD_TO) or "") .. "...")
             end
         elseif phase == 2 then
-            -- Names that were not loaded: request, retry, then give up and count.
-            local done = 0
-            while done < SPELL_LOAD_PER_FRAME and head <= #unnamed do
-                local id = unnamed[head]
-                if retryAt[id] and retryAt[id] > GetTime() then break end
-                tries[id] = (tries[id] or 0) + 1
-                if isWellFed(id) then
-                    head = head + 1
-                elseif tries[id] >= SPELL_LOAD_TRIES then
+            -- Names that were not loaded: retry, then give up and count.
+            local done = drain(unnamed, function(id)
+                if named(id) then return true end
+                if tries[id] >= SPELL_LOAD_TRIES then
                     result.unnamedNeverLoaded = result.unnamedNeverLoaded + 1
-                    head = head + 1
-                else
-                    C_Spell.RequestLoadSpellData(id)
-                    retryAt[id] = GetTime() + 0.5
-                    table.remove(unnamed, head)
-                    unnamed[#unnamed + 1] = id
+                    return true
                 end
-                done = done + 1
-            end
-            if head > #unnamed then
+                C_Spell.RequestLoadSpellData(id)
+                return false
+            end, deadline)
+            if done then
                 phase, head, tries, retryAt = 3, 1, {}, {}
                 for _, id in ipairs(candidates) do C_Spell.RequestLoadSpellData(id) end
                 print(PREFIX .. #candidates .. " spells named " .. WELL_FED .. "; loading their descriptions...")
             end
         else
             -- Descriptions of the Well Fed spells.
-            local done = 0
-            while done < TIP_PER_FRAME and head <= #candidates do
-                local id = candidates[head]
-                if retryAt[id] and retryAt[id] > GetTime() then break end
-                tries[id] = (tries[id] or 0) + 1
+            local done = drain(candidates, function(id)
                 local ok, desc = pcall(C_Spell.GetSpellDescription, id)
                 if ok and desc and desc ~= "" then
                     result.spells[id] = desc
-                    head = head + 1
-                elseif tries[id] >= DESC_TRIES then
+                    return true
+                end
+                if tries[id] >= DESC_TRIES then
                     result.spells[id] = ""
                     result.noDescription = result.noDescription + 1
-                    head = head + 1
-                else
-                    C_Spell.RequestLoadSpellData(id)
-                    retryAt[id] = GetTime() + 0.5
-                    table.remove(candidates, head)
-                    candidates[#candidates + 1] = id
+                    return true
                 end
-                done = done + 1
-            end
-            if head > #candidates then
+                C_Spell.RequestLoadSpellData(id)
+                return false
+            end, deadline)
+            if done then
                 self:SetScript("OnUpdate", nil)
                 Apotheca._scanRunning = false
                 local xp = 0
                 for _, d in pairs(result.spells) do
                     if d:find("[Ee]xperience gained from kills") then xp = xp + 1 end
                 end
+                result.complete = result.unnamedSkipped == 0 and result.unnamedNeverLoaded == 0
+                                  and result.noDescription == 0
                 ProbeDB().wellFedScan = result
-                print(PREFIX .. "Well Fed scan done: " .. #candidates .. " Well Fed spells, " .. xp
-                      .. " with the XP bonus, " .. result.noDescription .. " without a description. Names never loaded: "
-                      .. result.unnamedNeverLoaded .. " in range, " .. result.unnamedOutside
-                      .. " outside it (not loaded). /reload to write the file.")
+                print(PREFIX .. "Well Fed scan done (" .. (result.complete and "complete" or "INCOMPLETE")
+                      .. "): " .. #candidates .. " Well Fed spells, " .. xp .. " with the XP bonus; "
+                      .. result.exist .. " spells to " .. result.scannedTo .. "; names skipped "
+                      .. result.unnamedSkipped .. ", never loaded " .. result.unnamedNeverLoaded
+                      .. "; without description " .. result.noDescription .. ". /reload to write the file.")
             end
         end
     end)
