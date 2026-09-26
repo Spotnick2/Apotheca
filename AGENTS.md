@@ -16,7 +16,7 @@ ApothecaCompat.lua     — Apotheca.API: every moved or removed API; loads first
 ApothecaItems.lua      — GENERATED item data (Apotheca.DATA); see Item Data
 Apotheca.lua           — Main addon: all logic, item data, frame creation, events
 Apotheca_Options.lua   — In-game options panel: tabbed UI, DB read/write helpers
-Tools/ApothecaProbe/   — DEV-ONLY addon (never packaged): /apo probe, /apo scan, /apo scan2; `deploy.ps1 -Probe`
+Tools/ApothecaProbe/   — DEV-ONLY addon (never packaged): /apo probe, /apo scan, /apo scan2, /apo scan3; `deploy.ps1 -Probe`
 .pkgmeta               — BigWigs packager config (release packaging only, not used locally)
 tests/                 — Lua 5.1 unit tests against a strict-globals stub; tests/run.ps1
 Tools/deploy.ps1       — deploy to the local Forever AddOns folder
@@ -69,7 +69,7 @@ The canonical set of button keys (also `Apotheca.DEFAULT_BUTTON_ORDER`):
 ### Item Data
 **The item tables are generated, never hand-written.** Forever changed restore values, buff food and elixirs relative to Vanilla, and adds items no Vanilla list has, so the only trustworthy source is the client itself:
 
-1. `pwsh Tools/deploy.ps1 -Probe` (the scan lives in the dev-only probe addon). In game, out of combat, in one session (the scan is written to disk only at logout). The probe keeps its results in its own SavedVariable, `ApothecaProbeDB` (`SavedVariables/ApothecaProbe.lua`), never in Apotheca's settings; `scan2` refuses a saved scan from another build: `/apo scan`, then `/apo scan2`, then `/reload` to write the file. `scan` walks every item ID with `C_Item.GetItemInfoInstant` (the client's item DB, no cache needed) and reads each consumable's tooltip and item spell; `scan2` loads the spells whose "Use:" text was missing.
+1. `pwsh Tools/deploy.ps1 -Probe` (the scan lives in the dev-only probe addon). In game, out of combat, in one session (the scan is written to disk only at logout). The probe keeps its results in its own SavedVariable, `ApothecaProbeDB` (`SavedVariables/ApothecaProbe.lua`), never in Apotheca's settings; `scan2` refuses a saved scan from another build: `/apo scan`, then `/apo scan2`, then `/reload` to write the file. `scan` walks every item ID with `C_Item.GetItemInfoInstant` (the client's item DB, no cache needed) and reads each consumable's tooltip and item spell; `scan2` loads the spells whose "Use:" text was missing. `/apo scan3` (#19) collects every spell named "Well Fed" with its description, because an XP food's aura is "Well Fed" with its own spell ID, not the item's; export it with `lua5.1 Tools/export_wellfed.lua <WTF>/.../ApothecaProbe.lua docs/forever-wellfed-<build>.tsv`, whose first line says COMPLETE or INCOMPLETE with the coverage counts (an incomplete scan exits 2: run scan3 again).
 2. `lua5.1 Tools/export_scan.lua <WTF>/Account/<id>/SavedVariables/ApothecaProbe.lua docs/forever-consumables-<build>.tsv`
 3. `python Tools/build_item_tables.py docs/forever-consumables-<build>.tsv`, which writes `ApothecaItems.lua` (`Apotheca.DATA`). Read its "skipped" report and the diff.
 4. `python Tools/consumables_reference.py docs/forever-consumables-<build>.tsv C:/Projects/References/forever-consumables-<version>.<build>.md` refreshes the shared human-readable catalog, and copy the TSV next to it. Diffing two builds' catalogs shows what Blizzard changed.

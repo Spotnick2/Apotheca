@@ -153,6 +153,33 @@ Talent-based detection would need a hand-made role map of every class's new tree
 
 Measured on a level 3 Undead at full health and mana: the Food and Drink buttons were grey, while the same items on the default action bar stayed in full colour. The client evaluates the colour curve itself (`UnitHealthPercent` / `UnitPowerPercent`), so the tint works although current health and mana are secret.
 
+## XP food and the Well Fed buffs (#19), 2026-09-25, build 70009
+
+**XP food's buff.** Eating Beer Basted Boar Ribs (item 2888, item spell 1248380 "Nutritious Food") gives **one** aura:
+- Its name is **"Well Fed"**, the same as ordinary food. Its spell ID is **1248422**.
+- The buff tooltip reads: *"Your Strength is increased by 1. Experience gained from kills increased by 5%."*
+- There is no separate XP aura, and the aura ID is not the item's spell ID.
+
+**`/apo scan3`**, run twice (`docs/forever-wellfed-70009.tsv`):
+- 31,716 spells exist; the highest is 1,322,007, and the scan went to 1,522,007.
+- Every unnamed name was requested, and **13 never loaded**: 27997, 32837, 32980, 32981, 34320, 34584, 37214, 37655, 38334, 39440, 243798, 243809, 245186. All are far below Forever's new food spells, which start at 1.22M.
+
+**30 spells are named "Well Fed"** (the export marks the scan INCOMPLETE for the 13 names and 10 empty descriptions):
+- **Vanilla:** 19705–19711, 24799, 24870, 25694, 25941. The descriptions are empty except 19708.
+- **Forever, item-style text:** 1225778, 1225779, 1225780, 1225782, e.g. "gain 25 Strength and 10 Stamina". These match the non-XP Forever foods: Prowler Steak, Filet o' Flank, Sunrise Omelette and the feasts.
+- **Forever, "A nutritious meal / A tasty drink has made you Well Fed, increasing your <stat>.":** 17 spells, one per stat. 1248406, 1248420, 1248421, **1248422**, 1248688, 1249519, 1249520, 1249521, 1249523, 1249907, 1249926, 1249927, 1294007, 1302064, 1319310.
+- **1283082:** no text at all.
+
+**Neither `C_Spell.GetSpellDescription` nor `C_TooltipInfo.GetSpellByID` shows the XP line.** Only an active buff's tooltip does. So XP can't be read from the spell data. The evidence that the "nutritious" family **is** the XP set:
+- The XP foods give 14 kinds of Well Fed, and each kind has a "nutritious" aura. Strength and movement speed have two.
+- None of the 18 non-XP Well Fed foods (Vanilla sweets, Dirge's Chops, the four item-style Forever foods) gives a stat in that wording.
+- One in-game measurement: 1248422.
+
+**Level APIs:**
+- `UnitLevel` = 11 and `GetMaxPlayerLevel()` = 60 at level 11.
+- `GetMaxLevelForPlayerExpansion()` = 60.
+- `IsXPUserDisabled()` = false.
+
 ## Still to measure
 
 - **`C_Item.UseItemByName` on a real item** from the right-click alternate "Use X instead?" popup.
