@@ -84,6 +84,25 @@ SlashCmdList["APOTHECA"]("scan2")
 H.check(ApothecaProbeDB and ApothecaProbeDB.itemScan == old, "an old scan in ApothecaDB moves to ApothecaProbeDB")
 H.eq(ApothecaDB.itemScan, nil, "and leaves Apotheca's settings")
 
+-- /apo scan3 collects every "Well Fed" spell with its description (#19).
+WoW.spellNames[19705]   = "Well Fed"      -- ordinary, Vanilla range
+WoW.spellNames[1248422] = "Well Fed"      -- XP (measured on 70009)
+WoW.spellNamesOnLoad[1300001] = "Well Fed"  -- in range, name only after a load request
+WoW.spellNames[1248380] = "Nutritious Food"
+WoW.spellDescriptions[19705]   = "Stamina increased by 12."
+WoW.spellDescriptions[1248422] = "Your Strength is increased by 1. Experience gained from kills increased by 5%."
+WoW.spellDescriptions[1300001] = "Your Intellect is increased by 6. Experience gained from kills increased by 5%."
+WoW.messages = {}
+SlashCmdList["APOTHECA"]("scan3")
+for _ = 1, 400 do WoW.tick(1) end
+local wf = ApothecaProbeDB.wellFedScan
+H.check(wf ~= nil, "scan3 stores its result in the probe's SavedVariable")
+H.eq(wf and wf.spells[1248422], WoW.spellDescriptions[1248422], "the XP Well Fed is found with its description")
+H.eq(wf and wf.spells[19705], "Stamina increased by 12.", "ordinary Well Fed is recorded too")
+H.check(wf and wf.spells[1300001] ~= nil, "a name that loads only on request is found")
+H.eq(wf and wf.spells[1248380], nil, "other spells are not kept")
+H.eq(H.messagesMatching("2 with the XP bonus"), 1, "the summary counts the XP ones")
+
 -- Every button's scripts.
 for key, btn in pairs(Apotheca.buttons) do
     for _, script in ipairs({ "OnEnter", "OnLeave", "PreClick", "PostClick" }) do

@@ -340,15 +340,32 @@ function C_Item.GetItemSpell(itemID)
 end
 
 C_Spell = C_Spell or {}
-function C_Spell.RequestLoadSpellData() end
+-- Spells whose name only appears once their data is requested.
+WoW.spellNamesOnLoad = {}
+function C_Spell.RequestLoadSpellData(spellID)
+    if WoW.spellNamesOnLoad[spellID] then
+        WoW.spellNames[spellID], WoW.spellNamesOnLoad[spellID] = WoW.spellNamesOnLoad[spellID], nil
+    end
+end
 -- Localized buff names by spell ID; tests install entries to simulate a
 -- buff whose aura spell ID differs from the item's spell.
 WoW.spellNames = {}
 function C_Spell.GetSpellName(spellID) return WoW.spellNames[spellID] end
+function C_Spell.DoesSpellExist(spellID)
+    return WoW.spellNames[spellID] ~= nil or WoW.spellNamesOnLoad[spellID] ~= nil
+end
+WoW.spellDescriptions = {}
 function C_Spell.GetSpellDescription(spellID)
     if spellID == 433 then return "Restores 61 health over 18 sec." end
-    return ""
+    return WoW.spellDescriptions[spellID] or ""
 end
+
+-- Levels (XP food, #19).
+WoW.level, WoW.maxLevel, WoW.xpDisabled = 3, 60, false
+function UnitLevel() return WoW.level end
+function GetMaxPlayerLevel() return WoW.maxLevel end
+function GetMaxLevelForPlayerExpansion() return WoW.maxLevel end
+function IsXPUserDisabled() return WoW.xpDisabled end
 
 C_TooltipInfo = {}
 function C_TooltipInfo.GetItemByID(itemID)

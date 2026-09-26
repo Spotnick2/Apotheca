@@ -10,7 +10,8 @@
 --
 -- A separate, development-only addon (Tools/ApothecaProbe, loaded after
 -- Apotheca): it is never packaged, and `pwsh Tools/deploy.ps1 -Probe`
--- installs it. /apo probe, /apo scan and /apo scan2 do nothing without it.
+-- installs it. /apo probe, /apo scan, /apo scan2 and /apo scan3 do nothing
+-- without it.
 -- ============================================================
 
 Apotheca = Apotheca or {}
@@ -279,6 +280,134 @@ function Apotheca.RunSpellScan()
     end)
 end
 
+-- /apo scan3: the Well Fed buffs (#19). Forever's XP food ("experience
+-- gained from kills is increased by 5%") gives ONE aura named "Well Fed",
+-- like ordinary food, and its spell ID is not the item's spell (measured:
+-- item spell 1248380 gives aura 1248422). The only language-independent
+-- way to tell an XP Well Fed from an ordinary one is its aura spell ID, so
+-- this pass collects every spell named "Well Fed" with its description.
+--
+-- It walks EVERY spell ID up to SPELL_SCAN_MAX, not only the range of the
+-- XP food's item spells, which is where the aura IDs are expected but not
+-- proven to be (Codex review of #19). It records its own coverage: how many
+-- IDs exist, how many names never loaded, and which descriptions stayed
+-- empty, so an incomplete result is visible instead of silently short.
+-- Names are compared in English: run it on an enUS client.
+local SPELL_SCAN_MAX       = 1500000
+local SPELL_EXIST_PER_FRAME = 5000
+local SPELL_LOAD_PER_FRAME  = 200
+local SPELL_LOAD_TRIES      = 10      -- 0.5 s apart
+-- Unnamed spells are retried with a load request only in this range, where
+-- Forever's new food spells are; elsewhere they are counted, not loaded
+-- (a sweep of every unnamed spell in the client would take very long).
+local SPELL_LOAD_FROM, SPELL_LOAD_TO = 1200000, 1400000
+local WELL_FED = "Well Fed"
+
+function Apotheca.RunWellFedScan()
+    if Apotheca._scanRunning then print(PREFIX .. "scan already running") return end
+    Apotheca._scanRunning = true
+    local build = select(2, GetBuildInfo())
+    local result = { build = build, max = SPELL_SCAN_MAX, exist = 0, unnamedOutside = 0,
+                     unnamedNeverLoaded = 0, noDescription = 0, spells = {} }
+    local unnamed, candidates = {}, {}
+    local phase, nextID, head, tries, retryAt = 1, 1, 1, {}, {}
+
+    local function isWellFed(id)
+        local name = C_Spell.GetSpellName(id)
+        if name == WELL_FED then candidates[#candidates + 1] = id end
+        return name ~= nil
+    end
+
+    print(PREFIX .. "Well Fed scan: walking spell IDs 1.." .. SPELL_SCAN_MAX .. "...")
+    local f = CreateFrame("Frame")
+    f:SetScript("OnUpdate", function(self)
+        if phase == 1 then
+            -- Which spells exist, and the names that are already loaded.
+            local last = math.min(nextID + SPELL_EXIST_PER_FRAME - 1, SPELL_SCAN_MAX)
+            for id = nextID, last do
+                if C_Spell.DoesSpellExist(id) then
+                    result.exist = result.exist + 1
+                    if not isWellFed(id) then
+                        if id >= SPELL_LOAD_FROM and id <= SPELL_LOAD_TO then
+                            unnamed[#unnamed + 1] = id
+                            C_Spell.RequestLoadSpellData(id)
+                        else
+                            result.unnamedOutside = result.unnamedOutside + 1
+                        end
+                    end
+                end
+            end
+            nextID = last + 1
+            if nextID > SPELL_SCAN_MAX then
+                phase, head = 2, 1
+                print(PREFIX .. result.exist .. " spells exist; loading " .. #unnamed
+                      .. " unnamed ones in " .. SPELL_LOAD_FROM .. ".." .. SPELL_LOAD_TO .. "...")
+            end
+        elseif phase == 2 then
+            -- Names that were not loaded: request, retry, then give up and count.
+            local done = 0
+            while done < SPELL_LOAD_PER_FRAME and head <= #unnamed do
+                local id = unnamed[head]
+                if retryAt[id] and retryAt[id] > GetTime() then break end
+                tries[id] = (tries[id] or 0) + 1
+                if isWellFed(id) then
+                    head = head + 1
+                elseif tries[id] >= SPELL_LOAD_TRIES then
+                    result.unnamedNeverLoaded = result.unnamedNeverLoaded + 1
+                    head = head + 1
+                else
+                    C_Spell.RequestLoadSpellData(id)
+                    retryAt[id] = GetTime() + 0.5
+                    table.remove(unnamed, head)
+                    unnamed[#unnamed + 1] = id
+                end
+                done = done + 1
+            end
+            if head > #unnamed then
+                phase, head, tries, retryAt = 3, 1, {}, {}
+                for _, id in ipairs(candidates) do C_Spell.RequestLoadSpellData(id) end
+                print(PREFIX .. #candidates .. " spells named " .. WELL_FED .. "; loading their descriptions...")
+            end
+        else
+            -- Descriptions of the Well Fed spells.
+            local done = 0
+            while done < TIP_PER_FRAME and head <= #candidates do
+                local id = candidates[head]
+                if retryAt[id] and retryAt[id] > GetTime() then break end
+                tries[id] = (tries[id] or 0) + 1
+                local ok, desc = pcall(C_Spell.GetSpellDescription, id)
+                if ok and desc and desc ~= "" then
+                    result.spells[id] = desc
+                    head = head + 1
+                elseif tries[id] >= DESC_TRIES then
+                    result.spells[id] = ""
+                    result.noDescription = result.noDescription + 1
+                    head = head + 1
+                else
+                    C_Spell.RequestLoadSpellData(id)
+                    retryAt[id] = GetTime() + 0.5
+                    table.remove(candidates, head)
+                    candidates[#candidates + 1] = id
+                end
+                done = done + 1
+            end
+            if head > #candidates then
+                self:SetScript("OnUpdate", nil)
+                Apotheca._scanRunning = false
+                local xp = 0
+                for _, d in pairs(result.spells) do
+                    if d:find("[Ee]xperience gained from kills") then xp = xp + 1 end
+                end
+                ProbeDB().wellFedScan = result
+                print(PREFIX .. "Well Fed scan done: " .. #candidates .. " Well Fed spells, " .. xp
+                      .. " with the XP bonus, " .. result.noDescription .. " without a description. Names never loaded: "
+                      .. result.unnamedNeverLoaded .. " in range, " .. result.unnamedOutside
+                      .. " outside it (not loaded). /reload to write the file.")
+            end
+        end
+    end)
+end
+
 function Apotheca.RunProbe()
     log = {}
     local API = Apotheca.API
@@ -361,6 +490,10 @@ function Apotheca.RunProbe()
     try("UnitPowerType / UnitPowerMax(Mana)", function()
         return UnitPowerType("player"), UnitPowerMax("player", Enum.PowerType.Mana)
     end)
+    -- XP food (#19): the button hides at the level cap or with XP turned off.
+    try("UnitLevel / GetMaxPlayerLevel", function() return UnitLevel("player"), GetMaxPlayerLevel() end)
+    try("GetMaxLevelForPlayerExpansion", function() return GetMaxLevelForPlayerExpansion() end)
+    try("IsXPUserDisabled", function() return IsXPUserDisabled() end)
 
     -- Weapons (#9 stones and poisons): main hand 16, off hand 17, with the
     -- item class and subclass that tell a blade from a blunt weapon.
