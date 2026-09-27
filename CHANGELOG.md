@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [2.2.0] - 2026-09-27
 
 ### Added
 - **XP Food button (optional, off by default).** Forever's "Nutritious" food and drink give 5% more experience from kills on top of Well Fed. Turn the button on in the options (Consumables, Buff Food) and, while you're below max level, it offers one you can eat at your level, preferring a stat your role uses, then the highest level. When you leave combat without the XP buff, it glows for a few seconds to remind you to eat, and it glows on a ready check too. Well Fed doesn't stack, so XP food replaces another Well Fed buff, and the reminder shows even over other buff food. While the XP Food button offers a food, XP food is its own: the Buff Food, Food and Drink buttons offer only your other food and drink, so the same item never shows twice, and only one of XP Food and Buff Food glows. At max level, or when you carry no XP food you can eat yet, Buff Food offers everything again.
