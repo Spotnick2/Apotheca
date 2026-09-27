@@ -9,6 +9,8 @@ Input:  docs/forever-consumables-<build>.tsv, exported from an in-game
         `/apo scan` + `/apo scan2` run (ApothecaProbe.lua) with
         Tools/export_scan.lua. Columns: id, subClassID, subType, name,
         spellID, spellName, tooltip ("line | line | ...").
+        docs/forever-wellfed-<build>.tsv, next to it: every spell named
+        "Well Fed" (`/apo scan3`, Tools/export_wellfed.lua), for XP food.
 Output: ApothecaItems.lua (Apotheca.DATA), loaded before Apotheca.lua.
 
 Usage:
@@ -19,6 +21,7 @@ and review the diff. Anything the parser does not recognise is simply
 left out, so read the "skipped" report it prints.
 """
 
+import os
 import re
 import sys
 from collections import defaultdict
@@ -441,6 +444,76 @@ def build(rows):
     return out, skipped
 
 
+# ------------------------------------------------------------------
+# XP food (#19)
+# ------------------------------------------------------------------
+# Forever's "Nutritious" food and drink add "experience gained from kills is
+# increased by 5%" to their Well Fed bonus. The buff is ONE aura named
+# "Well Fed" whose spell ID is not the item's; the XP line is in no spell
+# text the API returns, only in the live buff's tooltip (docs/FOREVER-PROBE.md,
+# 70009). The XP auras are the Well Fed spells in the "nutritious" wording,
+# one per stat. The generator checks that every stat an XP food gives has
+# one, and that the aura measured in game is among them.
+XP_LINE = 'kills is increased by 5%'
+XP_AURA_TEXT = re.compile(r'^A (?:nutritious meal|tasty drink) has made you Well Fed, increasing your (.+?)\.*$')
+MEASURED_XP_AURAS = [1248422]   # Beer Basted Boar Ribs, eaten on 70009
+
+
+def xp_food(rows):
+    """Every XP food and drink: (id, name, level, stat or None, value, kind
+    of Well Fed as the aura names it). Highest level first."""
+    out = []
+    for r in rows:
+        u = r['use']
+        if XP_LINE not in u or kind(r) != 'food':
+            continue
+        m = re.search(r'well fed and gain (.*?) for \d+ min', u, re.I)
+        gain = m.group(1) if m else ''
+        stats = parse_stats(u)
+        stat = max(stats, key=lambda k: (stats[k], k)) if stats else None
+        # The aura names the kind: "Strength", "movement speed" (any zone),
+        # "chance to deal a critical strike", "Fishing Skill".
+        what = re.sub(r'^[\d%]+\s*', '', gain)
+        what = re.sub(r' while in .*$', '', what)
+        what = {'critical strike chance': 'chance to deal a critical strike'}.get(what.lower(), what)
+        out.append((-max(1, r['lvl']), -(stats[stat] if stat else 0), r['id'], r['name'],
+                    max(1, r['lvl']), stat, stats[stat] if stat else 0, what.lower()))
+    return sorted(out)
+
+
+def load_wellfed(path):
+    """{spellID: description} from export_wellfed.lua's TSV, refusing an
+    INCOMPLETE scan."""
+    spells = {}
+    with open(path, encoding='utf-8') as f:
+        for i, line in enumerate(f):
+            line = line.rstrip('\n')
+            if i == 0 and not line.startswith('# COMPLETE'):
+                sys.exit('%s is not a COMPLETE /apo scan3 export: %s' % (path, line))
+            if line.startswith('#') or not line:
+                continue
+            sid, _, desc = line.partition('\t')
+            spells[int(sid)] = desc
+    return spells
+
+
+def xp_auras(spells, foods):
+    """The XP Well Fed aura IDs, checked against the XP foods."""
+    xp, kinds = [], set()
+    for sid, desc in sorted(spells.items()):
+        m = XP_AURA_TEXT.match(desc)
+        if m:
+            xp.append(sid)
+            kinds.add(m.group(1).lower())
+    missing = sorted({f[7] for f in foods} - kinds)
+    if missing:
+        sys.exit('XP food gives Well Fed kinds with no XP aura in the Well Fed scan: %s' % missing)
+    absent = [a for a in MEASURED_XP_AURAS if a not in xp]
+    if absent:
+        sys.exit('the XP aura measured in game is not in the XP set: %s' % absent)
+    return xp
+
+
 def offered_item_ids(out):
     """Every ITEM id the generated tables can put on a button: only the item
     positions of each collection, never spell IDs, values or map IDs."""
@@ -455,6 +528,7 @@ def offered_item_ids(out):
     ids.update(t[0] for t in out['ELIXIR_CATALOG'])
     ids.update(t[0] for t in out['OILS'])
     ids.update(t[0] for t in out['PERCENT_POTIONS'])
+    ids.update(t[2] for t in out.get('XP_FOOD', []))
     return ids
 
 
@@ -549,6 +623,24 @@ def emit(out, build_id, src):
     w('}')
     w('')
 
+    w('-- XP food (#19): "experience gained from kills is increased by 5%" on top')
+    w('-- of Well Fed. Highest required level first. stat = the Buff Food stat of')
+    w('-- its Well Fed bonus (nil: movement speed, fishing, herbalism).')
+    w('D.XP_FOOD = {')
+    for t in out['XP_FOOD']:
+        w('    { id = %-6d, level = %-2d, stat = %-13s value = %-3d },  -- %s' % (
+            t[2], t[4], ('"%s",' % t[5]) if t[5] else 'nil,', t[6], t[3]))
+    w('}')
+    w('')
+    w('-- Well Fed auras (from /apo scan3). XP food gives ONE aura named "Well')
+    w('-- Fed", like ordinary food, with its own spell ID: these are the XP ones')
+    w('-- ("A nutritious meal / A tasty drink has made you Well Fed").')
+    w('D.XP_WELL_FED_SPELLS = { %s }' % ', '.join(str(x) for x in out['XP_WELL_FED_SPELLS']))
+    w('-- Every Well Fed aura the scan found, XP or not. A Well Fed aura in')
+    w('-- neither list is unknown (a spell revealed by a later build).')
+    w('D.WELL_FED_SPELLS = { %s }' % ', '.join(str(x) for x in out['WELL_FED_SPELLS']))
+    w('')
+
     id_list('HEALTHSTONE_ITEMS', out['HEALTHSTONE_ITEMS'],
             lambda t: '    { id = %-6d, healValue = %-5d },  -- %s' % (t[1], t[3], t[2]),
             'Every healthstone, strongest first. All ranks share one cooldown.')
@@ -629,6 +721,15 @@ if __name__ == '__main__':
     build_id = re.search(r'(\d{5,})', src)
     rows = load(src)
     out, skipped = build(rows)
+    # The Well Fed scan of the same build, next to the consumables scan.
+    wellfed_src = src.replace('forever-consumables-', 'forever-wellfed-')
+    if wellfed_src == src or not os.path.exists(wellfed_src):
+        sys.exit('no Well Fed scan next to %s (expected %s): run /apo scan3 and Tools/export_wellfed.lua'
+                 % (src, wellfed_src))
+    wellfed = load_wellfed(wellfed_src)
+    out['XP_FOOD'] = xp_food(rows)
+    out['XP_WELL_FED_SPELLS'] = xp_auras(wellfed, out['XP_FOOD'])
+    out['WELL_FED_SPELLS'] = sorted(wellfed)
     lua = emit(out, build_id.group(1) if build_id else '?', src.replace('\\', '/'))
     open('ApothecaItems.lua', 'w', encoding='utf-8', newline='\r\n').write(lua)
     for k, v in out.items():

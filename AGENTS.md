@@ -64,7 +64,7 @@ ApothecaDB = {
 
 ### Button Keys
 The canonical set of button keys (also `Apotheca.DEFAULT_BUTTON_ORDER`):
-`"mana"`, `"health"`, `"healthstone"`, `"rune"`, `"recovery"`, `"food"`, `"drink"`, `"flask"`, `"battle"`, `"guardian"`, `"bufffood"`, `"spiritscroll"`, `"protectionscroll"`, `"weaponoil"`, `"bandage"`
+`"mana"`, `"health"`, `"healthstone"`, `"rune"`, `"recovery"`, `"food"`, `"drink"`, `"flask"`, `"battle"`, `"guardian"`, `"bufffood"`, `"xpfood"`, `"spiritscroll"`, `"protectionscroll"`, `"weaponoil"`, `"bandage"` (see `Apotheca.DEFAULT_BUTTON_ORDER` for the full list)
 
 ### Item Data
 **The item tables are generated, never hand-written.** Forever changed restore values, buff food and elixirs relative to Vanilla, and adds items no Vanilla list has, so the only trustworthy source is the client itself:
@@ -86,6 +86,7 @@ What the data looks like:
 - `HEALTHSTONE_ITEMS`: `{ id, healValue }`, strongest first. Base stones now restore what fully Improved stones did in Vanilla. `FindBestHealthstone`'s smart rank is dormant while health is secret.
 - `SCROLLS_BY_STAT`, `ELIXIR_CATALOG`: every scroll, elixir and flask tagged by stat with its buff `spell` ID. Active buffs are matched by spell ID, and also by the spell's localized name (`C_Spell.GetSpellName`), because "item spell ID == aura spell ID" is not measured for every item.
 - `OILS`: `kind = "mana"` (default) or `"wizard"` (opt-in).
+- `XP_FOOD` (#19): every food and drink with the 5% kill-XP bonus, `{ id, level, stat, value }`, highest required level first. `XP_WELL_FED_SPELLS`: the XP Well Fed aura IDs; `WELL_FED_SPELLS`: every Well Fed aura the scan found. XP food gives ONE aura named "Well Fed" (like any food) with its own ID, and no spell text the API returns mentions XP, so the XP set is the "A nutritious meal / A tasty drink has made you Well Fed" family, read from `docs/forever-wellfed-<build>.tsv` (docs/FOREVER-PROBE.md). At runtime `Apotheca.HasXPFoodBuff()` matches by ID only: an XP aura is true, a known ordinary Well Fed false, and a Well Fed in neither list nil (a spell a later build revealed), so an unknown aura never makes the button nag.
 - `ZONE_RESTRICTED_ITEMS`: battleground-only items, `"pvp"` (any battleground) or `{ map = instance map ID, name = enUS name }`. The map ID is compared, so it works on any language; Darkspear Islands has no measured ID yet and falls back to the enUS name. `Apotheca.IsItemUsableHere(id)` gates them in `BuildBagMap`, so every finder (food, drink, bandage, potion) skips an item usable only elsewhere; outdoors `GetInstanceInfo()` returns the continent, so the gate is `instanceType == "pvp"`.
 
 **Roles (#9).** `Apotheca.ResolveRole()` returns the role (`TANK` / `HEALER` / `DAMAGE`) and the profile key (`TANK` / `HEALER` / `CASTER` / `MELEE` / `AGILITY`). The order is:
@@ -194,7 +195,7 @@ On a new Forever build, the login note tells players the build differs from `Apo
 
 1. `/apidump` → `C:/Projects/References/forever-api-<version>.<build>.md` (see the porting guide).
 2. `pwsh Tools/deploy.ps1 -Probe`, then `/apo probe` in and out of combat. Update `docs/FOREVER-PROBE.md`.
-3. Re-scan the consumables and regenerate: see Item Data. Write the new `forever-consumables-<version>.<build>.md` to References and diff it against the previous build.
+3. Re-scan the consumables (`/apo scan`, `/apo scan2`) and the Well Fed spells (`/apo scan3`, exported next to the consumables TSV), and regenerate: see Item Data. The generator refuses an INCOMPLETE Well Fed scan, and fails if an XP food's stat has no XP Well Fed aura or the measured one (1248422) is missing. Write the new `forever-consumables-<version>.<build>.md` to References and diff it against the previous build.
 4. Bump `MEASURED_ON_BUILD`, and `WoW.build` in `tests/wow_stubs.lua`. Bumping without re-measuring silences the only reminder that the notes are stale.
 
 ## Key Conventions

@@ -90,6 +90,12 @@ local PROFILE_DEFAULTS = {
     bandage = {
         enabled = true,
     },
+    -- XP food (#19): optional, off by default. Offers a food with the 5%
+    -- kill-XP bonus while you can still gain XP, and glows for a few
+    -- seconds after combat when that buff is not up.
+    xpFood = {
+        enabled = false,
+    },
     -- "BLOCK" = silently disable button, "ASK" = confirmation popup,
     -- "DO_NOTHING" = no prevention
     preventWasteMode    = "BLOCK",
@@ -699,6 +705,11 @@ local BUFFFOOD_BUTTON_CONFIG = {
     key = "bufffood", label = "Buff Food", emptyIcon = "Interface\\Icons\\INV_Misc_Food_64",
 }
 
+local XPFOOD_BUTTON_CONFIG = {
+    key = "xpfood", label = "XP Food", emptyIcon = "Interface\\Icons\\INV_Misc_Food_65",
+    emptyTooltip = "No XP food in bags",
+}
+
 local ELIXIR_BUTTON_CONFIG = {
     { key = "flask",    label = "Flask",    emptyIcon = "Interface\\Icons\\INV_Potion_97"  },
     { key = "battle",   label = "Elixir",   emptyIcon = "Interface\\Icons\\INV_Potion_51"  },
@@ -1035,6 +1046,73 @@ local RECENTLY_BANDAGED_SPELLS = { 11196 }
 
 function Apotheca.HasFoodBuff()
     return AurasHave(ReadAuras("HELPFUL"), WELL_FED_SPELLS, "Well Fed")
+end
+
+-- ============================================================
+-- XP FOOD (#19)
+-- Forever's "Nutritious" food adds 5% kill XP to its Well Fed bonus. The
+-- buff is one aura named "Well Fed", like ordinary food, with its own
+-- spell ID, so it is recognised by ID only (never by name: the name is
+-- shared). DATA.XP_WELL_FED_SPELLS and DATA.WELL_FED_SPELLS come from the
+-- client's own spell data (/apo scan3, docs/FOREVER-PROBE.md).
+-- ============================================================
+local XP_WELL_FED, KNOWN_WELL_FED = {}, {}
+for _, id in ipairs(DATA.XP_WELL_FED_SPELLS or {}) do XP_WELL_FED[id] = true end
+for _, id in ipairs(DATA.WELL_FED_SPELLS or {}) do KNOWN_WELL_FED[id] = true end
+
+-- While the player can still gain XP: below the level cap, and XP not
+-- turned off (measured on 70009: GetMaxPlayerLevel 60, IsXPUserDisabled).
+function Apotheca.CanGainXP()
+    local ok, can = pcall(function()
+        return UnitLevel("player") < GetMaxPlayerLevel() and not IsXPUserDisabled()
+    end)
+    return ok and can or false
+end
+
+-- Is the XP food buff up? true / false, or nil when unknown:
+-- - auras unreadable (combat);
+-- - a Well Fed aura the scan did not know (a spell a later build revealed:
+--   Blizzard keeps some data encrypted until it is discovered). Unknown
+--   never glows, so a new XP food cannot make the button nag.
+function Apotheca.HasXPFoodBuff(auras)
+    auras = auras or ReadAuras("HELPFUL")
+    if not auras then return nil end
+    for id in pairs(auras.ids) do
+        if XP_WELL_FED[id] then return true end
+    end
+    local wellFedName = SpellName(WELL_FED_SPELLS[1]) or "Well Fed"
+    if auras.names[wellFedName] then
+        for id in pairs(auras.ids) do
+            if KNOWN_WELL_FED[id] then return false end   -- ordinary Well Fed
+        end
+        return nil                                        -- a Well Fed we don't know
+    end
+    return false
+end
+
+-- The XP food to offer: one the player carries and can eat at their level.
+-- Highest required level first (better food); among equals, a stat the
+-- role's buff food priority wants, earliest first; then the bigger bonus.
+function Apotheca.FindBestXPFood(bagMap)
+    local level = UnitLevel("player") or 1
+    local rank = {}
+    for i, stat in ipairs(Apotheca.GetStatPriority() or {}) do rank[stat] = i end
+    local best, bestKey
+    for _, e in ipairs(DATA.XP_FOOD or {}) do
+        local count = bagMap[e.id]
+        if count and count > 0 and e.level <= level then
+            local key = { e.level, -(e.stat and rank[e.stat] or 99), e.value }
+            local better = not best
+            if best then
+                for i = 1, 3 do
+                    if key[i] ~= bestKey[i] then better = key[i] > bestKey[i] break end
+                end
+            end
+            if better then best, bestKey = e, key end
+        end
+    end
+    if not best then return nil, 0, nil end
+    return best.id, bagMap[best.id], GetCachedTexture(best.id)
 end
 
 -- ============================================================
@@ -1632,6 +1710,27 @@ local function UpdateWeaponOilGlow()
     end
 end
 
+-- XP food glow: ONE function decides, for both reasons it can glow (Codex
+-- review of #19): a ready check, or the reminder for a few seconds after
+-- combat. Recomputed from state on every call, so a stale timer or event
+-- can never hide a glow another reason still wants. Only a button on the
+-- bar with an item, and only when the XP buff is confirmed missing.
+local XP_REMIND_SECONDS = 5
+local xpRemindUntil     = 0
+local xpRemindPending   = false
+
+local function UpdateXPFoodGlow()
+    local btn = Apotheca.buttons["xpfood"]
+    if not btn then return end
+    local reason = readyCheckActive or GetTime() < xpRemindUntil
+    if reason and btn.itemID and btn:IsShown() and not InCombatLockdown()
+            and Apotheca.HasXPFoodBuff() == false then
+        ShowGlow(btn)
+    else
+        HideGlow(btn)
+    end
+end
+
 -- Lightweight bandage debuff check called from UNIT_AURA.
 -- Toggles the button without a full UpdateAllButtons pass.
 local function UpdateBandageUsability()
@@ -1966,6 +2065,7 @@ do
     Apotheca.buttons[cfg.key] = CreateApothecaButton(cfg)
 end
 Apotheca.buttons["bufffood"]    = CreateApothecaButton(BUFFFOOD_BUTTON_CONFIG)
+Apotheca.buttons["xpfood"]      = CreateApothecaButton(XPFOOD_BUTTON_CONFIG)
 Apotheca.buttons["weaponoil"]   = CreateApothecaButton(WEAPONOIL_BUTTON_CONFIG)
 Apotheca.buttons["bandage"]     = CreateApothecaButton(BANDAGE_BUTTON_CONFIG)
 Apotheca.buttons["healthstone"] = CreateApothecaButton(HEALTHSTONE_BUTTON_CONFIG)
@@ -2172,7 +2272,7 @@ Apotheca.DEFAULT_BUTTON_ORDER = {
     "mana", "managem", "health", "healthstone", "rune",
     "recovery", "food", "drink",
     "flask", "battle", "guardian",
-    "bufffood",
+    "bufffood", "xpfood",
     "spiritscroll", "protectionscroll",
     "intellectscroll", "staminascroll", "strengthscroll", "agilityscroll",
     "weaponoil",
@@ -2242,6 +2342,7 @@ local function RefreshLayout(recoveryMode, elixirMode, staticFlags, scrollFlags)
     end
 
     if scrollFlags and scrollFlags.food       then shouldShow["bufffood"]         = true end
+    if scrollFlags and scrollFlags.xpfood     then shouldShow["xpfood"]           = true end
     if scrollFlags and scrollFlags.scrolls then
         for key, r in pairs(scrollFlags.scrolls) do
             if r.show then shouldShow[key] = true end
@@ -2428,12 +2529,14 @@ function UpdateAllButtonsBody()
 
     if db.enabled == false then
         ApothecaFrame:Hide()
+        xpRemindPending = false   -- a hidden bar has nothing to remind
         return
     end
 
     local specOk = (not db.onlyWhenHealer) or Apotheca.IsHealerSpec()
     if not specOk or not Apotheca.IsVisible() then
         ApothecaFrame:Hide()
+        xpRemindPending = false
         return
     end
     ApothecaFrame:Show()
@@ -2535,6 +2638,13 @@ function UpdateAllButtonsBody()
         buffFoodID, buffFoodCnt, buffFoodTex = Apotheca.FindBestBuffFood(bagMap)
     end
 
+    -- ── XP food (optional, while levelling) ───────────────────────
+    local xpOn = db.xpFood and db.xpFood.enabled and Apotheca.CanGainXP()
+    local xpID, xpCnt, xpTex
+    if xpOn then
+        xpID, xpCnt, xpTex = Apotheca.FindBestXPFood(bagMap)
+    end
+
     -- ── Bandage ──────────────────────────────────────────────────
     local bandageID, bandageCnt, bandageTex
     if not db.bandage or db.bandage.enabled then
@@ -2552,6 +2662,7 @@ function UpdateAllButtonsBody()
         food        = (buffFoodID ~= nil)          or (db.buffFood and db.buffFood.enabled and showEmpty),
         scrolls     = scrollRes,
         managem     = gemOn and (gemID ~= nil or showEmpty),
+        xpfood      = xpOn and (xpID ~= nil or showEmpty),
         oil         = (oilID      ~= nil)          or ((not db.weaponOil or db.weaponOil.enabled) and showEmpty),
         bandage     = (bandageID  ~= nil)          or ((not db.bandage or db.bandage.enabled) and showEmpty),
         healthstone = (hsID       ~= nil)          or ((not db.healthstone or db.healthstone.enabled ~= false) and showEmpty),
@@ -2591,6 +2702,9 @@ function UpdateAllButtonsBody()
     end
     if flags.managem then
         ApplyItemToButton(Apotheca.buttons["managem"], gemID, gemCnt, gemTex)
+    end
+    if flags.xpfood then
+        ApplyItemToButton(Apotheca.buttons["xpfood"], xpID, xpCnt, xpTex)
     end
     if flags.oil then
         ApplyItemToButton(Apotheca.buttons["weaponoil"], oilID, oilCnt, oilTex)
@@ -2704,6 +2818,14 @@ function UpdateAllButtonsBody()
     UpdateScrollGlow()
     UpdateWeaponOilGlow()
     Apotheca._lastElixRes = elixRes
+
+    -- The after-combat reminder starts here, AFTER the bar was rebuilt for
+    -- the post-combat bags, so it glows the item the button now holds.
+    if xpRemindPending then
+        xpRemindPending = false
+        xpRemindUntil = GetTime() + XP_REMIND_SECONDS
+    end
+    UpdateXPFoodGlow()
 end
 
 -- ============================================================
@@ -2810,7 +2932,7 @@ Apotheca.API.RegisterEvents(eventFrame,
     "BAG_UPDATE_DELAYED", "BAG_UPDATE_COOLDOWN",
     "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED",
     "GET_ITEM_INFO_RECEIVED", "PLAYER_LOGOUT", "PLAYER_TALENT_UPDATE",
-    "READY_CHECK", "READY_CHECK_FINISHED", "ZONE_CHANGED_NEW_AREA")
+    "READY_CHECK", "READY_CHECK_FINISHED", "ZONE_CHANGED_NEW_AREA", "PLAYER_LEVEL_UP")
 
 -- UNIT_MAXHEALTH / UNIT_MAXPOWER: percentage potions are ranked against the
 -- maximum (FindBestPotion), so a Fortitude buff, a level-up or gear can
@@ -2841,6 +2963,11 @@ local ROLE_POLL = 3
 local rolePollElapsed = 0
 
 eventFrame:SetScript("OnUpdate", function(self, elapsed)
+    -- The XP food reminder ends: recompute, the ready check may still glow.
+    if xpRemindUntil > 0 and GetTime() >= xpRemindUntil then
+        xpRemindUntil = 0
+        UpdateXPFoodGlow()
+    end
     if playerReady and not InCombatLockdown() then
         rolePollElapsed = rolePollElapsed + elapsed
         if rolePollElapsed >= ROLE_POLL then
@@ -2964,6 +3091,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
             UpdateElixirGlow(Apotheca._lastElixRes)
             UpdateScrollGlow()
             UpdateWeaponOilGlow()
+            UpdateXPFoodGlow()
             UpdateBandageUsability()
             -- A slot whose buff was running offers nothing; when the buff
             -- expires there is no bag event, so re-resolve. Only when an
@@ -2982,6 +3110,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
             UpdateElixirGlow(Apotheca._lastElixRes)
             UpdateScrollGlow()
             UpdateWeaponOilGlow()
+            UpdateXPFoodGlow()
         end
 
     elseif event == "READY_CHECK_FINISHED" then
@@ -2990,12 +3119,19 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         UpdateElixirGlow(nil)
         UpdateScrollGlow()
         UpdateWeaponOilGlow()
+        UpdateXPFoodGlow()
 
     elseif event == "PLAYER_REGEN_DISABLED" then
         HideBuffFoodGlow()
         UpdateElixirGlow(nil)
         UpdateScrollGlow()
         UpdateWeaponOilGlow()
+        xpRemindPending, xpRemindUntil = false, 0
+        UpdateXPFoodGlow()
+
+    elseif event == "PLAYER_LEVEL_UP" then
+        -- A new level opens better XP food, and the cap hides the button.
+        if playerReady then RequestUpdate() end
 
     elseif event == "LFG_ROLE_UPDATE" or event == "ROLE_CHANGED_INFORM"
         or event == "PLAYER_ROLES_ASSIGNED" or event == "GROUP_ROSTER_UPDATE" then
@@ -3037,6 +3173,8 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         for _, btn in pairs(Apotheca.buttons) do
             Apotheca.ApplySecureItemAttributes(btn, btn.itemID)
         end
+        -- The XP food reminder waits for this update (UpdateAllButtonsBody).
+        xpRemindPending = true
         RequestUpdate()
 
     elseif event == "PLAYER_LOGOUT" then

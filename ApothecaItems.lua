@@ -468,6 +468,125 @@ D.BUFF_FOOD_BY_STAT = {
     },
 }
 
+-- XP food (#19): "experience gained from kills is increased by 5%" on top
+-- of Well Fed. Highest required level first. stat = the Buff Food stat of
+-- its Well Fed bonus (nil: movement speed, fishing, herbalism).
+D.XP_FOOD = {
+    { id = 267341, level = 55, stat = nil,          value = 0   },  -- Sweetpaw Jam
+    { id = 249870, level = 45, stat = "healing",    value = 44  },  -- Sage's Tea
+    { id = 13934 , level = 45, stat = "attackPower", value = 40  },  -- Mightfish Steak
+    { id = 13933 , level = 45, stat = "spellDmg",   value = 28  },  -- Lobster Stew
+    { id = 13935 , level = 45, stat = "spellDmg",   value = 28  },  -- Baked Salmon
+    { id = 20452 , level = 45, stat = "strength",   value = 20  },  -- Smoked Desert Dumplings
+    { id = 249876, level = 45, stat = "spirit",     value = 20  },  -- Wicked Smoothie
+    { id = 250066, level = 45, stat = "intellect",  value = 20  },  -- Soaring Pamplona
+    { id = 250067, level = 45, stat = "intellect",  value = 20  },  -- Bat Hachee
+    { id = 250068, level = 45, stat = "stamina",    value = 20  },  -- Savory Turtle Stew
+    { id = 250069, level = 45, stat = "agility",    value = 20  },  -- Flank au Poivre
+    { id = 250070, level = 45, stat = "strength",   value = 20  },  -- Bear Bruscitti
+    { id = 250071, level = 45, stat = "strength",   value = 20  },  -- Steaming Stag Steak
+    { id = 250072, level = 45, stat = "agility",    value = 20  },  -- Swiftstrike Steak
+    { id = 250075, level = 45, stat = "intellect",  value = 20  },  -- Prehistoric Pulled Raptor
+    { id = 8957  , level = 45, stat = nil,          value = 0   },  -- Spinefin Halibut
+    { id = 286152, level = 35, stat = "armor",      value = 150 },  -- Plated Armorfish
+    { id = 13932 , level = 35, stat = "attackPower", value = 40  },  -- Poached Sunscale Salmon
+    { id = 249869, level = 35, stat = "healing",    value = 33  },  -- Sunny Tea
+    { id = 13927 , level = 35, stat = "attackPower", value = 30  },  -- Cooked Glossy Mightfish
+    { id = 6887  , level = 35, stat = "spellDmg",   value = 22  },  -- Spotted Yellowtail
+    { id = 13931 , level = 35, stat = "spellDmg",   value = 22  },  -- Nightfin Soup
+    { id = 12212 , level = 35, stat = "agility",    value = 15  },  -- Jungle Stew
+    { id = 12218 , level = 35, stat = "stamina",    value = 15  },  -- Monster Omelet
+    { id = 17222 , level = 35, stat = "stamina",    value = 15  },  -- Spider Sausage
+    { id = 18045 , level = 35, stat = "agility",    value = 15  },  -- Tender Wolf Steak
+    { id = 18254 , level = 35, stat = "intellect",  value = 15  },  -- Runn Tum Tuber Surprise
+    { id = 249875, level = 35, stat = "spirit",     value = 15  },  -- Spicy Smoothie
+    { id = 250065, level = 35, stat = "strength",   value = 15  },  -- Savory Stag Sliders
+    { id = 250076, level = 35, stat = "intellect",  value = 15  },  -- Raptor Rouladen
+    { id = 13928 , level = 35, stat = "crit",       value = 1   },  -- Grilled Squid
+    { id = 13929 , level = 35, stat = "crit",       value = 1   },  -- Hot Smoked Bass
+    { id = 13930 , level = 35, stat = nil,          value = 0   },  -- Filet of Redgill
+    { id = 21217 , level = 30, stat = "spellDmg",   value = 7   },  -- Sagefish Delight
+    { id = 249868, level = 25, stat = "healing",    value = 22  },  -- Triage Tea
+    { id = 8364  , level = 25, stat = "attackPower", value = 20  },  -- Mithril Head Trout
+    { id = 274971, level = 25, stat = "spellDmg",   value = 14  },  -- Briny Seafood Stew
+    { id = 3728  , level = 25, stat = "agility",    value = 10  },  -- Tasty Lion Steak
+    { id = 4457  , level = 25, stat = "intellect",  value = 10  },  -- Barbecued Buzzard Wing
+    { id = 6038  , level = 25, stat = "stamina",    value = 10  },  -- Giant Clam Scorcho
+    { id = 12215 , level = 25, stat = "stamina",    value = 10  },  -- Heavy Kodo Stew
+    { id = 12216 , level = 25, stat = "intellect",  value = 10  },  -- Spiced Chili Crab
+    { id = 13851 , level = 25, stat = "agility",    value = 10  },  -- Hot Wolf Ribs
+    { id = 20074 , level = 25, stat = "agility",    value = 10  },  -- Heavy Crocolisk Stew
+    { id = 249874, level = 25, stat = "spirit",     value = 10  },  -- Calcified Smoothie
+    { id = 250073, level = 25, stat = "intellect",  value = 10  },  -- Raging Raptor Ribs
+    { id = 250074, level = 25, stat = "strength",   value = 10  },  -- Bear Brisket
+    { id = 250078, level = 25, stat = "stamina",    value = 10  },  -- Giant Scrambled Eggs
+    { id = 274976, level = 25, stat = "strength",   value = 10  },  -- Plain Ol' Paletusk
+    { id = 4594  , level = 25, stat = nil,          value = 0   },  -- Rockscale Cod
+    { id = 10841 , level = 25, stat = nil,          value = 0   },  -- Goldthorn Tea
+    { id = 249867, level = 15, stat = "healing",    value = 11  },  -- Root Tea
+    { id = 1017  , level = 15, stat = "agility",    value = 5   },  -- Seasoned Wolf Kabob
+    { id = 2685  , level = 15, stat = "strength",   value = 5   },  -- Succulent Pork Ribs
+    { id = 3664  , level = 15, stat = "agility",    value = 5   },  -- Crocolisk Gumbo
+    { id = 3665  , level = 15, stat = "stamina",    value = 5   },  -- Curiously Tasty Omelet
+    { id = 3666  , level = 15, stat = "stamina",    value = 5   },  -- Gooey Spider Cake
+    { id = 3727  , level = 15, stat = "agility",    value = 5   },  -- Hot Lion Chops
+    { id = 3729  , level = 15, stat = "stamina",    value = 5   },  -- Soothing Turtle Bisque
+    { id = 5480  , level = 15, stat = "strength",   value = 5   },  -- Lean Venison
+    { id = 12209 , level = 15, stat = "agility",    value = 5   },  -- Lean Wolf Steak
+    { id = 12210 , level = 15, stat = "intellect",  value = 5   },  -- Roast Raptor
+    { id = 12214 , level = 15, stat = "stamina",    value = 5   },  -- Mystery Stew
+    { id = 249873, level = 15, stat = "spirit",     value = 5   },  -- Mrrggl Smrrthle
+    { id = 4593  , level = 15, stat = nil,          value = 0   },  -- Bristle Whisker Catfish
+    { id = 21072 , level = 10, stat = "spellDmg",   value = 4   },  -- Smoked Sagefish
+    { id = 4592  , level = 5 , stat = "attackPower", value = 10  },  -- Longjaw Mud Snapper
+    { id = 249866, level = 5 , stat = "healing",    value = 7   },  -- Royal Tea
+    { id = 724   , level = 5 , stat = "strength",   value = 3   },  -- Goretusk Liver Pie
+    { id = 1082  , level = 5 , stat = "intellect",  value = 3   },  -- Redridge Goulash
+    { id = 2683  , level = 5 , stat = "intellect",  value = 3   },  -- Crab Cake
+    { id = 2684  , level = 5 , stat = "agility",    value = 3   },  -- Coyote Steak
+    { id = 2687  , level = 5 , stat = "strength",   value = 3   },  -- Dry Pork Ribs
+    { id = 3220  , level = 5 , stat = "strength",   value = 3   },  -- Blood Sausage
+    { id = 3662  , level = 5 , stat = "agility",    value = 3   },  -- Crocolisk Steak
+    { id = 3726  , level = 5 , stat = "strength",   value = 3   },  -- Big Bear Steak
+    { id = 5479  , level = 5 , stat = "stamina",    value = 3   },  -- Crispy Lizard Tail
+    { id = 12213 , level = 5 , stat = "stamina",    value = 3   },  -- Carrion Surprise
+    { id = 249872, level = 5 , stat = "spirit",     value = 3   },  -- Slimy Smoothie
+    { id = 250077, level = 5 , stat = "intellect",  value = 3   },  -- Twice-Spiced Raptor Slice
+    { id = 250080, level = 5 , stat = "stamina",    value = 3   },  -- Breakfast Omelette
+    { id = 268912, level = 5 , stat = "stamina",    value = 3   },  -- Expiring Crab Cake
+    { id = 268913, level = 5 , stat = "stamina",    value = 3   },  -- Expiring Crocolisk Steak
+    { id = 5095  , level = 5 , stat = "spellDmg",   value = 1   },  -- Rainbow Fin Albacore
+    { id = 263509, level = 5 , stat = "stamina",    value = 1   },  -- Skywall Souffle
+    { id = 263512, level = 5 , stat = "intellect",  value = 1   },  -- Pincer Bites
+    { id = 733   , level = 5 , stat = nil,          value = 0   },  -- Westfall Stew
+    { id = 5476  , level = 5 , stat = nil,          value = 0   },  -- Fillet of Frenzy
+    { id = 6316  , level = 5 , stat = nil,          value = 0   },  -- Loch Frenzy Delight
+    { id = 787   , level = 1 , stat = "attackPower", value = 6   },  -- Slitherskin Mackerel
+    { id = 6290  , level = 1 , stat = "attackPower", value = 2   },  -- Brilliant Smallfish
+    { id = 249865, level = 1 , stat = "healing",    value = 2   },  -- Peace Tea
+    { id = 2680  , level = 1 , stat = "agility",    value = 1   },  -- Spiced Wolf Meat
+    { id = 2681  , level = 1 , stat = "strength",   value = 1   },  -- Roasted Boar Meat
+    { id = 2682  , level = 1 , stat = "intellect",  value = 1   },  -- Cooked Crab Claw
+    { id = 2888  , level = 1 , stat = "strength",   value = 1   },  -- Beer Basted Boar Ribs
+    { id = 3663  , level = 1 , stat = "stamina",    value = 1   },  -- Murloc Fin Soup
+    { id = 5472  , level = 1 , stat = "stamina",    value = 1   },  -- Kaldorei Spider Kabob
+    { id = 5474  , level = 1 , stat = "stamina",    value = 1   },  -- Roasted Kodo Meat
+    { id = 5477  , level = 1 , stat = "intellect",  value = 1   },  -- Strider Stew
+    { id = 6888  , level = 1 , stat = "stamina",    value = 1   },  -- Herb Baked Egg
+    { id = 6890  , level = 1 , stat = "strength",   value = 1   },  -- Smoked Bear Meat
+    { id = 12224 , level = 1 , stat = "intellect",  value = 1   },  -- Crispy Bat Wing
+    { id = 249871, level = 1 , stat = "spirit",     value = 1   },  -- Venomous Smoothie
+    { id = 250079, level = 1 , stat = "intellect",  value = 1   },  -- Tasty Raptor Bites
+}
+
+-- Well Fed auras (from /apo scan3). XP food gives ONE aura named "Well
+-- Fed", like ordinary food, with its own spell ID: these are the XP ones
+-- ("A nutritious meal / A tasty drink has made you Well Fed").
+D.XP_WELL_FED_SPELLS = { 1248406, 1248420, 1248421, 1248422, 1248688, 1249519, 1249520, 1249521, 1249523, 1249907, 1249926, 1249927, 1294007, 1302064, 1319310 }
+-- Every Well Fed aura the scan found, XP or not. A Well Fed aura in
+-- neither list is unknown (a spell revealed by a later build).
+D.WELL_FED_SPELLS = { 19705, 19706, 19708, 19709, 19710, 19711, 24799, 24870, 25694, 25941, 1225778, 1225779, 1225780, 1225782, 1248406, 1248420, 1248421, 1248422, 1248688, 1249519, 1249520, 1249521, 1249523, 1249907, 1249926, 1249927, 1283082, 1294007, 1302064, 1319310 }
+
 -- Every healthstone, strongest first. All ranks share one cooldown.
 D.HEALTHSTONE_ITEMS = {
     { id = 9421  , healValue = 1440  },  -- Major Healthstone

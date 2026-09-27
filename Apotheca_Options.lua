@@ -482,6 +482,12 @@ function Apotheca.BuildOptionsPanelContent(panel)
     Checkbox("Strict: only use highest-tier food in category",
         function() return DBGet("buffFood", "strictBestOnly") == true end,
         function(v) DBSet(v, "buffFood", "strictBestOnly") end)
+    Checkbox("Enable XP Food button  |cff888888(while levelling)|r",
+        function() return DBGet("xpFood", "enabled") == true end,
+        function(v) DBSet(v, "xpFood", "enabled") end)
+    SmallLabel("|cff888888Offers food with the 5% kill-XP bonus you can eat at your level, and glows\n"
+        .. "for a few seconds after combat, and on a ready check, while that buff is not up.\n"
+        .. "Well Fed doesn't stack: XP food replaces another Well Fed.|r")
 
     SectionHeader("Buff Food Priority")
     SmallLabel("Priority order for stat categories (1 = most preferred).")
@@ -622,7 +628,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
         rune = "Rune (mana)", managem = "Mana Gem",
         recovery = "Recovery (Conjured)", food = "Food", drink = "Drink",
         flask = "Flask", battle = "Elixir", guardian = "Elixir 2",
-        bufffood = "Buff Food", spiritscroll = "Spirit Scroll",
+        bufffood = "Buff Food", xpfood = "XP Food", spiritscroll = "Spirit Scroll",
         protectionscroll = "Protection Scroll", intellectscroll = "Intellect Scroll",
         staminascroll = "Stamina Scroll", strengthscroll = "Strength Scroll",
         agilityscroll = "Agility Scroll", weaponoil = "Weapon Oil", bandage = "Bandage",
