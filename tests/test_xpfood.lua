@@ -225,6 +225,32 @@ ApothecaDB.profiles[ApothecaDB.activeProfile].buffFood.strictBestOnly = true
 update()
 H.eq(bf.itemID, 21023, "strict mode is not beaten by XP food it cannot offer")
 ApothecaDB.profiles[ApothecaDB.activeProfile].buffFood.strictBestOnly = false
+-- The two Buff Food passes, each able to pick XP food if the exclusion
+-- slipped (Codex review of #22). Substitution first: strict finds nothing
+-- (no non-XP Intellect food; Lollipop's +2 Spirit is not the best Spirit),
+-- so the fallback runs and must skip the XP Intellect food.
+local prof = ApothecaDB.profiles[ApothecaDB.activeProfile]
+prof.buffFoodPriority = { HEALER = { "intellect", "spirit" } }
+prof.buffFood.strictBestOnly, prof.buffFood.allowSubstitutions = true, true
+WoW.AddItem(0, 7, 7806, 3, "Lollipop")                   -- non-XP, +2 Stamina and Spirit
+update()
+H.eq(bf.itemID, 7806, "the substitution pass skips XP food: Lollipop, not Redridge Goulash")
+prof.categories.spirit = false
+update()
+-- (A hidden button keeps its last itemID: check what is on the bar.)
+H.check(not bf:IsShown(), "Spirit switched off: Buff Food has nothing to offer, not the XP food")
+prof.categories.spirit = true
+-- Strict, no substitutions: the best Spirit food Buff Food can OFFER is
+-- the bar, not the +20 XP Spirit food it must leave to XP Food.
+prof.buffFoodPriority = { HEALER = { "spirit" } }
+prof.buffFood.allowSubstitutions = false
+WoW.AddItem(0, 8, 16971, 2, "Clamlette Surprise")        -- non-XP, +12 Stamina and Spirit
+update()
+H.eq(bf.itemID, 16971, "strict mode measures against offerable food only: Clamlette Surprise")
+prof.buffFood.strictBestOnly, prof.buffFood.allowSubstitutions = false, true
+prof.buffFoodPriority = { HEALER = { "intellect", "stamina" } }
+update()
+
 -- XP Food off, or at the cap: Buff Food offers every buff food again.
 setXP(false) ; update()
 H.eq(bf.itemID, 1082, "XP Food off: Buff Food offers the XP food again")
