@@ -346,6 +346,48 @@ end
 -- use the item twice.
 -- ------------------------------------------------------------
 
+-- Weapons (#24). Plain values only; nil means unknown or none.
+-- The WEAPON in an inventory slot (16 main hand, 17 off hand): its item
+-- ID and weapon subclass, or nil for an empty slot, a shield or a held
+-- off-hand item.
+function API.HandWeapon(slot)
+    -- One pcall around the whole read, and the secret check before any
+    -- comparison: comparing a secret throws (Codex review of #26).
+    local ok, id, sub = pcall(function()
+        local id = GetInventoryItemID("player", slot)
+        if issecretvalue and issecretvalue(id) then return nil end
+        if id == nil then return nil end
+        local _, _, _, _, _, classID, subClassID = C_Item.GetItemInfoInstant(id)
+        if issecretvalue and (issecretvalue(classID) or issecretvalue(subClassID)) then return nil end
+        if classID ~= 2 then return nil end
+        return id, subClassID
+    end)
+    if not ok then return nil end
+    return id, sub
+end
+
+-- Can the player use this item now? true / false, or nil when unknown.
+-- (C_Item.IsUsableItem: false for a level, class or rune requirement.)
+function API.ItemUsable(itemID)
+    local ok, usable = pcall(C_Item.IsUsableItem, itemID)
+    if not ok or (issecretvalue and issecretvalue(usable)) then return nil end
+    return usable and true or false
+end
+
+-- Does this hand carry a temporary coating (poison, oil, stone)? true /
+-- false, or nil when the read is refused or secret. Any coating counts:
+-- which one is on is not measured yet (enchant IDs, #24).
+function API.HandCoated(slot)
+    local ok, has = pcall(function()
+        local v = { GetWeaponEnchantInfo() }
+        local h = v[slot == 17 and 5 or 1]
+        if issecretvalue and issecretvalue(h) then return nil end
+        return h and true or false
+    end)
+    if ok then return has end
+    return nil
+end
+
 function API.ClickEdges()
     return "AnyUp", "AnyDown"
 end

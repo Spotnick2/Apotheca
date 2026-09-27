@@ -22,6 +22,7 @@ Your settings are saved per profile (global or per character), and your role cho
 | Flask / Elixir / Elixir 2 | Three separate slots, each offering its best item for your role on its own: Distilled Wisdom, Cleric's Elixirs, Mageblood… Forever has no TBC-style battle/guardian elixir limit. Which elixirs stack with each other hasn't been measured yet; if two don't, please report it. A slot whose buff is already running offers nothing, so a misclick can't waste a two-hour flask. |
 | Spirit / Protection scroll | The strongest scroll. |
 | Weapon oil | Mana oils; wizard oils are optional. |
+| Poisons *(rogues, experimental, off by default)* | One button per hand: your strongest poison of the kind you pick for that hand (Instant and Deadly by default), applied to that weapon on click. Not yet tried on a rogue in game, so please report whether it works. |
 | Bandage | The strongest bandage. Battleground bandages are only offered inside their battleground. |
 
 Every value comes from the WoW: Forever client itself, not from a Vanilla database, because Forever changed many of them. For example, Nightfin Soup now gives spell damage, and a plain healthstone restores what an Improved one did in Vanilla.

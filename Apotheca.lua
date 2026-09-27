@@ -90,6 +90,14 @@ local PROFILE_DEFAULTS = {
     bandage = {
         enabled = true,
     },
+    -- Rogue poisons (#24): EXPERIMENTAL, off by default, not yet tried on a
+    -- rogue in game. The poison kind per hand is a per-character setting
+    -- (Apotheca.PoisonChoice).
+    poisons = {
+        enabled           = false,
+        glowOnMissingBuff = true,
+        remind            = false,   -- the 5-second reminder after combat
+    },
     -- XP food (#19): optional, off by default. Offers a food with the 5%
     -- kill-XP bonus while you can still gain XP, and glows for a few
     -- seconds after combat when that buff is not up.
@@ -198,16 +206,19 @@ local function MigrateProfile(prof)
         end
         prof.preventWaste = nil
     end
-    -- A custom button order saved before the XP Food button (#19) gets it
-    -- next to Buff Food, as in the default order, not after Bandage where
-    -- GetButtonOrder would append it.
+    -- A custom button order saved before a newer button gets it next to its
+    -- neighbour, as in the default order, not at the end where
+    -- GetButtonOrder would append it: XP Food (#19), poisons (#24).
     if type(prof.buttonOrder) == "table" and #prof.buttonOrder > 0 then
-        local at, has = nil, false
-        for i, k in ipairs(prof.buttonOrder) do
-            if k == "xpfood" then has = true end
-            if k == "bufffood" then at = i end
+        for _, new in ipairs({ { "xpfood", "bufffood" }, { "poisonmh", "weaponoil" },
+                               { "poisonoh", "poisonmh" } }) do
+            local at, has = nil, false
+            for i, k in ipairs(prof.buttonOrder) do
+                if k == new[1] then has = true end
+                if k == new[2] then at = i end
+            end
+            if not has and at then table.insert(prof.buttonOrder, at + 1, new[1]) end
         end
-        if not has and at then table.insert(prof.buttonOrder, at + 1, "xpfood") end
     end
     -- showOnlyHealingSpec was a class check that defaulted to TRUE, so every
     -- saved profile holds true whether or not anyone chose it. Under the new
@@ -739,6 +750,17 @@ local MANAGEM_BUTTON_CONFIG = {
     key = "managem", label = "Mana Gem", restores = "mana", classOnly = "MAGE",
     emptyIcon = "Interface\\Icons\\INV_Misc_Gem_Stone_01",
     emptyTooltip = "No mana gem in bags",
+}
+
+-- Rogue poisons (#24, experimental): one button per hand. targetSlot makes
+-- the secure button apply the item to that hand ("target-slot", read by
+-- the client's secure item action after the use; upstream behaviour, not
+-- yet measured on Forever).
+local POISON_BUTTON_CONFIG = {
+    { key = "poisonmh", label = "Poison (main hand)", classOnly = "ROGUE", targetSlot = 16,
+      emptyIcon = "Interface\\Icons\\Ability_Poisons", emptyTooltip = "No poison of the chosen kind in bags" },
+    { key = "poisonoh", label = "Poison (off hand)", classOnly = "ROGUE", targetSlot = 17,
+      emptyIcon = "Interface\\Icons\\Ability_Poisons", emptyTooltip = "No poison of the chosen kind in bags" },
 }
 
 local WEAPONOIL_BUTTON_CONFIG = {
@@ -1274,13 +1296,56 @@ function Apotheca.HasProtectionScrollBuff() return Apotheca.HasScrollBuff(Scroll
 -- Returns true if main hand has any temporary enchant active, false if
 -- not, or nil when the client would not say (its combat secrecy is not
 -- measured yet, and a secret boolean throws when compared).
-function Apotheca.HasMainHandTempEnchant()
-    local ok, has = pcall(function()
-        local hasMainHandEnchant = GetWeaponEnchantInfo()
-        return hasMainHandEnchant == true or hasMainHandEnchant == 1
-    end)
-    if not ok then return nil end
-    return has
+-- ============================================================
+-- ROGUE POISONS (#24, experimental)
+-- ============================================================
+local POISON_DEFAULTS = { [16] = "instant", [17] = "deadly" }
+-- Weapon subclasses a poison cannot coat: bows, guns, miscellaneous,
+-- thrown, crossbows, wands and fishing poles (/code-review of #26).
+local NOT_POISONABLE = { [2] = true, [3] = true, [14] = true, [16] = true, [18] = true, [19] = true, [20] = true }
+
+-- Does this hand hold a weapon a poison can coat?
+function Apotheca.PoisonableHand(slot)
+    local id, sub = Apotheca.API.HandWeapon(slot)
+    return id ~= nil and not NOT_POISONABLE[sub]
+end
+local POISON_KEYS = { none = true }
+for _, f in ipairs(DATA.POISON_FAMILIES or {}) do POISON_KEYS[f.key] = true end
+
+-- The poison family chosen for a hand (16 / 17), per character: "none"
+-- or a family key; an unknown saved key falls back to the default.
+function Apotheca.PoisonChoice(slot)
+    local v = Apotheca.CharSetting(slot == 17 and "poisonOH" or "poisonMH", POISON_DEFAULTS[slot])
+    if not POISON_KEYS[v] then v = POISON_DEFAULTS[slot] end
+    return v
+end
+
+-- Saves the choice and asks for an update: the button must change item
+-- (Codex review of #24). Not through SetCharSetting, which re-resolves the
+-- role for nothing; and a caller's own full update right after satisfies
+-- the request, so it does not cost a second one (/code-review of #26).
+function Apotheca.SetPoisonChoice(slot, family)
+    ApothecaCharDB = type(ApothecaCharDB) == "table" and ApothecaCharDB or {}
+    ApothecaCharDB[slot == 17 and "poisonOH" or "poisonMH"] = family
+    Apotheca.RequestUpdate()
+end
+
+-- The strongest poison of a family the player carries and can use: its
+-- required level, and whatever else the client says (a rune the Season of
+-- Discovery poisons may need). No other family is ever offered: the wrong
+-- poison on a weapon is worse than none.
+function Apotheca.FindBestPoison(family, bagMap)
+    local list = DATA.POISONS and DATA.POISONS[family]
+    if not list then return nil, 0, nil end
+    local level = UnitLevel("player") or 1
+    for _, e in ipairs(list) do
+        local count = bagMap[e.id]
+        if count and count > 0 and e.level <= level
+                and Apotheca.API.ItemUsable(e.id) ~= false then
+            return e.id, count, GetCachedTexture(e.id)
+        end
+    end
+    return nil, 0, nil
 end
 
 function Apotheca.FindBestWeaponOil(bagMap)
@@ -1691,19 +1756,23 @@ end
 
 local readyCheckActive = false
 
+-- The after-combat reminder window, shared by every button that reminds
+-- (XP food, poisons): armed on leaving combat, started after the
+-- post-combat update (UpdateAllButtonsBody), cleared on entering combat.
+--
 -- XP food glow: ONE function decides, for both reasons it can glow (Codex
 -- review of #19): a ready check, or the reminder for a few seconds after
 -- combat. Recomputed from state on every call, so a stale timer or event
 -- can never hide a glow another reason still wants. Only a button on the
 -- bar with an item, and only when the XP buff is confirmed missing.
-local XP_REMIND_SECONDS = 5
-local xpRemindUntil     = 0
-local xpRemindPending   = false
+local REMIND_SECONDS = 5
+local remindUntil     = 0
+local remindPending   = false
 
 local function XPFoodGlowWanted()
     local btn = Apotheca.buttons["xpfood"]
     if not btn then return false end
-    local reason = readyCheckActive or GetTime() < xpRemindUntil
+    local reason = readyCheckActive or GetTime() < remindUntil
     -- Not while dead: dying ends combat too, and a ghost cannot eat.
     return (reason and btn.itemID and btn:IsShown() and not InCombatLockdown()
             and not UnitIsDeadOrGhost("player")
@@ -1714,6 +1783,29 @@ local function UpdateXPFoodGlow()
     local btn = Apotheca.buttons["xpfood"]
     if not btn then return end
     if XPFoodGlowWanted() then ShowGlow(btn) else HideGlow(btn) end
+end
+
+-- Poison glows (#24): the same one-decision pattern, per hand. A ready
+-- check (glowOnMissingBuff) or the after-combat reminder window (opt-in,
+-- `remind`), for a button on the bar with an item, while that hand is
+-- confirmed to carry no coating at all. Any coating counts as covered:
+-- which poison is on is not measured yet.
+local function PoisonGlowWanted(btn)
+    local p = DB().poisons or {}
+    local reason = (readyCheckActive and p.glowOnMissingBuff ~= false)
+                   or (p.remind and GetTime() < remindUntil)
+    return (reason and btn.itemID and btn:IsShown() and not InCombatLockdown()
+            and not UnitIsDeadOrGhost("player")
+            and Apotheca.API.HandCoated(btn.cfg.targetSlot) == false) and true or false
+end
+
+local function UpdatePoisonGlow()
+    for _, cfg in ipairs(POISON_BUTTON_CONFIG) do
+        local btn = Apotheca.buttons[cfg.key]
+        if btn then
+            if PoisonGlowWanted(btn) then ShowGlow(btn) else HideGlow(btn) end
+        end
+    end
 end
 
 
@@ -1776,7 +1868,7 @@ local function UpdateWeaponOilGlow()
     local btn = Apotheca.buttons["weaponoil"]
     if not btn then return end
     local glowEnabled = db.weaponOil and db.weaponOil.glowOnMissingBuff
-    if readyCheckActive and glowEnabled and btn.itemID and Apotheca.HasMainHandTempEnchant() == false then
+    if readyCheckActive and glowEnabled and btn.itemID and Apotheca.API.HandCoated(16) == false then
         ShowGlow(btn)
     else
         HideGlow(btn)
@@ -1973,18 +2065,19 @@ end)
 
 function Apotheca.ApplySecureItemAttributes(btn, itemID)
     if InCombatLockdown() then return end
-    if DB().debug then
+    -- A button aimed at a weapon hand (poisons) also carries target-slot;
+    -- cleared with the item on every other path, so no stale target is
+    -- left behind (Codex review of #24).
+    local slot = btn.cfg and btn.cfg.targetSlot
+    if DB().debug or not itemID then
         btn:SetAttribute("type", nil)
         btn:SetAttribute("item", nil)
+        btn:SetAttribute("target-slot", nil)
         return
     end
-    if itemID then
-        btn:SetAttribute("type", "item")
-        btn:SetAttribute("item", "item:" .. itemID)
-    else
-        btn:SetAttribute("type", nil)
-        btn:SetAttribute("item", nil)
-    end
+    btn:SetAttribute("type", "item")
+    btn:SetAttribute("item", "item:" .. itemID)
+    btn:SetAttribute("target-slot", slot)
 end
 
 local function ApplyDebugAttributes(btn)
@@ -2119,6 +2212,9 @@ end
 Apotheca.buttons["bufffood"]    = CreateApothecaButton(BUFFFOOD_BUTTON_CONFIG)
 Apotheca.buttons["xpfood"]      = CreateApothecaButton(XPFOOD_BUTTON_CONFIG)
 Apotheca.buttons["weaponoil"]   = CreateApothecaButton(WEAPONOIL_BUTTON_CONFIG)
+for _, cfg in ipairs(POISON_BUTTON_CONFIG) do
+    Apotheca.buttons[cfg.key] = CreateApothecaButton(cfg)
+end
 Apotheca.buttons["bandage"]     = CreateApothecaButton(BANDAGE_BUTTON_CONFIG)
 Apotheca.buttons["healthstone"] = CreateApothecaButton(HEALTHSTONE_BUTTON_CONFIG)
 
@@ -2327,7 +2423,7 @@ Apotheca.DEFAULT_BUTTON_ORDER = {
     "bufffood", "xpfood",
     "spiritscroll", "protectionscroll",
     "intellectscroll", "staminascroll", "strengthscroll", "agilityscroll",
-    "weaponoil",
+    "weaponoil", "poisonmh", "poisonoh",
     "bandage",
 }
 
@@ -2402,6 +2498,9 @@ local function RefreshLayout(recoveryMode, elixirMode, staticFlags, scrollFlags)
     end
     if scrollFlags and scrollFlags.managem then shouldShow["managem"] = true end
     if scrollFlags and scrollFlags.oil        then shouldShow["weaponoil"]        = true end
+    for key, r in pairs(scrollFlags and scrollFlags.poisons or {}) do
+        if r.show then shouldShow[key] = true end
+    end
     if scrollFlags and scrollFlags.bandage    then shouldShow["bandage"]          = true end
     if scrollFlags and scrollFlags.healthstone then shouldShow["healthstone"]      = true end
 
@@ -2573,6 +2672,9 @@ function Apotheca.UpdateAllButtons()
     Apotheca.RefreshRole(true)
     UpdateAllButtonsBody()
     Apotheca.RefreshFullTint()
+    -- Counts full updates: a deferred request (RequestUpdate) made before
+    -- this one is satisfied by it and does not run again.
+    Apotheca._updateSeq = (Apotheca._updateSeq or 0) + 1
 end
 
 function UpdateAllButtonsBody()
@@ -2581,14 +2683,14 @@ function UpdateAllButtonsBody()
 
     if db.enabled == false then
         ApothecaFrame:Hide()
-        xpRemindPending = false   -- a hidden bar has nothing to remind
+        remindPending = false   -- a hidden bar has nothing to remind
         return
     end
 
     local specOk = (not db.onlyWhenHealer) or Apotheca.IsHealerSpec()
     if not specOk or not Apotheca.IsVisible() then
         ApothecaFrame:Hide()
-        xpRemindPending = false
+        remindPending = false
         return
     end
     ApothecaFrame:Show()
@@ -2713,6 +2815,22 @@ function UpdateAllButtonsBody()
             Apotheca.FindBestBuffFood(bagMap, xpOwned)
     end
 
+    -- ── Rogue poisons (experimental) ─────────────────────────────
+    -- One per hand: the chosen family's strongest usable poison, only for
+    -- a hand holding a weapon (no shield or held item). Class gating is
+    -- the buttons' classOnly = "ROGUE" (RefreshLayout).
+    local poisonRes = {}
+    local poisonsOn = db.poisons and db.poisons.enabled
+    for _, cfg in ipairs(POISON_BUTTON_CONFIG) do
+        local r = { show = false }
+        local family = poisonsOn and Apotheca.PoisonChoice(cfg.targetSlot)
+        if family and family ~= "none" and Apotheca.PoisonableHand(cfg.targetSlot) then
+            r.id, r.count, r.tex = Apotheca.FindBestPoison(family, bagMap)
+            r.show = r.id ~= nil or showEmpty
+        end
+        poisonRes[cfg.key] = r
+    end
+
     -- ── Bandage ──────────────────────────────────────────────────
     local bandageID, bandageCnt, bandageTex
     if not db.bandage or db.bandage.enabled then
@@ -2732,6 +2850,7 @@ function UpdateAllButtonsBody()
         managem     = gemOn and (gemID ~= nil or showEmpty),
         xpfood      = xpOn and (xpID ~= nil or showEmpty),
         oil         = (oilID      ~= nil)          or ((not db.weaponOil or db.weaponOil.enabled) and showEmpty),
+        poisons     = poisonRes,
         bandage     = (bandageID  ~= nil)          or ((not db.bandage or db.bandage.enabled) and showEmpty),
         healthstone = (hsID       ~= nil)          or ((not db.healthstone or db.healthstone.enabled ~= false) and showEmpty),
     }
@@ -2776,6 +2895,11 @@ function UpdateAllButtonsBody()
     end
     if flags.oil then
         ApplyItemToButton(Apotheca.buttons["weaponoil"], oilID, oilCnt, oilTex)
+    end
+    -- Poison buttons are applied even when hidden, so a hand left with no
+    -- poison loses its item AND its target-slot, not only its place on the bar.
+    for key, r in pairs(flags.poisons or {}) do
+        ApplyItemToButton(Apotheca.buttons[key], r.id, r.count, r.tex)
     end
     if flags.bandage then
         ApplyItemToButton(Apotheca.buttons["bandage"], bandageID, bandageCnt, bandageTex)
@@ -2889,12 +3013,13 @@ function UpdateAllButtonsBody()
 
     -- The after-combat reminder starts here, AFTER the bar was rebuilt for
     -- the post-combat bags, so it glows the item the button now holds.
-    if xpRemindPending then
-        xpRemindPending = false
+    if remindPending then
+        remindPending = false
         -- Death ends combat as well; no reminder for a corpse.
-        if not UnitIsDeadOrGhost("player") then xpRemindUntil = GetTime() + XP_REMIND_SECONDS end
+        if not UnitIsDeadOrGhost("player") then remindUntil = GetTime() + REMIND_SECONDS end
     end
     UpdateXPFoodGlow()
+    UpdatePoisonGlow()
 end
 
 -- ============================================================
@@ -3004,7 +3129,7 @@ Apotheca.API.RegisterEvents(eventFrame,
     "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED",
     "GET_ITEM_INFO_RECEIVED", "PLAYER_LOGOUT", "PLAYER_TALENT_UPDATE",
     "READY_CHECK", "READY_CHECK_FINISHED", "ZONE_CHANGED_NEW_AREA", "PLAYER_LEVEL_UP",
-    "DISABLE_XP_GAIN", "ENABLE_XP_GAIN")
+    "DISABLE_XP_GAIN", "ENABLE_XP_GAIN", "PLAYER_EQUIPMENT_CHANGED", "WEAPON_ENCHANT_CHANGED")
 
 -- UNIT_MAXHEALTH / UNIT_MAXPOWER: percentage potions are ranked against the
 -- maximum (FindBestPotion), so a Fortitude buff, a level-up or gear can
@@ -3022,9 +3147,11 @@ local deferredPending      = false
 local deferredElapsed      = 0
 local deferredDelay        = 0.2
 
+local deferredSeq = 0
 local function RequestUpdate()
     deferredPending = true
     deferredElapsed = 0
+    deferredSeq     = Apotheca._updateSeq or 0
 end
 Apotheca.RequestUpdate = RequestUpdate
 
@@ -3036,9 +3163,10 @@ local rolePollElapsed = 0
 
 eventFrame:SetScript("OnUpdate", function(self, elapsed)
     -- The XP food reminder ends: recompute, the ready check may still glow.
-    if xpRemindUntil > 0 and GetTime() >= xpRemindUntil then
-        xpRemindUntil = 0
+    if remindUntil > 0 and GetTime() >= remindUntil then
+        remindUntil = 0
         UpdateXPFoodGlow()
+        UpdatePoisonGlow()
     end
     if playerReady and not InCombatLockdown() then
         rolePollElapsed = rolePollElapsed + elapsed
@@ -3057,7 +3185,8 @@ eventFrame:SetScript("OnUpdate", function(self, elapsed)
         deferredElapsed = deferredElapsed + elapsed
         if deferredElapsed >= deferredDelay then
             deferredPending = false
-            Apotheca.UpdateAllButtons()
+            -- A full update since the request already did the work.
+            if (Apotheca._updateSeq or 0) == deferredSeq then Apotheca.UpdateAllButtons() end
         end
     end
 
@@ -3183,6 +3312,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
             UpdateScrollGlow()
             UpdateWeaponOilGlow()
             UpdateXPFoodGlow()
+            UpdatePoisonGlow()
         end
 
     elseif event == "READY_CHECK_FINISHED" then
@@ -3192,6 +3322,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         UpdateScrollGlow()
         UpdateWeaponOilGlow()
         UpdateXPFoodGlow()
+        UpdatePoisonGlow()
 
     elseif event == "PLAYER_REGEN_DISABLED" then
         HideBuffFoodGlow()
@@ -3200,8 +3331,17 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         UpdateWeaponOilGlow()
         -- Hide outright, like the other glows: at this event lockdown may not
         -- be engaged yet, so a recompute could still show it for the fight.
-        xpRemindPending, xpRemindUntil = false, 0
+        remindPending, remindUntil = false, 0
         HideGlow(Apotheca.buttons["xpfood"])
+        for _, cfg in ipairs(POISON_BUTTON_CONFIG) do HideGlow(Apotheca.buttons[cfg.key]) end
+
+    elseif event == "PLAYER_EQUIPMENT_CHANGED" then
+        -- A weapon swap changes which hands take a poison (#24).
+        if playerReady and (arg1 == 16 or arg1 == 17) then RequestUpdate() end
+
+    elseif event == "WEAPON_ENCHANT_CHANGED" then
+        -- A coating applied or run out (#24): the poison glows follow.
+        if playerReady and not InCombatLockdown() then UpdatePoisonGlow() end
 
     elseif event == "PLAYER_LEVEL_UP" or event == "DISABLE_XP_GAIN" or event == "ENABLE_XP_GAIN" then
         -- A new level opens better XP food; the cap, or XP turned off,
@@ -3249,7 +3389,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
             Apotheca.ApplySecureItemAttributes(btn, btn.itemID)
         end
         -- The XP food reminder waits for this update (UpdateAllButtonsBody).
-        xpRemindPending = true
+        remindPending = true
         RequestUpdate()
 
     elseif event == "PLAYER_LOGOUT" then

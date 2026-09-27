@@ -350,11 +350,20 @@ function C_Item.GetItemIconByID(itemID) return WoW.items[itemID] and 134400 or n
 function C_Item.GetItemCount(itemID) return 0 end
 function C_Item.UseItemByName(name) WoW.itemsUsed[#WoW.itemsUsed + 1] = name end
 -- Reads the client's item DB: answers for any known ID, cache or not.
+-- Item class by ID ({ classID, subClassID, subType }); consumables by
+-- default. The type name follows the class, as the client's does.
+WoW.itemClass = {}
+local CLASS_NAME = { [2] = "Weapon", [4] = "Armor" }
 function C_Item.GetItemInfoInstant(itemID)
+    local c = WoW.itemClass[itemID]
+    if c then return itemID, CLASS_NAME[c[1]] or "Miscellaneous", c[3] or "", "", 134400, c[1], c[2] end
     if not WoW.items[itemID] then return nil end
     return itemID, "Consumable", "Food & Drink", "", 134400, 0, 5
 end
 function C_Item.RequestLoadItemDataByID() end
+-- Items the player cannot use now (C_Item.IsUsableItem false).
+WoW.unusable = {}
+function C_Item.IsUsableItem(itemID) return not WoW.unusable[itemID], false end
 function C_Item.GetItemSpell(itemID)
     if WoW.items[itemID] then return "Food", 433 end
 end

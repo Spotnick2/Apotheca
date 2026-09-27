@@ -586,6 +586,29 @@ function Apotheca.BuildOptionsPanelContent(panel)
     Checkbox("Glow when weapon oil is missing  |cff888888(ready check)|r",
         function() return DBGet("weaponOil", "glowOnMissingBuff") ~= false end,
         function(v) DBSet(v, "weaponOil", "glowOnMissingBuff") end)
+    Divider()
+    Checkbox("Enable Poison buttons  |cff888888(rogues)|r  |cffff8800experimental|r",
+        function() return DBGet("poisons", "enabled") == true end,
+        function(v) DBSet(v, "poisons", "enabled") end)
+    SmallLabel("|cffff8800Experimental: not yet tried on a rogue in game.|r |cff888888One button per hand,\n"
+        .. "offering your strongest poison of the kind chosen below; a click should apply\n"
+        .. "it to that weapon. Please report whether it does.|r")
+    local POISON_OPTIONS = { { value = "none", label = "None" } }
+    for _, f in ipairs(Apotheca.DATA.POISON_FAMILIES or {}) do
+        POISON_OPTIONS[#POISON_OPTIONS + 1] = { value = f.key, label = f.label }
+    end
+    Dropdown("Main hand poison  |cff888888(this character)|r:", POISON_OPTIONS,
+        function() return Apotheca.PoisonChoice(16) end,
+        function(v) Apotheca.SetPoisonChoice(16, v) end)
+    Dropdown("Off hand poison  |cff888888(this character)|r:", POISON_OPTIONS,
+        function() return Apotheca.PoisonChoice(17) end,
+        function(v) Apotheca.SetPoisonChoice(17, v) end)
+    Checkbox("Glow when a weapon has no poison  |cff888888(ready check)|r",
+        function() return DBGet("poisons", "glowOnMissingBuff") ~= false end,
+        function(v) DBSet(v, "poisons", "glowOnMissingBuff") end)
+    Checkbox("Remind me after combat  |cff888888(glows for a few seconds)|r",
+        function() return DBGet("poisons", "remind") == true end,
+        function(v) DBSet(v, "poisons", "remind") end)
 
     SectionHeader("Bandage")
     SmallLabel("Shows the best available bandage from your bags.")
@@ -633,7 +656,8 @@ function Apotheca.BuildOptionsPanelContent(panel)
         bufffood = "Buff Food", xpfood = "XP Food", spiritscroll = "Spirit Scroll",
         protectionscroll = "Protection Scroll", intellectscroll = "Intellect Scroll",
         staminascroll = "Stamina Scroll", strengthscroll = "Strength Scroll",
-        agilityscroll = "Agility Scroll", weaponoil = "Weapon Oil", bandage = "Bandage",
+        agilityscroll = "Agility Scroll", weaponoil = "Weapon Oil",
+        poisonmh = "Poison (main hand)", poisonoh = "Poison (off hand)", bandage = "Bandage",
     }
     local ROW_HEIGHT, ROW_WIDTH = 22, CONTENT_W - PAD * 2
     local orderContainer = CreateFrame("Frame", nil, curContent)

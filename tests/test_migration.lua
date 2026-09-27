@@ -18,7 +18,7 @@ H.loadAddon({ savedDB = {
       ["Realm-Calm"]   = { preventWaste = true,  preventWasteMode = "DO_NOTHING" },
       ["Realm-Old"]    = { preventWaste = true,  preventWasteMode = "BLOCK" },
       -- A custom order saved before the XP Food button.
-      ["Realm-Ordered"] = { buttonOrder = { "bandage", "bufffood", "mana" } },
+      ["Realm-Ordered"] = { buttonOrder = { "bandage", "bufffood", "mana", "weaponoil" } },
       Global = {
         preventWaste = false,          -- old boolean, off: must stay off
         showOnlyHealingSpec = true,   -- saved by every earlier profile, as the old default
@@ -58,7 +58,8 @@ H.eq(ApothecaDB.profiles["Realm-Calm"].preventWasteMode, "DO_NOTHING", "and so i
 H.eq(ApothecaDB.profiles["Realm-Asker"].preventWaste, nil, "the stale boolean is removed there too")
 H.eq(ApothecaDB.profiles["Realm-Old"].preventWasteMode, "BLOCK", "the old default, true, stays Block")
 local ord = ApothecaDB.profiles["Realm-Ordered"].buttonOrder
-H.eq(table.concat(ord, ","), "bandage,bufffood,xpfood,mana", "a saved order gets XP Food next to Buff Food")
+H.eq(table.concat(ord, ","), "bandage,bufffood,xpfood,mana,weaponoil,poisonmh,poisonoh",
+    "a saved order gets XP Food next to Buff Food, and the poisons after Weapon Oil")
 
 -- The flat (pre-profile) database route.
 local flat = { preventWaste = false, buffFoodPriority = { PRIEST = { "healing", "mp5", "crit", "stamina" } } }
