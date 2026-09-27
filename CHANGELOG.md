@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- **Weapon Oil applies straight to your main hand.** Left-click: a 3-second cast and no weapon to pick. Right-click still lets you pick the weapon.
+
 ## [2.3.0] - 2026-09-27
 
 ### Added

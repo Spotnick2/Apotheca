@@ -164,4 +164,25 @@ WoW.fire("READY_CHECK")
 H.check(not glowing(mh), "ready-check glow switched off")
 WoW.fire("READY_CHECK_FINISHED")
 
+------------------------------------------------------------
+-- Weapon Oil: straight onto the main hand (measured on 70009, #24)
+------------------------------------------------------------
+WoW.class = "MAGE"
+WoW.AddItem(0, 5, 20744, 3, "Minor Wizard Oil")
+prof().weaponOil.includeWizardOils = true
+update()
+local oil = Apotheca.buttons.weaponoil
+H.eq(oil.itemID, 20744, "a mage is offered the wizard oil")
+H.eq(oil:GetAttribute("target-slot1"), 16, "left-click aimed at the main hand, as measured")
+H.eq(oil:GetAttribute("target-slot"), nil, "right-click keeps the cursor to pick a weapon")
+WoW.equipped[16] = POLE
+WoW.fire("PLAYER_EQUIPMENT_CHANGED", 16, false)
+for _ = 1, 3 do WoW.tick(0.1) end
+H.eq(oil:GetAttribute("target-slot1"), nil, "a fishing pole in the main hand: no target, the cursor as before")
+WoW.equipped[16] = nil
+WoW.fire("PLAYER_EQUIPMENT_CHANGED", 16, false)
+for _ = 1, 3 do WoW.tick(0.1) end
+H.eq(oil:GetAttribute("target-slot1"), nil, "no main-hand weapon: no target")
+WoW.equipped[16] = MH_WEAPON
+
 H.done("test_poisons")
