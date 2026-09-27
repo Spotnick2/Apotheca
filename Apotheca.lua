@@ -76,7 +76,9 @@ local PROFILE_DEFAULTS = {
     weaponOil = {
         enabled           = true,
         glowOnMissingBuff = true,
-        includeWizardOils = false,
+        -- Which oil (#29): "AUTO" by role, "MANA_FIRST", "WIZARD_FIRST",
+        -- "MANA_ONLY". Replaces the old includeWizardOils checkbox.
+        kind              = "AUTO",
     },
     health = {
         preferHealthstone = true,
@@ -205,6 +207,14 @@ local function MigrateProfile(prof)
             prof.preventWasteMode = prof.preventWaste and "BLOCK" or "DO_NOTHING"
         end
         prof.preventWaste = nil
+    end
+    -- The old includeWizardOils checkbox (#29): ticked was a choice, "mana
+    -- oil, then wizard oil", which is MANA_FIRST. Unticked was the saved
+    -- default for everyone, so it becomes the new default, by role. It
+    -- overrides the "AUTO" ApplyDefaults has already filled in.
+    if type(prof.weaponOil) == "table" and prof.weaponOil.includeWizardOils ~= nil then
+        if prof.weaponOil.includeWizardOils == true then prof.weaponOil.kind = "MANA_FIRST" end
+        prof.weaponOil.includeWizardOils = nil
     end
     -- A custom button order saved before a newer button gets it next to its
     -- neighbour, as in the default order, not at the end where
@@ -1356,18 +1366,27 @@ function Apotheca.FindBestPoison(family, bagMap)
     return nil, 0, nil
 end
 
+-- The oil lists to try, in order, for a weaponOil.kind (#29). "AUTO"
+-- follows the role: healers want mana regeneration, casters spell damage;
+-- other mana users (hunters, tank or melee paladins, druids, shamans) get
+-- mana oil only, as before, since a wizard oil does little for them.
+local OIL_ORDER = {
+    MANA_FIRST   = { MANA_OIL_ITEMS, WIZARD_OIL_ITEMS },
+    WIZARD_FIRST = { WIZARD_OIL_ITEMS, MANA_OIL_ITEMS },
+    MANA_ONLY    = { MANA_OIL_ITEMS },
+}
+function Apotheca.OilKind()
+    local kind = DB().weaponOil and DB().weaponOil.kind or "AUTO"
+    if OIL_ORDER[kind] then return kind end
+    local _, profile = Apotheca.ResolveRole()
+    if profile == "HEALER" then return "MANA_FIRST" end
+    if profile == "CASTER" then return "WIZARD_FIRST" end
+    return "MANA_ONLY"
+end
+
 function Apotheca.FindBestWeaponOil(bagMap)
-    -- Mana oils
-    for _, id in ipairs(MANA_OIL_ITEMS) do
-        local count = bagMap[id]
-        if count and count > 0 then
-            return id, count, GetCachedTexture(id)
-        end
-    end
-    -- Wizard oils (only if enabled in config)
-    local db = DB()
-    if db.weaponOil and db.weaponOil.includeWizardOils then
-        for _, id in ipairs(WIZARD_OIL_ITEMS) do
+    for _, list in ipairs(OIL_ORDER[Apotheca.OilKind()]) do
+        for _, id in ipairs(list) do
             local count = bagMap[id]
             if count and count > 0 then
                 return id, count, GetCachedTexture(id)

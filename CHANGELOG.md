@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
+- **Weapon Oil follows your role.** Casters are offered wizard oil (then mana oil), healers mana oil (then wizard oil), and other classes with mana mana oil. The old "Include Wizard Oils" checkbox is now an "Oil" choice in the options: if you had ticked it, you get "Mana oil first", the same as before.
 - **Weapon Oil applies straight to your main hand.** Left-click: a 3-second cast and no weapon to pick. Right-click still lets you pick the weapon.
 
 ## [2.3.0] - 2026-09-27
