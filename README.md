@@ -22,6 +22,7 @@ Your settings are saved per profile (global or per character), and your role cho
 | Flask / Elixir / Elixir 2 | Three separate slots, each offering its best item for your role on its own: Distilled Wisdom, Cleric's Elixirs, Mageblood… Forever has no TBC-style battle/guardian elixir limit. Which elixirs stack with each other hasn't been measured yet; if two don't, please report it. A slot whose buff is already running offers nothing, so a misclick can't waste a two-hour flask. |
 | Spirit / Protection scroll | The strongest scroll. |
 | Weapon oil | By role: healers get mana oil, casters wizard oil (a Druid or Shaman on Spell damage too), tanks and physical damage mana oil; you can choose instead. Only an oil you can use yet. Left-click applies it to your main-hand weapon; right-click lets you pick the weapon. |
+| Weapon stones *(experimental, chosen per character and hand)* | Pick "Damage stone first" or "Elemental first" for a hand: a sharpening stone for a sharp weapon, a weightstone for a blunt one, Elemental (crit) for any. A stone on the main hand replaces the Weapon Oil button there. Not yet tried in game. |
 | Poisons *(rogues, experimental, off by default)* | One button per hand: your strongest poison of the kind you pick for that hand (Instant and Deadly by default), applied to that weapon on click. Not yet tried on a rogue in game, so please report whether it works. |
 | Bandage | The strongest bandage. Battleground bandages are only offered inside their battleground. |
 

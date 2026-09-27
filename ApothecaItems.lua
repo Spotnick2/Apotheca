@@ -625,6 +625,29 @@ D.POISONS = {
         { id = 10918 , level = 32, rank = 1 },  -- Wound Poison
     },
 }
+-- Weapon stones (#32) by weapon kind, strongest first: sharp (sharpening
+-- stones), blunt (weightstones), any (Elemental: melee crit on any melee
+-- weapon). effect: weaponDamage or meleeCrit, never ranked against each other.
+D.STONES = {
+    any = {
+        { id = 18262 , value = 2 , effect = "meleeCrit", level = 50 },  -- Elemental Sharpening Stone
+    },
+    blunt = {
+        { id = 12643 , value = 8 , effect = "weaponDamage", level = 35 },  -- Dense Weightstone
+        { id = 7965  , value = 6 , effect = "weaponDamage", level = 25 },  -- Solid Weightstone
+        { id = 3241  , value = 4 , effect = "weaponDamage", level = 15 },  -- Heavy Weightstone
+        { id = 3240  , value = 3 , effect = "weaponDamage", level = 5  },  -- Coarse Weightstone
+        { id = 3239  , value = 2 , effect = "weaponDamage", level = 1  },  -- Rough Weightstone
+    },
+    sharp = {
+        { id = 12404 , value = 8 , effect = "weaponDamage", level = 35 },  -- Dense Sharpening Stone
+        { id = 7964  , value = 6 , effect = "weaponDamage", level = 25 },  -- Solid Sharpening Stone
+        { id = 2871  , value = 4 , effect = "weaponDamage", level = 15 },  -- Heavy Sharpening Stone
+        { id = 2863  , value = 3 , effect = "weaponDamage", level = 5  },  -- Coarse Sharpening Stone
+        { id = 2862  , value = 2 , effect = "weaponDamage", level = 1  },  -- Rough Sharpening Stone
+    },
+}
+
 -- The families in the order the options list them.
 D.POISON_FAMILIES = {
     { key = "instant", label = "Instant Poison" },

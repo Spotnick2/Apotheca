@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Weapon stones, experimental.** Choose a stone for each hand, per character, in the options under Scrolls & Weapon Oil: None (the default), "Damage stone first" or "Elemental first". The button offers a sharpening stone for a sharp weapon (axes, swords, daggers, polearms), a weightstone for a blunt one (maces, staves), or the Elemental Sharpening Stone (crit) for any melee weapon, whichever you can use. A stone on the main hand replaces the Weapon Oil button there, and a rogue's chosen poison keeps its hand. It hasn't been tried in game yet, so please tell us whether it works.
+
 ## [2.4.0] - 2026-09-27
 
 ### Read this after updating

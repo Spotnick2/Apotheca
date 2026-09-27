@@ -552,6 +552,44 @@ def poisons(rows):
     return {k: sorted(v) for k, v in fam.items()}, labels, skipped
 
 
+# ------------------------------------------------------------------
+# Weapon stones (#32)
+# ------------------------------------------------------------------
+# Sharpening stones (sharp weapons) and weightstones (blunt weapons) add
+# weapon damage; Elemental Sharpening Stone adds melee crit on any melee
+# weapon. Their effects are different quantities and are never ranked
+# against each other: effect says which. A stone only good "against" a
+# creature type (Consecrated) is reported as skipped, not offered.
+STONE_NAME = re.compile(r'(Sharpening Stone|Weightstone)$')
+
+
+def stones(rows):
+    """{kind: [(-value, id, name, value, effect, level)]} for kind sharp /
+    blunt / any, strongest first, and the skipped stones with why."""
+    out, skipped = defaultdict(list), []
+    for r in rows:
+        if not STONE_NAME.search(r['name']) or 'Writ' in r['name'] or r['quest']:
+            continue
+        u = r['use']
+        if 'against' in u:
+            skipped.append((r['id'], r['name'], 'stone: only against a creature type'))
+            continue
+        m = re.search(r'Increase sharp weapon damage by (\d+)', u)
+        kind, effect = 'sharp', 'weaponDamage'
+        if not m:
+            m = re.search(r'Increase the damage of a blunt weapon by (\d+)', u)
+            kind = 'blunt'
+        if not m:
+            m = re.search(r'Increase critical chance on a melee weapon by (\d+)%', u)
+            kind, effect = 'any', 'meleeCrit'
+        if not m:
+            skipped.append((r['id'], r['name'], 'stone: effect not recognised'))
+            continue
+        v = int(m.group(1))
+        out[kind].append((-v, r['id'], r['name'], v, effect, max(1, r['lvl'])))
+    return {k: sorted(v) for k, v in out.items()}, skipped
+
+
 def ordinary_well_fed(spells, xp):
     """Well Fed auras known NOT to be XP: a described non-XP one, or a
     Vanilla spell. A Forever spell with no description (1283082 on 70009)
@@ -579,6 +617,8 @@ def offered_item_ids(out):
     ids.update(t[0] for t in out['PERCENT_POTIONS'])
     ids.update(t[2] for t in out.get('XP_FOOD', []))
     for lst in out.get('POISONS', {}).values():
+        ids.update(t[1] for t in lst)
+    for lst in out.get('STONES', {}).values():
         ids.update(t[1] for t in lst)
     return ids
 
@@ -693,6 +733,18 @@ def emit(out, build_id, src):
     w('}')
     order = [k for k in POISON_ORDER if k in out['POISONS']] + \
             sorted(k for k in out['POISONS'] if k not in POISON_ORDER)
+    w('-- Weapon stones (#32) by weapon kind, strongest first: sharp (sharpening')
+    w('-- stones), blunt (weightstones), any (Elemental: melee crit on any melee')
+    w('-- weapon). effect: weaponDamage or meleeCrit, never ranked against each other.')
+    w('D.STONES = {')
+    for k in sorted(out['STONES']):
+        w('    %s = {' % k)
+        for t in out['STONES'][k]:
+            w('        { id = %-6d, value = %-2d, effect = "%s", level = %-2d },  -- %s' % (
+                t[1], t[3], t[4], t[5], t[2]))
+        w('    },')
+    w('}')
+    w('')
     w('-- The families in the order the options list them.')
     w('D.POISON_FAMILIES = {')
     for k in order:
@@ -801,6 +853,8 @@ if __name__ == '__main__':
     out['XP_FOOD'] = xp_food(rows)
     out['POISONS'], out['POISON_LABELS'], poison_skipped = poisons(rows)
     skipped.extend(poison_skipped)
+    out['STONES'], stone_skipped = stones(rows)
+    skipped.extend(stone_skipped)
     out['XP_WELL_FED_SPELLS'] = xp_auras(wellfed, out['XP_FOOD'])
     out['WELL_FED_SPELLS'] = sorted(wellfed)
     out['ORDINARY_WELL_FED_SPELLS'] = ordinary_well_fed(wellfed, out['XP_WELL_FED_SPELLS'])
