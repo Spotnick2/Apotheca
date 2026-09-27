@@ -350,11 +350,18 @@ end
 -- The item ID of the WEAPON in an inventory slot (16 main hand, 17 off
 -- hand): nil for an empty slot, a shield or a held off-hand item.
 function API.HandWeapon(slot)
-    local ok, id = pcall(GetInventoryItemID, "player", slot)
-    if not ok or id == nil or (issecretvalue and issecretvalue(id)) then return nil end
-    local okI, _, _, _, _, _, classID = pcall(C_Item.GetItemInfoInstant, id)
-    if not okI or classID ~= 2 then return nil end
-    return id
+    -- One pcall around the whole read, and the secret check before any
+    -- comparison: comparing a secret throws (Codex review of #26).
+    local ok, id = pcall(function()
+        local id = GetInventoryItemID("player", slot)
+        if issecretvalue and issecretvalue(id) then return nil end
+        if id == nil then return nil end
+        local _, _, _, _, _, classID = C_Item.GetItemInfoInstant(id)
+        if issecretvalue and issecretvalue(classID) then return nil end
+        if classID ~= 2 then return nil end
+        return id
+    end)
+    return ok and id or nil
 end
 
 -- Does this hand carry a temporary coating (poison, oil, stone)? true /
