@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [2.3.0] - 2026-09-27
 
 ### Added
 - **Rogue poisons, experimental (off by default).** One button per hand, offering your strongest poison of the kind you choose for that hand (Instant on the main hand and Deadly on the off hand by default; the choice is per character). A click should apply it to that weapon. Turn it on in the options under Scrolls & Weapon Oil. It hasn't been tried on a rogue in game yet, so please tell us whether it works. The buttons glow on a ready check when a weapon has no poison, and after combat too if you switch that on.
