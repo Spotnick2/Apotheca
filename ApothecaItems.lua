@@ -825,13 +825,13 @@ D.ALL_FLASK_SPELLS = {
     1293743,  -- Flask of Natural Swiftness
 }
 
--- Weapon oils. kind = "mana" (healer default) or "wizard".
+-- Weapon oils, strongest first. kind = "mana" or "wizard"; level = required level.
 D.OILS = {
-    { id = 20749 , kind = "wizard", stats = { healing = 36, spellCrit = 1, spellDmg = 36 } },  -- Brilliant Wizard Oil
-    { id = 20750 , kind = "wizard", stats = { healing = 24, spellDmg = 24 } },  -- Wizard Oil
-    { id = 20748 , kind = "mana",  stats = { healing = 30, mp5 = 15 } },  -- Brilliant Mana Oil
-    { id = 20744 , kind = "wizard", stats = { healing = 8, spellDmg = 8 } },  -- Minor Wizard Oil
-    { id = 20745 , kind = "mana",  stats = { healing = 10, mp5 = 5 } },  -- Minor Mana Oil
+    { id = 20749 , kind = "wizard", level = 45, stats = { healing = 36, spellCrit = 1, spellDmg = 36 } },  -- Brilliant Wizard Oil
+    { id = 20750 , kind = "wizard", level = 40, stats = { healing = 24, spellDmg = 24 } },  -- Wizard Oil
+    { id = 20748 , kind = "mana",  level = 45, stats = { healing = 30, mp5 = 15 } },  -- Brilliant Mana Oil
+    { id = 20744 , kind = "wizard", level = 5 , stats = { healing = 8, spellDmg = 8 } },  -- Minor Wizard Oil
+    { id = 20745 , kind = "mana",  level = 20, stats = { healing = 10, mp5 = 5 } },  -- Minor Mana Oil
 }
 
 -- Items usable only in battlegrounds. "pvp" = any battleground; otherwise

@@ -21,7 +21,7 @@ Your settings are saved per profile (global or per character), and your role cho
 | XP food *(optional, off by default)* | While you're levelling: food or drink with Forever's 5% kill-XP bonus that you can eat at your level: a stat your role uses first, then the highest level. When you leave combat without that buff, it glows for a few seconds as a reminder. |
 | Flask / Elixir / Elixir 2 | Three separate slots, each offering its best item for your role on its own: Distilled Wisdom, Cleric's Elixirs, Mageblood… Forever has no TBC-style battle/guardian elixir limit. Which elixirs stack with each other hasn't been measured yet; if two don't, please report it. A slot whose buff is already running offers nothing, so a misclick can't waste a two-hour flask. |
 | Spirit / Protection scroll | The strongest scroll. |
-| Weapon oil | By role: healers get mana oil, casters wizard oil, other classes with mana mana oil; you can choose instead. Left-click applies it to your main-hand weapon; right-click lets you pick the weapon. |
+| Weapon oil | By role: healers get mana oil, casters wizard oil (a Druid or Shaman on Spell damage too), tanks and physical damage mana oil; you can choose instead. Only an oil you can use yet. Left-click applies it to your main-hand weapon; right-click lets you pick the weapon. |
 | Poisons *(rogues, experimental, off by default)* | One button per hand: your strongest poison of the kind you pick for that hand (Instant and Deadly by default), applied to that weapon on click. Not yet tried on a rogue in game, so please report whether it works. |
 | Bandage | The strongest bandage. Battleground bandages are only offered inside their battleground. |
 

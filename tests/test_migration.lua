@@ -22,6 +22,8 @@ H.loadAddon({ savedDB = {
       -- The old wizard oil checkbox: ticked (a choice), and the saved default.
       ["Realm-Wizard"]  = { weaponOil = { enabled = true, includeWizardOils = true } },
       ["Realm-Plain"]   = { weaponOil = { enabled = true, includeWizardOils = false } },
+      -- A newer choice next to a leftover ticked checkbox: the choice stays.
+      ["Realm-Chosen"]  = { weaponOil = { enabled = true, kind = "WIZARD_FIRST", includeWizardOils = true } },
       Global = {
         weaponOil = { enabled = true, includeWizardOils = true },  -- the ACTIVE profile ticked it
         preventWaste = false,          -- old boolean, off: must stay off
@@ -66,6 +68,8 @@ H.eq(ApothecaDB.profiles["Realm-Wizard"].weaponOil.kind, "MANA_FIRST",
 H.eq(ApothecaDB.profiles["Realm-Plain"].weaponOil.kind, nil,
     "an unticked one (the old default) leaves the new default, by role, to apply")
 H.eq(ApothecaDB.profiles["Realm-Wizard"].weaponOil.includeWizardOils, nil, "the old key is gone")
+H.eq(ApothecaDB.profiles["Realm-Chosen"].weaponOil.kind, "WIZARD_FIRST",
+    "a kind already chosen is not replaced by a leftover ticked checkbox")
 -- The active profile: ApplyDefaults filled AUTO first; the choice wins.
 H.eq(ApothecaDB.profiles.Global.weaponOil.kind, "MANA_FIRST",
     "on the active profile too, over the AUTO ApplyDefaults filled in first")

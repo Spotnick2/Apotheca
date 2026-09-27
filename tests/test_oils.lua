@@ -6,6 +6,7 @@ local H = dofile("tests/harness.lua")
 local STAFF = 2042
 WoW.itemClass[STAFF] = { 2, 10, "Staves" }
 WoW.equipped = { [16] = STAFF }
+WoW.level = 25                          -- Minor Mana Oil needs 20, Minor Wizard Oil 5
 WoW.AddItem(0, 1, 20744, 3, "Minor Wizard Oil")
 WoW.AddItem(0, 2, 20745, 3, "Minor Mana Oil")
 H.loadAddon()
@@ -67,5 +68,22 @@ prof().weaponOil.kind = "sausage"
 as("WARLOCK", { damage = true })
 H.eq(oil.itemID, 20744, "an unknown saved choice behaves as by role")
 prof().weaponOil.kind = "AUTO"
+
+-- Only an oil the player can use: the fallback reaches the other kind
+-- (/code-review of #30). A level-35 warlock with Wizard Oil (level 40) and
+-- Minor Mana Oil gets the mana oil, until level 40.
+WoW.bags[0][1] = nil
+WoW.AddItem(0, 3, 20750, 2, "Wizard Oil")
+WoW.level = 35
+as("WARLOCK", { damage = true })
+H.eq(oil.itemID, 20745, "Wizard Oil above the level: the usable mana oil instead")
+WoW.level = 40
+as("WARLOCK", { damage = true })
+H.eq(oil.itemID, 20750, "at level 40: the Wizard Oil")
+-- An oil the client says can't be used is skipped too.
+WoW.unusable[20750] = true
+as("WARLOCK", { damage = true })
+H.eq(oil.itemID, 20745, "an oil the client refuses: the next usable one")
+WoW.unusable = {}
 
 H.done("test_oils")
