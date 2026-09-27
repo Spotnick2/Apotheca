@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Read this after updating
+- **Weapon Oil follows your role now.** Unless you had ticked "Include Wizard Oils", your Weapon Oil button may offer a different oil:
+  - Damage as a caster (including a Druid or Shaman set to Spell damage): wizard oil, then mana oil.
+  - Healer: mana oil, then wizard oil.
+  - Tank and physical Damage: mana oil only.
+
+  If you had ticked it, you get "Mana oil first", the same as before. Pick any other choice in the options under Oil.
+
 ### Changed
 - **Weapon Oil applies straight to your main hand.** Left-click: a 3-second cast and no weapon to pick. Right-click still lets you pick the weapon.
 

@@ -431,7 +431,7 @@ def build(rows):
         if not re.search(r'(Mana|Wizard) Oil$', r['name']) or 'against' in r['use']:
             continue
         st = parse_stats(r['use'])
-        oils.append((r['id'], r['name'], 'mana' if 'Mana Oil' in r['name'] else 'wizard', st))
+        oils.append((r['id'], r['name'], 'mana' if 'Mana Oil' in r['name'] else 'wizard', st, max(1, r['lvl'])))
     out['OILS'] = oils
 
     # Only one flask can be active. Its spell must count as "a flask is
@@ -745,10 +745,11 @@ def emit(out, build_id, src):
     w('}')
     w('')
 
-    w('-- Weapon oils. kind = "mana" (healer default) or "wizard".')
+    w('-- Weapon oils, strongest first. kind = "mana" or "wizard"; level = required level.')
     w('D.OILS = {')
     for t in sorted(out['OILS'], key=lambda t: -(sum(t[3].values()))):
-        w('    { id = %-6d, kind = %-8s stats = %s },  -- %s' % (t[0], '"%s",' % t[2], lua_stats(t[3]), t[1]))
+        w('    { id = %-6d, kind = %-8s level = %-2d, stats = %s },  -- %s' % (
+            t[0], '"%s",' % t[2], t[4], lua_stats(t[3]), t[1]))
     w('}')
     w('')
 

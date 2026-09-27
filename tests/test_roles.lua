@@ -91,6 +91,7 @@ H.check(not Apotheca.buttons.mana:IsShown(), "a warrior has no Mana button, even
 H.check(Apotheca.buttons.health:IsShown(), "but keeps the Health button")
 WoW.AddItem(0, 3, 8766, 3, "Morning Glory Dew")
 WoW.AddItem(0, 4, 20748, 3, "Brilliant Mana Oil")
+WoW.level = 60                          -- the oil needs level 45 (oils are level-checked, #29)
 Apotheca.UpdateAllButtons()
 H.check(not Apotheca.buttons.drink:IsShown(), "a warrior has no Drink button, even holding water")
 H.check(not Apotheca.buttons.weaponoil:IsShown(), "nor a Weapon Oil button holding Brilliant Mana Oil")

@@ -19,7 +19,13 @@ H.loadAddon({ savedDB = {
       ["Realm-Old"]    = { preventWaste = true,  preventWasteMode = "BLOCK" },
       -- A custom order saved before the XP Food button.
       ["Realm-Ordered"] = { buttonOrder = { "bandage", "bufffood", "mana", "weaponoil" } },
+      -- The old wizard oil checkbox: ticked (a choice), and the saved default.
+      ["Realm-Wizard"]  = { weaponOil = { enabled = true, includeWizardOils = true } },
+      ["Realm-Plain"]   = { weaponOil = { enabled = true, includeWizardOils = false } },
+      -- A newer choice next to a leftover ticked checkbox: the choice stays.
+      ["Realm-Chosen"]  = { weaponOil = { enabled = true, kind = "WIZARD_FIRST", includeWizardOils = true } },
       Global = {
+        weaponOil = { enabled = true, includeWizardOils = true },  -- the ACTIVE profile ticked it
         preventWaste = false,          -- old boolean, off: must stay off
         showOnlyHealingSpec = true,   -- saved by every earlier profile, as the old default
         buffFoodPriority = {
@@ -57,6 +63,22 @@ H.eq(ApothecaDB.profiles["Realm-Asker"].preventWasteMode, "ASK",
 H.eq(ApothecaDB.profiles["Realm-Calm"].preventWasteMode, "DO_NOTHING", "and so is Do nothing")
 H.eq(ApothecaDB.profiles["Realm-Asker"].preventWaste, nil, "the stale boolean is removed there too")
 H.eq(ApothecaDB.profiles["Realm-Old"].preventWasteMode, "BLOCK", "the old default, true, stays Block")
+H.eq(ApothecaDB.profiles["Realm-Wizard"].weaponOil.kind, "MANA_FIRST",
+    "a ticked Include Wizard Oils becomes Mana oil first, as it behaved")
+H.eq(ApothecaDB.profiles["Realm-Plain"].weaponOil.kind, nil,
+    "an unticked one (the old default) leaves the new default, by role, to apply")
+H.eq(ApothecaDB.profiles["Realm-Wizard"].weaponOil.includeWizardOils, nil, "the old key is gone")
+H.eq(ApothecaDB.profiles["Realm-Chosen"].weaponOil.kind, "WIZARD_FIRST",
+    "a kind already chosen is not replaced by a leftover ticked checkbox")
+-- The active profile: ApplyDefaults filled AUTO first; the choice wins.
+H.eq(ApothecaDB.profiles.Global.weaponOil.kind, "MANA_FIRST",
+    "on the active profile too, over the AUTO ApplyDefaults filled in first")
+-- Switching later fills the default without touching a migrated choice.
+Apotheca.SetProfile("Realm-Plain")
+H.eq(ApothecaDB.profiles["Realm-Plain"].weaponOil.kind, "AUTO", "switching to the unticked profile: by role")
+Apotheca.SetProfile("Realm-Wizard")
+H.eq(ApothecaDB.profiles["Realm-Wizard"].weaponOil.kind, "MANA_FIRST", "switching to the ticked one: still Mana oil first")
+Apotheca.SetProfile("Global")
 local ord = ApothecaDB.profiles["Realm-Ordered"].buttonOrder
 H.eq(table.concat(ord, ","), "bandage,bufffood,xpfood,mana,weaponoil,poisonmh,poisonoh",
     "a saved order gets XP Food next to Buff Food, and the poisons after Weapon Oil")

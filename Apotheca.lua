@@ -76,7 +76,9 @@ local PROFILE_DEFAULTS = {
     weaponOil = {
         enabled           = true,
         glowOnMissingBuff = true,
-        includeWizardOils = false,
+        -- Which oil (#29): "AUTO" by role, "MANA_FIRST", "WIZARD_FIRST",
+        -- "MANA_ONLY". Replaces the old includeWizardOils checkbox.
+        kind              = "AUTO",
     },
     health = {
         preferHealthstone = true,
@@ -205,6 +207,19 @@ local function MigrateProfile(prof)
             prof.preventWasteMode = prof.preventWaste and "BLOCK" or "DO_NOTHING"
         end
         prof.preventWaste = nil
+    end
+    -- The old includeWizardOils checkbox (#29): ticked was a choice, "mana
+    -- oil, then wizard oil", which is MANA_FIRST. Unticked was the saved
+    -- default for everyone, so it becomes the new default, by role. It
+    -- overrides the "AUTO" ApplyDefaults has already filled in.
+    -- Only over no choice or the default: a kind picked in the new dropdown
+    -- is never replaced by a leftover checkbox (/code-review of #30).
+    if type(prof.weaponOil) == "table" and prof.weaponOil.includeWizardOils ~= nil then
+        local kind = prof.weaponOil.kind
+        if prof.weaponOil.includeWizardOils == true and (kind == nil or kind == "AUTO") then
+            prof.weaponOil.kind = "MANA_FIRST"
+        end
+        prof.weaponOil.includeWizardOils = nil
     end
     -- A custom button order saved before a newer button gets it next to its
     -- neighbour, as in the default order, not at the end where
@@ -477,10 +492,11 @@ end
 Apotheca.SCROLL_KINDS = SCROLL_KINDS
 
 -- Weapon oils, strongest first by kind.
+-- Oil entries ({ id, level }) by kind, strongest first.
 local MANA_OIL_ITEMS, WIZARD_OIL_ITEMS = {}, {}
 for _, oil in ipairs(DATA.OILS) do
     local list = oil.kind == "mana" and MANA_OIL_ITEMS or WIZARD_OIL_ITEMS
-    list[#list + 1] = oil.id
+    list[#list + 1] = { id = oil.id, level = oil.level or 1 }
 end
 
 -- Battleground-only items: "pvp" means any battleground, otherwise
@@ -512,6 +528,7 @@ end
 
 local ROLE_PROFILES = {
     TANK = {
+        oil      = "MANA_ONLY",   -- Weapon Oil "by role" (#29)
         scrolls  = { "armor", "stamina" },
         buffFood = { "stamina", "armor", "strength", "agility" },
         flask    = { "maxHealth" },
@@ -519,6 +536,7 @@ local ROLE_PROFILES = {
         guardian = { "stamina", "strength", "agility" },
     },
     HEALER = {
+        oil      = "MANA_FIRST",   -- Weapon Oil "by role" (#29)
         scrolls  = { "spirit", "intellect", "armor" },
         buffFood = { "healing", "intellect", "spirit", "stamina" },
         flask    = { "maxMana", "healing" },
@@ -526,6 +544,7 @@ local ROLE_PROFILES = {
         guardian = { "mp5", "spirit" },           -- second elixir slot
     },
     CASTER = {
+        oil      = "WIZARD_FIRST",   -- Weapon Oil "by role" (#29)
         scrolls  = { "intellect", "spirit", "armor" },
         buffFood = { "spellDmg", "intellect", "spirit", "stamina" },
         flask    = { "spellDmg", "maxMana" },
@@ -533,6 +552,7 @@ local ROLE_PROFILES = {
         guardian = { "mp5", "spirit" },
     },
     MELEE = {
+        oil      = "MANA_ONLY",   -- Weapon Oil "by role" (#29)
         scrolls  = { "strength", "agility", "armor" },
         buffFood = { "strength", "agility", "attackPower", "stamina" },
         flask    = { "maxHealth" },
@@ -540,6 +560,7 @@ local ROLE_PROFILES = {
         guardian = { "crit", "stamina", "armor" },
     },
     AGILITY = {
+        oil      = "MANA_ONLY",   -- Weapon Oil "by role" (#29)
         scrolls  = { "agility", "strength", "armor" },
         buffFood = { "agility", "attackPower", "crit", "stamina" },
         flask    = { "maxHealth" },
@@ -774,6 +795,9 @@ local WEAPONOIL_BUTTON_CONFIG = {
     requiresMana = true,   -- mana and wizard oils are for casters and healers
     key = "weaponoil", label = "Weapon Oil", emptyIcon = "Interface\\Icons\\INV_Potion_95",
     targetSlot = 16, leftClickOnly = true,
+    -- Shown with Show Empty Buttons: the role's oil choice may skip an oil
+    -- you do carry.
+    emptyTooltip = "No usable oil for your oil choice in bags (Options: Scrolls & Weapon Oil, Oil)",
 }
 
 local BANDAGE_BUTTON_CONFIG = {
@@ -1356,21 +1380,36 @@ function Apotheca.FindBestPoison(family, bagMap)
     return nil, 0, nil
 end
 
+-- The oil lists to try, in order, for a weaponOil.kind (#29). "AUTO"
+-- follows the role PROFILE (ROLE_PROFILES[...].oil): HEALER mana oil then
+-- wizard oil, CASTER wizard oil then mana oil, the others (TANK, MELEE,
+-- AGILITY) mana oil only. A Damage-role druid or shaman is CASTER unless
+-- their damage style is Physical, as for their food.
+local OIL_ORDER = {
+    MANA_FIRST   = { MANA_OIL_ITEMS, WIZARD_OIL_ITEMS },
+    WIZARD_FIRST = { WIZARD_OIL_ITEMS, MANA_OIL_ITEMS },
+    MANA_ONLY    = { MANA_OIL_ITEMS },
+}
+Apotheca.OIL_KINDS = OIL_ORDER
+function Apotheca.OilKind()
+    local w = DB().weaponOil
+    local kind = w and w.kind or "AUTO"
+    if OIL_ORDER[kind] then return kind end
+    local oil = Apotheca.GetRoleProfile().oil
+    return OIL_ORDER[oil] and oil or "MANA_ONLY"
+end
+
+-- The first oil, in the kind's order, that the player carries and can
+-- use: its required level, and whatever else the client says. So the
+-- fallback to the other kind reaches a usable oil (/code-review of #30).
 function Apotheca.FindBestWeaponOil(bagMap)
-    -- Mana oils
-    for _, id in ipairs(MANA_OIL_ITEMS) do
-        local count = bagMap[id]
-        if count and count > 0 then
-            return id, count, GetCachedTexture(id)
-        end
-    end
-    -- Wizard oils (only if enabled in config)
-    local db = DB()
-    if db.weaponOil and db.weaponOil.includeWizardOils then
-        for _, id in ipairs(WIZARD_OIL_ITEMS) do
-            local count = bagMap[id]
-            if count and count > 0 then
-                return id, count, GetCachedTexture(id)
+    local level = UnitLevel("player") or 1
+    for _, list in ipairs(OIL_ORDER[Apotheca.OilKind()]) do
+        for _, e in ipairs(list) do
+            local count = bagMap[e.id]
+            if count and count > 0 and e.level <= level
+                    and Apotheca.API.ItemUsable(e.id) ~= false then
+                return e.id, count, GetCachedTexture(e.id)
             end
         end
     end

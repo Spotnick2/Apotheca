@@ -169,7 +169,6 @@ WoW.fire("READY_CHECK_FINISHED")
 ------------------------------------------------------------
 WoW.class = "MAGE"
 WoW.AddItem(0, 5, 20744, 3, "Minor Wizard Oil")
-prof().weaponOil.includeWizardOils = true
 update()
 local oil = Apotheca.buttons.weaponoil
 H.eq(oil.itemID, 20744, "a mage is offered the wizard oil")

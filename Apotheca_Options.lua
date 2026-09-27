@@ -580,9 +580,20 @@ function Apotheca.BuildOptionsPanelContent(panel)
     Checkbox("Enable Weapon Oil button",
         function() return DBGet("weaponOil", "enabled") ~= false end,
         function(v) DBSet(v, "weaponOil", "enabled") end)
-    Checkbox("Include Wizard Oils  |cff888888(off = mana oils only)|r",
-        function() return DBGet("weaponOil", "includeWizardOils") == true end,
-        function(v) DBSet(v, "weaponOil", "includeWizardOils") end)
+    Dropdown("Oil:", {
+        { value = "AUTO",         label = "By role" },
+        { value = "MANA_FIRST",   label = "Mana oil first" },
+        { value = "WIZARD_FIRST", label = "Wizard oil first" },
+        { value = "MANA_ONLY",    label = "Mana oil only" },
+    }, function()
+           -- An unknown saved value behaves as By role: show it as such.
+           local v = DBGet("weaponOil", "kind")
+           return (v and Apotheca.OIL_KINDS[v]) and v or "AUTO"
+       end,
+       function(v) DBSet(v, "weaponOil", "kind") end)
+    SmallLabel("|cff888888By role: Healer, mana oil then wizard oil; Damage as a caster (a\n"
+        .. "Druid or Shaman on Spell damage too), wizard oil then mana oil; Tank and\n"
+        .. "physical Damage, mana oil only.|r")
     Checkbox("Glow when weapon oil is missing  |cff888888(ready check)|r",
         function() return DBGet("weaponOil", "glowOnMissingBuff") ~= false end,
         function(v) DBSet(v, "weaponOil", "glowOnMissingBuff") end)
