@@ -180,7 +180,11 @@ function Frame:GetStringHeight() return 12 end
 function Frame:GetText() return self._text end
 function Frame:SetText(t) self._text = t end
 function Frame:GetID() return 1 end
-function Frame:IsPlaying() return false end
+-- Animation groups record play/stop (they never finish on their own), so a
+-- test can tell a glow being faded out from one still shown.
+function Frame:Play() self._playing = true end
+function Frame:Stop() self._playing = false end
+function Frame:IsPlaying() return self._playing == true end
 function Frame:GetNumPoints() return #self._points end
 function Frame:SetPoint(...) self._points[#self._points + 1] = { ... } end
 function Frame:ClearAllPoints() self._points = {} end
@@ -371,6 +375,8 @@ function debugprofilestop() WoW.profileMs = WoW.profileMs + 0.0005 return WoW.pr
 -- Levels (XP food, #19).
 WoW.level, WoW.maxLevel, WoW.xpDisabled = 3, 60, false
 function UnitLevel() return WoW.level end
+WoW.dead = false
+function UnitIsDeadOrGhost() return WoW.dead end
 function GetMaxPlayerLevel() return WoW.maxLevel end
 function GetMaxLevelForPlayerExpansion() return WoW.maxLevel end
 function IsXPUserDisabled() return WoW.xpDisabled end

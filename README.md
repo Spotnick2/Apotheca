@@ -18,6 +18,7 @@ Your settings are saved per profile (global or per character), and your role cho
 | Healthstone | The strongest stone. |
 | Food / Drink | The best plain food and water. Conjured items are preferred unless vendor food is clearly better; the threshold is configurable. Food that restores both health and mana can appear on both buttons. |
 | Buff food | Well Fed food for your stat priority. On Forever that means the teas (mana + healing), the smoothies (mana + spirit), and the new cooking. |
+| XP food *(optional, off by default)* | While you're levelling: food or drink with Forever's 5% kill-XP bonus that you can eat at your level: a stat your role uses first, then the highest level. When you leave combat without that buff, it glows for a few seconds as a reminder. |
 | Flask / Elixir / Elixir 2 | Three separate slots, each offering its best item for your role on its own: Distilled Wisdom, Cleric's Elixirs, Mageblood… Forever has no TBC-style battle/guardian elixir limit. Which elixirs stack with each other hasn't been measured yet; if two don't, please report it. A slot whose buff is already running offers nothing, so a misclick can't waste a two-hour flask. |
 | Spirit / Protection scroll | The strongest scroll. |
 | Weapon oil | Mana oils; wizard oils are optional. |
@@ -31,7 +32,7 @@ Buffs are recognised on every client language.
 
 ## Also
 
-- Ready check: missing buffs glow (buff food, flask and elixirs, scrolls, weapon oil).
+- Ready check: missing buffs glow (buff food, XP food, flask and elixirs, scrolls, weapon oil).
 - Global or per-character profiles.
 - Horizontal or vertical layout, rows, icon size and padding.
 - Visibility: always, in combat only, out of combat only, or hidden.
