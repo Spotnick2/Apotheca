@@ -1096,7 +1096,10 @@ end
 function Apotheca.FindBestXPFood(bagMap)
     local level = UnitLevel("player") or 1
     local rank = {}
-    for i, stat in ipairs(Apotheca.GetStatPriority() or {}) do rank[stat] = i end
+    -- The first occurrence ranks: the options allow a stat twice.
+    for i, stat in ipairs(Apotheca.GetStatPriority() or {}) do
+        if not rank[stat] then rank[stat] = i end
+    end
     local best, bestKey
     for _, e in ipairs(DATA.XP_FOOD or {}) do
         local count = bagMap[e.id]
@@ -2932,7 +2935,8 @@ Apotheca.API.RegisterEvents(eventFrame,
     "BAG_UPDATE_DELAYED", "BAG_UPDATE_COOLDOWN",
     "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED",
     "GET_ITEM_INFO_RECEIVED", "PLAYER_LOGOUT", "PLAYER_TALENT_UPDATE",
-    "READY_CHECK", "READY_CHECK_FINISHED", "ZONE_CHANGED_NEW_AREA", "PLAYER_LEVEL_UP")
+    "READY_CHECK", "READY_CHECK_FINISHED", "ZONE_CHANGED_NEW_AREA", "PLAYER_LEVEL_UP",
+    "DISABLE_XP_GAIN", "ENABLE_XP_GAIN")
 
 -- UNIT_MAXHEALTH / UNIT_MAXPOWER: percentage potions are ranked against the
 -- maximum (FindBestPotion), so a Fortitude buff, a level-up or gear can
@@ -3129,8 +3133,9 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         xpRemindPending, xpRemindUntil = false, 0
         UpdateXPFoodGlow()
 
-    elseif event == "PLAYER_LEVEL_UP" then
-        -- A new level opens better XP food, and the cap hides the button.
+    elseif event == "PLAYER_LEVEL_UP" or event == "DISABLE_XP_GAIN" or event == "ENABLE_XP_GAIN" then
+        -- A new level opens better XP food; the cap, or XP turned off,
+        -- hides the button (CanGainXP).
         if playerReady then RequestUpdate() end
 
     elseif event == "LFG_ROLE_UPDATE" or event == "ROLE_CHANGED_INFORM"

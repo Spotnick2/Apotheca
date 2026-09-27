@@ -63,10 +63,31 @@ H.eq(btn().itemID, 1082, "at level 5 the level-5 food (Redridge Goulash) wins ov
 WoW.level = 60
 update()
 H.check(not btn():IsShown(), "hidden at the level cap")
-WoW.level, WoW.xpDisabled = 5, true
+-- Turning XP gain off and on updates the button through its events, not
+-- only on some unrelated update (Codex review of #21).
+WoW.level = 5
 update()
-H.check(not btn():IsShown(), "hidden while XP is turned off")
+H.check(btn():IsShown(), "back below the cap: shown")
+WoW.xpDisabled = true
+WoW.fire("DISABLE_XP_GAIN")
+for _ = 1, 3 do WoW.tick(0.1) end
+H.check(not btn():IsShown(), "DISABLE_XP_GAIN hides it")
 WoW.xpDisabled = false
+WoW.fire("ENABLE_XP_GAIN")
+for _ = 1, 3 do WoW.tick(0.1) end
+H.check(btn():IsShown(), "ENABLE_XP_GAIN shows it again")
+
+-- A stat listed twice ranks where it first appears (the options allow
+-- repeats): Intellect first, Healing second, Intellect again.
+WoW.level = 3
+WoW.class, WoW.lfgRoles = "PRIEST", { healer = true }
+WoW.AddItem(0, 4, 249865, 5, "Peace Tea")               -- L1, Healing Power
+ApothecaDB.profiles[ApothecaDB.activeProfile].buffFoodPriority =
+    { HEALER = { "intellect", "healing", "intellect", "spirit" } }
+update()
+H.eq(btn().itemID, 12224, "a repeated stat keeps its first rank: Intellect (Crispy Bat Wing) over Healing")
+ApothecaDB.profiles[ApothecaDB.activeProfile].buffFoodPriority = nil
+WoW.level = 5
 update()
 
 ------------------------------------------------------------
@@ -153,8 +174,7 @@ WoW.tick(10)
 update()
 H.check(not glowing(), "a reminder from a hidden bar does not fire when it shows again")
 
--- A level-up re-picks: level 1 food only at level 3 again is the reverse;
--- here a level-up to the cap hides the button.
+-- A level-up to the cap hides the button.
 WoW.level = 60
 WoW.fire("PLAYER_LEVEL_UP", 60)
 settle()
