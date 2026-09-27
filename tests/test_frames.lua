@@ -85,53 +85,63 @@ H.check(ApothecaProbeDB and ApothecaProbeDB.itemScan == old, "an old scan in Apo
 H.eq(ApothecaDB.itemScan, nil, "and leaves Apotheca's settings")
 
 -- /apo scan3 collects every "Well Fed" spell with its description (#19),
--- and says when its result is incomplete (Codex review of #20).
-WoW.spellNames[19705]   = "Well Fed"      -- ordinary, Vanilla range
+-- lists the names that never load, and is INCOMPLETE only when unnamed
+-- spells were skipped (Codex review and /code-review of #20).
+WoW.spellNames[19705]   = "Well Fed"      -- ordinary, Vanilla range: empty description
 WoW.spellNames[1248422] = "Well Fed"      -- XP (measured on 70009)
 WoW.spellNames[1248380] = "Nutritious Food"
-WoW.spellNames[1248500] = "Well Fed"      -- its description never loads
 WoW.spellLoadAfter[1300001] = { name = "Well Fed", n = 3 }         -- loads on the 3rd request
-WoW.spellLoadAfter[1300002] = { name = "Well Fed", n = math.huge } -- never loads
+WoW.spellLoadAfter[1300002] = { name = "Well Fed", n = math.huge } -- hidden: never loads
 WoW.spellNames[1450000] = "Some Spell"    -- near the 1.5M floor: the sweep goes on
 WoW.spellNames[1640000] = "Well Fed"      -- so this one, past 1.5M, is found
-WoW.spellDescriptions[19705]   = "Stamina increased by 12."
--- Measured on 70009: the XP aura's DESCRIPTION does not mention experience.
+-- Measured on 70009: the XP aura's description does not mention experience.
 WoW.spellDescriptions[1248422] = "A nutritious meal has made you Well Fed, increasing your Strength."
-WoW.spellTooltips[1248422] = { "Well Fed", "Your Strength is increased by 1. Experience gained from kills increased by 5%." }
-WoW.spellDescriptions[1300001] = "Your Intellect is increased by 6. Experience gained from kills increased by 5%."
-WoW.spellDescriptions[1640000] = "Your Spirit is increased by 4. Experience gained from kills increased by 5%."
+WoW.spellDescriptions[1300001] = "A nutritious meal has made you Well Fed, increasing your Intellect."
+WoW.spellDescriptions[1640000] = "A tasty drink has made you Well Fed, increasing your Spirit."
 local function runScan3()
     WoW.messages = {}
     SlashCmdList["APOTHECA"]("scan3")
-    for _ = 1, 1500 do
+    for _ = 1, 3000 do
         WoW.tick(1)
-        if H.messagesMatching("Well Fed scan done") > 0 then break end
+        if H.messagesMatching("Well Fed scan done") + H.messagesMatching("stopped by an error") > 0 then break end
     end
     return ApothecaProbeDB.wellFedScan
 end
-local ticks0 = WoW.profileMs
 local wf = runScan3()
 H.check(wf ~= nil, "scan3 stores its result in the probe's SavedVariable")
 H.eq(wf and wf.spells[1248422], WoW.spellDescriptions[1248422], "the XP Well Fed is found with its description")
-H.eq(wf and wf.spells[19705], "Stamina increased by 12.", "ordinary Well Fed is recorded too")
+H.eq(wf and wf.spells[19705], "", "a Well Fed with an empty description is recorded as empty")
+H.eq(wf and wf.emptyDescription, 1, "and counted")
 H.eq(wf and wf.spells[1300001], WoW.spellDescriptions[1300001], "a name that loads only after retries is found")
 H.eq(wf and wf.spells[1640000], WoW.spellDescriptions[1640000], "the sweep follows spells past 1.5M")
 H.eq(wf and wf.scannedTo, 1840000, "and stops 200k past the highest spell")
 H.eq(wf and wf.spells[1248380], nil, "other spells are not kept")
-H.eq(wf and wf.unnamedNeverLoaded, 1, "a name that never loads is counted")
-H.eq(wf and wf.neverLoaded[1], 1300002, "and its ID is recorded")
-H.eq(wf and wf.tooltips[1248422], WoW.spellTooltips[1248422][1] .. " | " .. WoW.spellTooltips[1248422][2],
-    "the spell tooltip is kept, where the XP line may be")
-H.eq(wf and wf.noDescription, 1, "a missing description is counted")
-H.eq(wf and wf.complete, false, "so the result is marked incomplete")
-H.eq(H.messagesMatching("INCOMPLETE"), 1, "and the summary says so")
-H.eq(H.messagesMatching("3 with the XP bonus"), 1, "the summary counts the XP ones")
+H.eq(wf and #wf.hidden, 1, "a name that never loads is listed as hidden")
+H.eq(wf and wf.hidden[1], 1300002, "by its ID")
+H.eq(wf and wf.complete, true, "hidden names and empty descriptions do not make the scan incomplete")
+H.eq(H.messagesMatching("%(complete%)"), 1, "the summary says complete")
+H.eq(H.messagesMatching("hidden 1 %(1300002%)"), 1, "and lists the hidden ID")
 
-WoW.spellLoadAfter[1300002] = nil
-WoW.spellDescriptions[1248500] = "Your Stamina is increased by 2."
+-- More unnamed spells than the load limit: those outside 1.2M..1.4M are
+-- skipped, and only that makes the scan INCOMPLETE.
+for id = 200001, 260001 do WoW.spellLoadAfter[id] = { name = "Filler", n = 1 } end
 wf = runScan3()
-H.eq(wf and wf.complete, true, "with every name and description loaded, the scan is complete")
-H.eq(H.messagesMatching("%(complete%)"), 1, "and says complete")
+H.eq(wf and wf.unnamedSkipped, 60001, "unnamed spells past the load limit are skipped outside the range")
+H.eq(wf and wf.complete, false, "and the scan is INCOMPLETE")
+H.eq(wf and wf.spells[1300001] ~= nil, true, "names inside the range are still loaded")
+for id = 200001, 260001 do WoW.spellLoadAfter[id] = nil end
+
+-- An error mid-scan stops it and frees the guard, instead of erroring
+-- every frame with "scan already running" until /reload.
+local realName = C_Spell.GetSpellName
+C_Spell.GetSpellName = function() error("boom") end
+runScan3()
+C_Spell.GetSpellName = realName
+H.eq(H.messagesMatching("stopped by an error"), 1, "an error stops the scan and says so")
+WoW.messages = {}
+SlashCmdList["APOTHECA"]("scan3")
+H.eq(H.messagesMatching("already running"), 0, "and a new scan can start")
+for _ = 1, 3000 do WoW.tick(1) if H.messagesMatching("Well Fed scan done") > 0 then break end end
 
 -- Every button's scripts.
 for key, btn in pairs(Apotheca.buttons) do
