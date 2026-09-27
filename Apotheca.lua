@@ -763,13 +763,17 @@ local POISON_BUTTON_CONFIG = {
       emptyIcon = "Interface\\Icons\\Ability_Poisons", emptyTooltip = "No poison of the chosen kind in bags" },
 }
 
--- targetSlot 16: a click applies the oil to the main hand directly, with
--- no targeting cursor (measured on 70009 with Minor Wizard Oil,
--- /apo applytest: a 3-second cast, then the oil renewed; #24).
+-- Left-click applies the oil to the main hand directly, with no targeting
+-- cursor (measured on 70009 with Minor Wizard Oil, /apo applytest: a
+-- 3-second cast, then the oil renewed; #24). Right-click keeps the old way:
+-- the cursor, to pick any weapon (Codex review of #28). leftClickOnly sets
+-- "target-slot1" (the secure template's left-button variant, upstream);
+-- if a client ignored it, left-click would just fall back to the cursor.
+-- No target at all while the main hand can't take a coating.
 local WEAPONOIL_BUTTON_CONFIG = {
     requiresMana = true,   -- mana and wizard oils are for casters and healers
     key = "weaponoil", label = "Weapon Oil", emptyIcon = "Interface\\Icons\\INV_Potion_95",
-    targetSlot = 16,
+    targetSlot = 16, leftClickOnly = true,
 }
 
 local BANDAGE_BUTTON_CONFIG = {
@@ -1308,8 +1312,8 @@ local POISON_DEFAULTS = { [16] = "instant", [17] = "deadly" }
 -- thrown, crossbows, wands and fishing poles (/code-review of #26).
 local NOT_POISONABLE = { [2] = true, [3] = true, [14] = true, [16] = true, [18] = true, [19] = true, [20] = true }
 
--- Does this hand hold a weapon a poison can coat?
-function Apotheca.PoisonableHand(slot)
+-- Does this hand hold a weapon a coating (poison, oil) can go on?
+function Apotheca.CoatableHand(slot)
     local id, sub = Apotheca.API.HandWeapon(slot)
     return id ~= nil and not NOT_POISONABLE[sub]
 end
@@ -2072,16 +2076,22 @@ function Apotheca.ApplySecureItemAttributes(btn, itemID)
     -- A button aimed at a weapon hand (poisons) also carries target-slot;
     -- cleared with the item on every other path, so no stale target is
     -- left behind (Codex review of #24).
-    local slot = btn.cfg and btn.cfg.targetSlot
+    local cfg = btn.cfg or {}
+    local slot = cfg.targetSlot
+    -- Only a hand that can take a coating gets a target; otherwise the
+    -- click leaves the cursor for the player, as without a target.
+    if slot and not Apotheca.CoatableHand(slot) then slot = nil end
+    local key = cfg.leftClickOnly and "target-slot1" or "target-slot"
+    btn:SetAttribute("target-slot", nil)
+    btn:SetAttribute("target-slot1", nil)
     if DB().debug or not itemID then
         btn:SetAttribute("type", nil)
         btn:SetAttribute("item", nil)
-        btn:SetAttribute("target-slot", nil)
         return
     end
     btn:SetAttribute("type", "item")
     btn:SetAttribute("item", "item:" .. itemID)
-    btn:SetAttribute("target-slot", slot)
+    if slot then btn:SetAttribute(key, slot) end
 end
 
 local function ApplyDebugAttributes(btn)
@@ -2828,7 +2838,7 @@ function UpdateAllButtonsBody()
     for _, cfg in ipairs(POISON_BUTTON_CONFIG) do
         local r = { show = false }
         local family = poisonsOn and Apotheca.PoisonChoice(cfg.targetSlot)
-        if family and family ~= "none" and Apotheca.PoisonableHand(cfg.targetSlot) then
+        if family and family ~= "none" and Apotheca.CoatableHand(cfg.targetSlot) then
             r.id, r.count, r.tex = Apotheca.FindBestPoison(family, bagMap)
             r.show = r.id ~= nil or showEmpty
         end

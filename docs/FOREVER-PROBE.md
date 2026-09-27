@@ -198,13 +198,20 @@ Measured with `/apo applytest 20744` (Minor Wizard Oil) on a warlock with a two-
 |---|---|
 | **A** (`type=item` + `target-slot` 16), main hand | **Applied.** No targeting cursor after the click; a 3-second cast (spell 25117); the oil already on the staff renewed. |
 | **B** (`/use item:20744` + `/use 16` macro), main hand | **Applied**, the same way. |
-| A, off hand (empty) | Failed at once: "Item is not ready yet." That was the oil's 1-second cooldown after the previous cast, so it says nothing about an empty hand. |
+| A, off hand (empty) | Failed at once (+0.00 s after the click): "Item is not ready yet." Cause undetermined (the probe does not record the item cooldown), so it says nothing about an empty hand. |
 | B, off hand (empty) | Left a **targeting cursor**: `/use 17` had no weapon to aim at. |
 
 - **Events, in order:** `UNIT_SPELLCAST_START`; then after 3 s `UNIT_SPELLCAST_SUCCEEDED`, `ENCHANT_SPELL_COMPLETED (true, <item location>)`, `UNIT_INVENTORY_CHANGED (player)`, `WEAPON_ENCHANT_CHANGED`.
 - **Re-applying the same oil** raised no replace popup.
 - **`GetWeaponEnchantInfo()`** out of combat: `true, <ms left>, 0, 2623` for the main hand. Minor Wizard Oil is **enchant ID 2623**. An oil has **0 charges**.
-- **Consequence:** the Weapon Oil button now sets `target-slot` 16, so a click applies the oil to the main hand. The poison buttons use the same method A. It's measured on the main hand with an oil, but poisons and the off hand are not measured yet.
+- **What it shows:** method A applies to the main hand in one click, renewing the same oil on a two-handed staff, out of combat, standing still, with `ActionButtonUseKeyDown = 1`. **Not shown:**
+  - coating an uncoated weapon, or replacing a different coating;
+  - combat, or the key-up setting;
+  - the off hand, or a one-hander with a held off-hand item;
+  - what method A does on an empty or unsuitable slot.
+- **Consequence:**
+  - The Weapon Oil button's **left-click** sets `target-slot1` 16 and applies to the main hand. **Right-click** leaves the cursor to pick any weapon, as before. A main hand that can't take a coating gets no target.
+  - The poison buttons use method A on both clicks. Poisons and the off hand are not measured yet.
 
 ## Still to measure
 
