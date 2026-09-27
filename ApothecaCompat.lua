@@ -347,21 +347,31 @@ end
 -- ------------------------------------------------------------
 
 -- Weapons (#24). Plain values only; nil means unknown or none.
--- The item ID of the WEAPON in an inventory slot (16 main hand, 17 off
--- hand): nil for an empty slot, a shield or a held off-hand item.
+-- The WEAPON in an inventory slot (16 main hand, 17 off hand): its item
+-- ID and weapon subclass, or nil for an empty slot, a shield or a held
+-- off-hand item.
 function API.HandWeapon(slot)
     -- One pcall around the whole read, and the secret check before any
     -- comparison: comparing a secret throws (Codex review of #26).
-    local ok, id = pcall(function()
+    local ok, id, sub = pcall(function()
         local id = GetInventoryItemID("player", slot)
         if issecretvalue and issecretvalue(id) then return nil end
         if id == nil then return nil end
-        local _, _, _, _, _, classID = C_Item.GetItemInfoInstant(id)
-        if issecretvalue and issecretvalue(classID) then return nil end
+        local _, _, _, _, _, classID, subClassID = C_Item.GetItemInfoInstant(id)
+        if issecretvalue and (issecretvalue(classID) or issecretvalue(subClassID)) then return nil end
         if classID ~= 2 then return nil end
-        return id
+        return id, subClassID
     end)
-    return ok and id or nil
+    if not ok then return nil end
+    return id, sub
+end
+
+-- Can the player use this item now? true / false, or nil when unknown.
+-- (C_Item.IsUsableItem: false for a level, class or rune requirement.)
+function API.ItemUsable(itemID)
+    local ok, usable = pcall(C_Item.IsUsableItem, itemID)
+    if not ok or (issecretvalue and issecretvalue(usable)) then return nil end
+    return usable and true or false
 end
 
 -- Does this hand carry a temporary coating (poison, oil, stone)? true /

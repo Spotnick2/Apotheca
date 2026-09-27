@@ -3,10 +3,11 @@
 dofile("tests/wow_stubs.lua")
 local H = dofile("tests/harness.lua")
 
-local MH_WEAPON, OH_WEAPON, SHIELD = 2169, 2209, 2129
-WoW.itemClass[MH_WEAPON] = { 2, 15 }     -- daggers
-WoW.itemClass[OH_WEAPON] = { 2, 15 }
-WoW.itemClass[SHIELD]    = { 4, 6 }
+local MH_WEAPON, OH_WEAPON, SHIELD, POLE = 2169, 2209, 2129, 6256
+WoW.itemClass[MH_WEAPON] = { 2, 15, "Daggers" }
+WoW.itemClass[OH_WEAPON] = { 2, 15, "Daggers" }
+WoW.itemClass[SHIELD]    = { 4, 6, "Shields" }
+WoW.itemClass[POLE]      = { 2, 20, "Fishing Poles" }
 WoW.class, WoW.level = "ROGUE", 25
 WoW.lfgRoles = { damage = true }
 WoW.equipped = { [16] = MH_WEAPON, [17] = OH_WEAPON }
@@ -90,6 +91,38 @@ WoW.equipped[17] = OH_WEAPON
 WoW.fire("PLAYER_EQUIPMENT_CHANGED", 17, false)
 for _ = 1, 3 do WoW.tick(0.1) end
 H.eq(oh.itemID, 2892, "a weapon back: the off-hand poison returns")
+
+-- A fishing pole is a weapon (class 2) no poison can coat.
+WoW.equipped[16] = POLE
+WoW.fire("PLAYER_EQUIPMENT_CHANGED", 16, false)
+for _ = 1, 3 do WoW.tick(0.1) end
+H.check(not mh:IsShown(), "a fishing pole in the main hand: no poison button")
+WoW.equipped[16] = MH_WEAPON
+WoW.fire("PLAYER_EQUIPMENT_CHANGED", 16, false)
+for _ = 1, 3 do WoW.tick(0.1) end
+
+-- A poison the client says this character can't use is skipped: the next
+-- rank of the family, or nothing.
+WoW.unusable[6949] = true
+update()
+H.eq(mh.itemID, 6947, "Instant Poison II unusable: Instant Poison instead")
+WoW.unusable[6947] = true
+update()
+H.check(not mh:IsShown(), "no usable Instant Poison: no main hand button")
+WoW.unusable = {}
+update()
+
+-- Changing the choice from the options costs one full update, not two:
+-- the dropdown's own update satisfies the setter's deferred request.
+local seq = Apotheca._updateSeq
+Apotheca.SetPoisonChoice(16, "crippling")
+Apotheca.UpdateAllButtons()                  -- what the options dropdown does
+for _ = 1, 5 do WoW.tick(0.1) end
+H.eq(Apotheca._updateSeq - seq, 1, "one full update for a poison change from the options")
+H.eq(mh.itemID, 3775, "and the button changed")
+Apotheca.SetPoisonChoice(16, "instant")
+for _ = 1, 5 do WoW.tick(0.1) end
+H.eq(mh.itemID, 6949, "on its own, the setter's request still updates the button")
 
 -- The target is cleared with the item.
 WoW.bags[0][1], WoW.bags[0][2] = nil, nil

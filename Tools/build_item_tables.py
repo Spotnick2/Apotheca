@@ -531,20 +531,25 @@ POISON_ORDER = ['instant', 'deadly', 'wound', 'crippling', 'mindnumbing', 'occul
 
 
 def poisons(rows):
-    """{family: [(-rank, id, name, level, rank)]} highest rank first, and
-    {family: label}."""
-    fam, labels = defaultdict(list), {}
+    """{family: [(-rank, id, name, level, rank)]} highest rank first,
+    {family: label}, and the skipped poisons with why."""
+    fam, labels, skipped = defaultdict(list), {}, []
     for r in rows:
-        if POISON_TEXT not in r['use'] or 'Test' in r['name']:
+        if POISON_TEXT not in r['use']:
+            continue
+        if 'Test' in r['name']:
+            skipped.append((r['id'], r['name'], 'poison: a test item'))
             continue
         m = POISON_NAME.match(r['name'])
         if not m:
+            # Reported, never dropped silently (/code-review of #26).
+            skipped.append((r['id'], r['name'], 'poison: name not "<Family> Poison [rank]"'))
             continue
         key = m.group(1).lower().replace('-', '').replace(' ', '')
         rank = ROMAN[m.group(2)] if m.group(2) else 1
         labels[key] = m.group(1) + ' Poison'
         fam[key].append((-rank, r['id'], r['name'], max(1, r['lvl']), rank))
-    return {k: sorted(v) for k, v in fam.items()}, labels
+    return {k: sorted(v) for k, v in fam.items()}, labels, skipped
 
 
 def ordinary_well_fed(spells, xp):
@@ -793,7 +798,8 @@ if __name__ == '__main__':
                  % (src, wellfed_src))
     wellfed = load_wellfed(wellfed_src)
     out['XP_FOOD'] = xp_food(rows)
-    out['POISONS'], out['POISON_LABELS'] = poisons(rows)
+    out['POISONS'], out['POISON_LABELS'], poison_skipped = poisons(rows)
+    skipped.extend(poison_skipped)
     out['XP_WELL_FED_SPELLS'] = xp_auras(wellfed, out['XP_FOOD'])
     out['WELL_FED_SPELLS'] = sorted(wellfed)
     out['ORDINARY_WELL_FED_SPELLS'] = ordinary_well_fed(wellfed, out['XP_WELL_FED_SPELLS'])

@@ -1296,19 +1296,19 @@ function Apotheca.HasProtectionScrollBuff() return Apotheca.HasScrollBuff(Scroll
 -- Returns true if main hand has any temporary enchant active, false if
 -- not, or nil when the client would not say (its combat secrecy is not
 -- measured yet, and a secret boolean throws when compared).
-function Apotheca.HasMainHandTempEnchant()
-    local ok, has = pcall(function()
-        local hasMainHandEnchant = GetWeaponEnchantInfo()
-        return hasMainHandEnchant == true or hasMainHandEnchant == 1
-    end)
-    if not ok then return nil end
-    return has
-end
-
 -- ============================================================
 -- ROGUE POISONS (#24, experimental)
 -- ============================================================
 local POISON_DEFAULTS = { [16] = "instant", [17] = "deadly" }
+-- Weapon subclasses a poison cannot coat: bows, guns, miscellaneous,
+-- thrown, crossbows, wands and fishing poles (/code-review of #26).
+local NOT_POISONABLE = { [2] = true, [3] = true, [14] = true, [16] = true, [18] = true, [19] = true, [20] = true }
+
+-- Does this hand hold a weapon a poison can coat?
+function Apotheca.PoisonableHand(slot)
+    local id, sub = Apotheca.API.HandWeapon(slot)
+    return id ~= nil and not NOT_POISONABLE[sub]
+end
 local POISON_KEYS = { none = true }
 for _, f in ipairs(DATA.POISON_FAMILIES or {}) do POISON_KEYS[f.key] = true end
 
@@ -1320,23 +1320,28 @@ function Apotheca.PoisonChoice(slot)
     return v
 end
 
--- SetCharSetting only refreshes on a changed role, so ask for an update
--- here: the button must change item (Codex review of #24).
+-- Saves the choice and asks for an update: the button must change item
+-- (Codex review of #24). Not through SetCharSetting, which re-resolves the
+-- role for nothing; and a caller's own full update right after satisfies
+-- the request, so it does not cost a second one (/code-review of #26).
 function Apotheca.SetPoisonChoice(slot, family)
-    Apotheca.SetCharSetting(slot == 17 and "poisonOH" or "poisonMH", family)
+    ApothecaCharDB = type(ApothecaCharDB) == "table" and ApothecaCharDB or {}
+    ApothecaCharDB[slot == 17 and "poisonOH" or "poisonMH"] = family
     Apotheca.RequestUpdate()
 end
 
--- The strongest poison of a family the player carries and can use. No
--- other family is ever offered: the wrong poison on a weapon is worse
--- than none.
+-- The strongest poison of a family the player carries and can use: its
+-- required level, and whatever else the client says (a rune the Season of
+-- Discovery poisons may need). No other family is ever offered: the wrong
+-- poison on a weapon is worse than none.
 function Apotheca.FindBestPoison(family, bagMap)
     local list = DATA.POISONS and DATA.POISONS[family]
     if not list then return nil, 0, nil end
     local level = UnitLevel("player") or 1
     for _, e in ipairs(list) do
         local count = bagMap[e.id]
-        if count and count > 0 and e.level <= level then
+        if count and count > 0 and e.level <= level
+                and Apotheca.API.ItemUsable(e.id) ~= false then
             return e.id, count, GetCachedTexture(e.id)
         end
     end
@@ -1751,19 +1756,23 @@ end
 
 local readyCheckActive = false
 
+-- The after-combat reminder window, shared by every button that reminds
+-- (XP food, poisons): armed on leaving combat, started after the
+-- post-combat update (UpdateAllButtonsBody), cleared on entering combat.
+--
 -- XP food glow: ONE function decides, for both reasons it can glow (Codex
 -- review of #19): a ready check, or the reminder for a few seconds after
 -- combat. Recomputed from state on every call, so a stale timer or event
 -- can never hide a glow another reason still wants. Only a button on the
 -- bar with an item, and only when the XP buff is confirmed missing.
-local XP_REMIND_SECONDS = 5
-local xpRemindUntil     = 0
-local xpRemindPending   = false
+local REMIND_SECONDS = 5
+local remindUntil     = 0
+local remindPending   = false
 
 local function XPFoodGlowWanted()
     local btn = Apotheca.buttons["xpfood"]
     if not btn then return false end
-    local reason = readyCheckActive or GetTime() < xpRemindUntil
+    local reason = readyCheckActive or GetTime() < remindUntil
     -- Not while dead: dying ends combat too, and a ghost cannot eat.
     return (reason and btn.itemID and btn:IsShown() and not InCombatLockdown()
             and not UnitIsDeadOrGhost("player")
@@ -1784,7 +1793,7 @@ end
 local function PoisonGlowWanted(btn)
     local p = DB().poisons or {}
     local reason = (readyCheckActive and p.glowOnMissingBuff ~= false)
-                   or (p.remind and GetTime() < xpRemindUntil)
+                   or (p.remind and GetTime() < remindUntil)
     return (reason and btn.itemID and btn:IsShown() and not InCombatLockdown()
             and not UnitIsDeadOrGhost("player")
             and Apotheca.API.HandCoated(btn.cfg.targetSlot) == false) and true or false
@@ -1859,7 +1868,7 @@ local function UpdateWeaponOilGlow()
     local btn = Apotheca.buttons["weaponoil"]
     if not btn then return end
     local glowEnabled = db.weaponOil and db.weaponOil.glowOnMissingBuff
-    if readyCheckActive and glowEnabled and btn.itemID and Apotheca.HasMainHandTempEnchant() == false then
+    if readyCheckActive and glowEnabled and btn.itemID and Apotheca.API.HandCoated(16) == false then
         ShowGlow(btn)
     else
         HideGlow(btn)
@@ -2663,6 +2672,9 @@ function Apotheca.UpdateAllButtons()
     Apotheca.RefreshRole(true)
     UpdateAllButtonsBody()
     Apotheca.RefreshFullTint()
+    -- Counts full updates: a deferred request (RequestUpdate) made before
+    -- this one is satisfied by it and does not run again.
+    Apotheca._updateSeq = (Apotheca._updateSeq or 0) + 1
 end
 
 function UpdateAllButtonsBody()
@@ -2671,14 +2683,14 @@ function UpdateAllButtonsBody()
 
     if db.enabled == false then
         ApothecaFrame:Hide()
-        xpRemindPending = false   -- a hidden bar has nothing to remind
+        remindPending = false   -- a hidden bar has nothing to remind
         return
     end
 
     local specOk = (not db.onlyWhenHealer) or Apotheca.IsHealerSpec()
     if not specOk or not Apotheca.IsVisible() then
         ApothecaFrame:Hide()
-        xpRemindPending = false
+        remindPending = false
         return
     end
     ApothecaFrame:Show()
@@ -2812,7 +2824,7 @@ function UpdateAllButtonsBody()
     for _, cfg in ipairs(POISON_BUTTON_CONFIG) do
         local r = { show = false }
         local family = poisonsOn and Apotheca.PoisonChoice(cfg.targetSlot)
-        if family and family ~= "none" and Apotheca.API.HandWeapon(cfg.targetSlot) then
+        if family and family ~= "none" and Apotheca.PoisonableHand(cfg.targetSlot) then
             r.id, r.count, r.tex = Apotheca.FindBestPoison(family, bagMap)
             r.show = r.id ~= nil or showEmpty
         end
@@ -3001,10 +3013,10 @@ function UpdateAllButtonsBody()
 
     -- The after-combat reminder starts here, AFTER the bar was rebuilt for
     -- the post-combat bags, so it glows the item the button now holds.
-    if xpRemindPending then
-        xpRemindPending = false
+    if remindPending then
+        remindPending = false
         -- Death ends combat as well; no reminder for a corpse.
-        if not UnitIsDeadOrGhost("player") then xpRemindUntil = GetTime() + XP_REMIND_SECONDS end
+        if not UnitIsDeadOrGhost("player") then remindUntil = GetTime() + REMIND_SECONDS end
     end
     UpdateXPFoodGlow()
     UpdatePoisonGlow()
@@ -3135,9 +3147,11 @@ local deferredPending      = false
 local deferredElapsed      = 0
 local deferredDelay        = 0.2
 
+local deferredSeq = 0
 local function RequestUpdate()
     deferredPending = true
     deferredElapsed = 0
+    deferredSeq     = Apotheca._updateSeq or 0
 end
 Apotheca.RequestUpdate = RequestUpdate
 
@@ -3149,8 +3163,8 @@ local rolePollElapsed = 0
 
 eventFrame:SetScript("OnUpdate", function(self, elapsed)
     -- The XP food reminder ends: recompute, the ready check may still glow.
-    if xpRemindUntil > 0 and GetTime() >= xpRemindUntil then
-        xpRemindUntil = 0
+    if remindUntil > 0 and GetTime() >= remindUntil then
+        remindUntil = 0
         UpdateXPFoodGlow()
         UpdatePoisonGlow()
     end
@@ -3171,7 +3185,8 @@ eventFrame:SetScript("OnUpdate", function(self, elapsed)
         deferredElapsed = deferredElapsed + elapsed
         if deferredElapsed >= deferredDelay then
             deferredPending = false
-            Apotheca.UpdateAllButtons()
+            -- A full update since the request already did the work.
+            if (Apotheca._updateSeq or 0) == deferredSeq then Apotheca.UpdateAllButtons() end
         end
     end
 
@@ -3278,7 +3293,6 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
             UpdateScrollGlow()
             UpdateWeaponOilGlow()
             UpdateXPFoodGlow()
-            UpdatePoisonGlow()
             UpdateBandageUsability()
             -- A slot whose buff was running offers nothing; when the buff
             -- expires there is no bag event, so re-resolve. Only when an
@@ -3317,10 +3331,9 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         UpdateWeaponOilGlow()
         -- Hide outright, like the other glows: at this event lockdown may not
         -- be engaged yet, so a recompute could still show it for the fight.
-        xpRemindPending, xpRemindUntil = false, 0
+        remindPending, remindUntil = false, 0
         HideGlow(Apotheca.buttons["xpfood"])
-        HideGlow(Apotheca.buttons["poisonmh"])
-        HideGlow(Apotheca.buttons["poisonoh"])
+        for _, cfg in ipairs(POISON_BUTTON_CONFIG) do HideGlow(Apotheca.buttons[cfg.key]) end
 
     elseif event == "PLAYER_EQUIPMENT_CHANGED" then
         -- A weapon swap changes which hands take a poison (#24).
@@ -3376,7 +3389,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
             Apotheca.ApplySecureItemAttributes(btn, btn.itemID)
         end
         -- The XP food reminder waits for this update (UpdateAllButtonsBody).
-        xpRemindPending = true
+        remindPending = true
         RequestUpdate()
 
     elseif event == "PLAYER_LOGOUT" then
