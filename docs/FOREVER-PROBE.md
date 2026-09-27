@@ -195,7 +195,7 @@ Measured on a level 3 Undead at full health and mana: the Food and Drink buttons
 - **Applying a weapon coating from a secure button (#24).** `/apo applytest <itemID>` shows four buttons:
   - method A (`type=item` + `target-slot`) for each hand;
   - method B (the `/use item:<id>` + `/use 16|17` macro) for each hand.
-  
+
   Each click prints a verdict and is kept in `ApothecaProbeDB.applyTests`. To measure, with a dual-wielding rogue and real poisons: each method on each hand, re-applying the same poison, replacing with another family (the replace popup), moving while applying, and in combat. Record which events fired.
 
 - **`C_Item.UseItemByName` on a real item** from the right-click alternate "Use X instead?" popup.

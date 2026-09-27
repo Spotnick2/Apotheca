@@ -294,7 +294,9 @@ local function left(e)
     e.t = e.t or WoW.time
     return e[2] - (WoW.time - e.t) * 1000
 end
+WoW.enchantThrow = false
 function GetWeaponEnchantInfo()
+    if WoW.enchantThrow then error("GetWeaponEnchantInfo refused") end
     local m, o = WoW.enchants[16] or {}, WoW.enchants[17] or {}
     return m[1] or false, left(m), m[3], m[4], o[1] or false, left(o), o[3], o[4], false
 end

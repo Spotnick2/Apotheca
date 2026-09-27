@@ -437,7 +437,8 @@ end
 -- Out of combat only: the buttons are secure frames.
 -- ============================================================
 local APPLY_SETTLE  = 6      -- seconds after the click before the verdict
-local APPLY_TIMEOUT = 30     -- give up waiting for a cursor or a popup
+local APPLY_QUIET   = 2      -- ...and this long with no cursor, popup, cast or event
+local APPLY_TIMEOUT = 45     -- give up
 local SLOT_NAME = { [16] = "main hand", [17] = "off hand" }
 
 local applyFrame, applyAttempt, applyEvents
@@ -459,7 +460,8 @@ local function EnchantState()
         return t
     end)
     if ok then return r end
-    return { raw = "ERROR: " .. tostring(r), [16] = {}, [17] = {} }
+    -- A failed read is unknown, never "no coating" (Codex review of #25).
+    return { raw = "ERROR: " .. tostring(r), [16] = { unknown = true }, [17] = { unknown = true } }
 end
 
 local function Snapshot(itemID)
@@ -474,30 +476,37 @@ local function Snapshot(itemID)
     return s
 end
 
--- Did this hand's coating change between two snapshots? true / false, or
--- nil when a value needed to tell was secret or missing.
-local function HandChanged(a, b, elapsedMs)
-    if a.has == "<secret>" or b.has == "<secret>" then return nil end
-    if (a.has and true or false) ~= (b.has and true or false) then return true end
-    if not b.has then return false end
-    if a.id ~= b.id and a.id ~= "<secret>" and b.id ~= "<secret>" then return true end
+-- What happened to one hand's coating between two snapshots, by direction
+-- (Codex review of #25): "gained", "replaced" or "renewed" is an
+-- application; "lost" (expired, charges used up) and "same" are not; nil
+-- is unknown (a failed read, a secret, or a value missing to tell).
+local function HandChange(a, b, elapsedMs)
+    if a.unknown or b.unknown or a.has == "<secret>" or b.has == "<secret>" then return nil end
+    local had, has = a.has and true or false, b.has and true or false
+    if not had and has then return "gained" end
+    if had and not has then return "lost" end
+    if not has then return "same" end
+    if a.id == "<secret>" or b.id == "<secret>" then return nil end
+    if a.id ~= b.id then return "replaced" end
     -- Same coating: a fresh application renews the charges, or the time
     -- left beyond what the attempt's own duration took off it.
     if type(a.charges) == "number" and type(b.charges) == "number" and b.charges > a.charges then
-        return true
+        return "renewed"
     end
     if type(a.exp) == "number" and type(b.exp) == "number" then
-        return b.exp > a.exp - elapsedMs + 3000
+        return (b.exp > a.exp - elapsedMs + 3000) and "renewed" or "same"
     end
     return nil
 end
+local APPLIED = { gained = true, replaced = true, renewed = true }
 
 local function Verdict(att)
     local before, after = att.before.enchant, att.after.enchant
     local other = att.slot == 16 and 17 or 16
     local elapsedMs = 1000 * (att.after.t - att.before.t)
-    local mine   = HandChanged(before[att.slot], after[att.slot], elapsedMs)
-    local theirs = HandChanged(before[other], after[other], elapsedMs)
+    local mine   = HandChange(before[att.slot], after[att.slot], elapsedMs)
+    local theirs = HandChange(before[other], after[other], elapsedMs)
+    att.change = { mine = mine or "unknown", other = theirs or "unknown" }
     local failed, completed = false, false
     for _, e in ipairs(att.events) do
         if e[2] == "ENCHANT_SPELL_COMPLETED" and e[3] == "true" then completed = true end
@@ -507,13 +516,16 @@ local function Verdict(att)
         end
     end
     if att.weaponChanged then return "inconclusive (the weapons changed during the attempt)" end
-    if theirs then return "WRONG HAND (the other hand changed)" end
-    if mine == true then return "applied" end
+    if APPLIED[theirs] then return "WRONG HAND (the other hand was coated)" end
+    -- Applied only if the intended hand was coated AND the other hand is
+    -- known not to have been (it may have expired meanwhile: "lost").
+    if APPLIED[mine] and theirs then return "applied (" .. mine .. ")" end
+    if APPLIED[mine] then return "inconclusive (applied, but the other hand is unreadable)" end
+    if mine == nil then return "inconclusive (enchant state unreadable)" end
     -- Refreshing a coating that was still full changes nothing visible:
     -- the completion event is then the only evidence.
-    if mine == false and completed then return "inconclusive (completed, no visible change: was it still full?)" end
-    if mine == false then return failed and "failed" or "failed (nothing changed)" end
-    return "inconclusive (enchant state unreadable)"
+    if completed then return "inconclusive (completed, no visible change: was it still full?)" end
+    return failed and "failed" or "failed (nothing changed)"
 end
 
 local function FinishAttempt(reason)
@@ -570,7 +582,13 @@ local function MakeButton(parent, method, slot, itemID, x, y)
         b:SetAttribute("macrotext", "/use item:" .. itemID .. "\n/use " .. slot)
     end
     -- Observation only: no protected call from these insecure scripts.
+    -- Both mouse edges are registered (Apotheca.API.ClickEdges), but the
+    -- secure handler acts on one: down when ActionButtonUseKeyDown is 1
+    -- (measured). Only that edge starts an attempt, so one click is one
+    -- record (Codex review of #25).
     b:SetScript("PreClick", function(self, button, down)
+        local keyDown = C_CVar and C_CVar.GetCVar("ActionButtonUseKeyDown") == "1"
+        if (down and true or false) ~= (keyDown and true or false) then return end
         if applyAttempt then FinishAttempt("superseded by a new click") end
         attemptCount = attemptCount + 1
         applyAttempt = {
@@ -582,9 +600,10 @@ local function MakeButton(parent, method, slot, itemID, x, y)
             t0 = GetTime(), events = {}, before = Snapshot(itemID),
         }
     end)
-    b:SetScript("PostClick", function()
+    b:SetScript("PostClick", function(self, button, down)
         local att = applyAttempt
-        if not att then return end
+        if not att or att.method ~= self.method or att.slot ~= self.slot then return end
+        if (down and true or false) ~= att.down then return end
         att.targetingAfterClick = plain(SpellIsTargeting())
         local okP, popup = pcall(StaticPopup_Visible, "REPLACE_ENCHANT")
         att.popup = okP and popup and true or nil
@@ -636,6 +655,18 @@ function Apotheca.RunApplyTest(arg)
             if (event:find("^UNIT_") and a1 ~= "player") then return end
             att.events[#att.events + 1] = { GetTime() - att.t0, event,
                 tostring(plain(a1)), tostring(plain(a2)), tostring(plain(a3)) }
+            att.lastActivity = GetTime()
+            -- A weapon swapped out and back ends with the same item IDs, so
+            -- the swap itself marks the attempt (Codex review of #25).
+            if event == "PLAYER_EQUIPMENT_CHANGED" and (a1 == 16 or a1 == 17) then
+                att.weaponChanged = true
+            end
+            -- The apply cast: no verdict while it runs.
+            if event == "UNIT_SPELLCAST_START" then att.casting = true end
+            if event == "UNIT_SPELLCAST_SUCCEEDED" or event == "UNIT_SPELLCAST_FAILED"
+                    or event == "UNIT_SPELLCAST_INTERRUPTED" then
+                att.casting = false
+            end
         end)
         applyEvents:SetScript("OnUpdate", function()
             local att = applyAttempt
@@ -645,11 +676,15 @@ function Apotheca.RunApplyTest(arg)
             local okP, popup = pcall(StaticPopup_Visible, "REPLACE_ENCHANT")
             if okP and popup then att.popup = true end
             -- Wait while the player still has to pick a weapon or answer
-            -- the replace popup.
-            local waiting = (okT and targeting == true) or (okP and popup and true)
+            -- the replace popup, and while the apply cast runs; then for a
+            -- quiet spell, so a late pick or answer gets its cast in (Codex
+            -- review of #25).
+            local waiting = (okT and targeting == true) or (okP and popup and true) or att.casting
+            if waiting then att.lastActivity = GetTime() end
+            local quiet = GetTime() - (att.lastActivity or att.t0)
             if age >= APPLY_TIMEOUT then
                 FinishAttempt("timeout")
-            elseif age >= APPLY_SETTLE and not waiting then
+            elseif age >= APPLY_SETTLE and not waiting and quiet >= APPLY_QUIET then
                 FinishAttempt("settled")
             end
         end)
