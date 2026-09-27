@@ -183,6 +183,8 @@ Measured on a level 3 Undead at full health and mana: the Food and Drink buttons
 - None of the 18 non-XP Well Fed foods (Vanilla sweets, Dirge's Chops, the four item-style Forever foods) gives a stat in that wording.
 - One in-game measurement: 1248422.
 
+**Second XP aura measured (2026-09-27):** eating Herb Baked Egg (item 6888, item spell 1248377 "Nutritious Food", +1 Stamina) gives `Well Fed#1248406`, in the "nutritious" family (Stamina). That makes two of the 15 confirmed in game.
+
 **Level APIs:**
 - `UnitLevel` = 11 and `GetMaxPlayerLevel()` = 60 at level 11.
 - `GetMaxLevelForPlayerExpansion()` = 60.

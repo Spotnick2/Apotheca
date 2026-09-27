@@ -208,21 +208,109 @@ H.check(glowing(), "...but the ready check still wants the glow: it stays")
 WoW.fire("READY_CHECK_FINISHED")
 H.check(not glowing(), "the ready check ends: the glow goes")
 
--- Buff Food offering the same item: only XP Food glows (one reminder for
--- one thing to eat).
+-- XP food belongs to the XP Food button while it is on the bar: Buff Food
+-- offers only the other buff food, so one item never shows twice (owner,
+-- in game on #21). Nearly all buff food is XP food, so the non-XP one here
+-- is Dirge's Kickin' Chimaerok Chops (Stamina).
 local bf = Apotheca.buttons.bufffood
-ApothecaDB.profiles[ApothecaDB.activeProfile].buffFoodPriority = { HEALER = { "intellect", "spirit" } }
+ApothecaDB.profiles[ApothecaDB.activeProfile].buffFoodPriority = { HEALER = { "intellect", "stamina" } }
 update()
-H.eq(bf.itemID, btn().itemID, "both buttons offer the same item here")
+H.check(btn().itemID == 1082, "XP Food holds the Intellect XP food")
+-- Nothing but XP food held: Buff Food has nothing to offer. (A hidden
+-- button keeps its last itemID, so check the bar, not the field.)
+H.check(not bf:IsShown(), "Buff Food does not offer XP food while XP Food offers one")
+WoW.AddItem(0, 6, 21023, 2, "Dirge's Kickin' Chimaerok Chops")
+update()
+H.eq(bf.itemID, 21023, "Buff Food offers the non-XP buff food instead")
+-- Strict mode compares only what Buff Food can offer.
+ApothecaDB.profiles[ApothecaDB.activeProfile].buffFood.strictBestOnly = true
+update()
+H.eq(bf.itemID, 21023, "strict mode is not beaten by XP food it cannot offer")
+ApothecaDB.profiles[ApothecaDB.activeProfile].buffFood.strictBestOnly = false
+-- The two Buff Food passes, each able to pick XP food if the exclusion
+-- slipped (Codex review of #22). Substitution first: strict finds nothing
+-- (no non-XP Intellect food; Lollipop's +2 Spirit is not the best Spirit),
+-- so the fallback runs and must skip the XP Intellect food.
+local prof = ApothecaDB.profiles[ApothecaDB.activeProfile]
+prof.buffFoodPriority = { HEALER = { "intellect", "spirit" } }
+prof.buffFood.strictBestOnly, prof.buffFood.allowSubstitutions = true, true
+WoW.AddItem(0, 7, 7806, 3, "Lollipop")                   -- non-XP, +2 Stamina and Spirit
+update()
+H.eq(bf.itemID, 7806, "the substitution pass skips XP food: Lollipop, not Redridge Goulash")
+prof.categories.spirit = false
+update()
+-- (A hidden button keeps its last itemID: check what is on the bar.)
+H.check(not bf:IsShown(), "Spirit switched off: Buff Food has nothing to offer, not the XP food")
+prof.categories.spirit = true
+-- Strict, no substitutions: the best Spirit food Buff Food can OFFER is
+-- the bar, not the +20 XP Spirit food it must leave to XP Food.
+prof.buffFoodPriority = { HEALER = { "spirit" } }
+prof.buffFood.allowSubstitutions = false
+WoW.AddItem(0, 8, 16971, 2, "Clamlette Surprise")        -- non-XP, +12 Stamina and Spirit
+update()
+H.eq(bf.itemID, 16971, "strict mode measures against offerable food only: Clamlette Surprise")
+prof.buffFood.strictBestOnly, prof.buffFood.allowSubstitutions = false, true
+prof.buffFoodPriority = { HEALER = { "intellect", "stamina" } }
+update()
+
+-- A hidden Buff Food never glows, even with a leftover itemID.
+prof.buffFoodPriority = { HEALER = { "intellect" } }
+update()
+H.check(not bf:IsShown() and bf.itemID ~= nil, "Buff Food hidden, with a leftover itemID")
+WoW.fire("READY_CHECK")
 local function bfGlowing() local o = bf.__apothecaGlow return o ~= nil and not o.animOut:IsPlaying() end
-WoW.fire("READY_CHECK")
-H.check(glowing() and not bfGlowing(), "only XP Food glows for the shared item")
+H.check(not bfGlowing(), "a hidden Buff Food does not glow on a ready check")
 WoW.fire("READY_CHECK_FINISHED")
+-- Two different foods on the bar, no Well Fed: only XP Food glows, since
+-- eating the second would replace the first.
+prof.buffFoodPriority = { HEALER = { "intellect", "stamina" } }
+update()
+H.check(bf:IsShown() and bf.itemID == 21023 and btn().itemID == 1082, "XP Food and Buff Food offer different foods")
+WoW.fire("READY_CHECK")
+H.check(glowing() and not bfGlowing(), "only XP Food glows: one thing to eat")
+WoW.auras.HELPFUL = {}
+WoW.SetAura("HELPFUL", "Well Fed", 1248422)              -- XP buff up
+H.check(not bfGlowing(), "with the XP Well Fed up, Buff Food does not glow either")
+WoW.auras.HELPFUL = {}
+WoW.fire("READY_CHECK_FINISHED")
+-- XP Food offering nothing (every XP food held is above the level): Buff
+-- Food offers the XP food as usual. The level-1 XP foods leave the bags.
+local saved = {}
+for _, slot in ipairs({ 1, 2, 4 }) do saved[slot], WoW.bags[0][slot] = WoW.bags[0][slot], nil end
+WoW.level = 3
+prof.buffFoodPriority = { HEALER = { "intellect" } }
+update()
+H.check(not btn():IsShown(), "level 3 with only level-5 XP food: XP Food offers nothing")
+H.check(bf:IsShown() and bf.itemID == 1082, "so Buff Food offers the XP food (Redridge Goulash) as usual")
+for slot, v in pairs(saved) do WoW.bags[0][slot] = v end
+WoW.level = 5
+prof.buffFoodPriority = { HEALER = { "intellect", "stamina" } }
+update()
+
+-- XP food on the plain Food and Drink lists (its Well Fed is movement
+-- speed, fishing or herbalism) is XP Food's too (Codex review of #22).
+local food, drink = Apotheca.buttons.food, Apotheca.buttons.drink
+WoW.AddItem(1, 1, 267341, 4, "Sweetpaw Jam")             -- L55, movement speed in Hyjal
+WoW.AddItem(1, 2, 10841, 4, "Goldthorn Tea")             -- L25, herbalism
+WoW.level = 55
+update()
+H.check(btn():IsShown(), "XP Food offers an XP food at level 55")
+H.check(food.itemID ~= 267341, "Food does not offer Sweetpaw Jam while XP Food owns XP food")
+H.check(drink.itemID ~= 10841, "Drink does not offer Goldthorn Tea either")
 setXP(false) ; update()
-WoW.fire("READY_CHECK")
-H.check(bfGlowing(), "with XP Food off, Buff Food glows as before")
-WoW.fire("READY_CHECK_FINISHED")
+H.eq(food.itemID, 267341, "XP Food off: Food offers Sweetpaw Jam again")
+H.eq(drink.itemID, 10841, "and Drink offers Goldthorn Tea again")
 setXP(true)
+WoW.bags[1][1], WoW.bags[1][2] = nil, nil
+WoW.level = 5
+update()
+
+-- XP Food off, or at the cap: Buff Food offers every buff food again.
+setXP(false) ; update()
+H.eq(bf.itemID, 1082, "XP Food off: Buff Food offers the XP food again")
+setXP(true) ; WoW.level = 60 ; update()
+H.eq(bf.itemID, 1082, "at the level cap: Buff Food offers it again")
+WoW.level = 5
 ApothecaDB.profiles[ApothecaDB.activeProfile].buffFoodPriority = nil
 update()
 

@@ -936,7 +936,10 @@ function Apotheca.FindBestDrink(bagMap)
     end
 end
 
-function Apotheca.FindBestBuffFood(bagMap)
+-- `skip`: item IDs Buff Food must not offer (the XP food, while the XP
+-- Food button shows one; #19). Skipped outright, so strict mode measures
+-- only against food Buff Food can offer.
+function Apotheca.FindBestBuffFood(bagMap, skip)
     local db       = DB()
     local bf       = db.buffFood
     if not bf or not bf.enabled then return nil, 0, nil end
@@ -945,9 +948,10 @@ function Apotheca.FindBestBuffFood(bagMap)
     if not priority then return nil, 0, nil end
 
     local categories = db.categories or PROFILE_DEFAULTS.categories
-    local strict     = bf.strictBestOnly
 
-    local function scanCategory(statKey)
+    -- The best held food of one stat. `strict`: nothing unless it is the
+    -- best that stat has at all.
+    local function scanCategory(statKey, strict)
         local entries = BUFF_FOOD_BY_STAT[statKey]
         if not entries or #entries == 0 then return nil, 0, nil end
         if categories[statKey] == false then return nil, 0, nil end
@@ -955,12 +959,14 @@ function Apotheca.FindBestBuffFood(bagMap)
         local bestID, bestVal, bestCount = nil, -1, 0
         local globalBestVal = -1
         for _, entry in ipairs(entries) do
-            if entry.value > globalBestVal then globalBestVal = entry.value end
-            local count = bagMap[entry.id]
-            if count and count > 0 and entry.value > bestVal then
-                bestVal   = entry.value
-                bestID    = entry.id
-                bestCount = count
+            if not (skip and skip[entry.id]) then
+                if entry.value > globalBestVal then globalBestVal = entry.value end
+                local count = bagMap[entry.id]
+                if count and count > 0 and entry.value > bestVal then
+                    bestVal   = entry.value
+                    bestID    = entry.id
+                    bestCount = count
+                end
             end
         end
         if not bestID then return nil, 0, nil end
@@ -969,26 +975,15 @@ function Apotheca.FindBestBuffFood(bagMap)
     end
 
     for _, statKey in ipairs(priority) do
-        local id, count, tex = scanCategory(statKey)
+        local id, count, tex = scanCategory(statKey, bf.strictBestOnly)
         if id then return id, count, tex end
     end
 
-    -- allowSubstitutions fallback: retry without strict
-    if strict and bf.allowSubstitutions then
+    -- allowSubstitutions fallback: the same scan without strict
+    if bf.strictBestOnly and bf.allowSubstitutions then
         for _, statKey in ipairs(priority) do
-            local entries = BUFF_FOOD_BY_STAT[statKey]
-            if entries and categories[statKey] ~= false then
-                local bestID, bestVal, bestCount = nil, -1, 0
-                for _, entry in ipairs(entries) do
-                    local count = bagMap[entry.id]
-                    if count and count > 0 and entry.value > bestVal then
-                        bestVal   = entry.value
-                        bestID    = entry.id
-                        bestCount = count
-                    end
-                end
-                if bestID then return bestID, bestCount, GetCachedTexture(bestID) end
-            end
+            local id, count, tex = scanCategory(statKey, false)
+            if id then return id, count, tex end
         end
     end
 
@@ -1071,12 +1066,26 @@ local XP_WELL_FED, ORDINARY_WELL_FED = {}, {}
 for _, id in ipairs(DATA.XP_WELL_FED_SPELLS or {}) do XP_WELL_FED[id] = true end
 for _, id in ipairs(DATA.ORDINARY_WELL_FED_SPELLS or {}) do ORDINARY_WELL_FED[id] = true end
 
+local XP_FOOD_IDS = {}
+for _, e in ipairs(DATA.XP_FOOD or {}) do XP_FOOD_IDS[e.id] = true end
+
+-- Every XP food item ID: while the XP Food button offers one, Buff Food
+-- leaves all of them to it (UpdateAllButtonsBody).
+Apotheca.XP_FOOD_IDS = XP_FOOD_IDS
+
+-- Is the XP Food button in play: switched on, and XP to gain?
+function Apotheca.XPFoodEnabled()
+    local xp = DB().xpFood
+    return (xp and xp.enabled and Apotheca.CanGainXP()) and true or false
+end
+
 -- While the player can still gain XP: below the level cap, and XP not
 -- turned off (measured on 70009: GetMaxPlayerLevel 60, IsXPUserDisabled).
+local function CanGainXPUnprotected()
+    return UnitLevel("player") < GetMaxPlayerLevel() and not IsXPUserDisabled()
+end
 function Apotheca.CanGainXP()
-    local ok, can = pcall(function()
-        return UnitLevel("player") < GetMaxPlayerLevel() and not IsXPUserDisabled()
-    end)
+    local ok, can = pcall(CanGainXPUnprotected)
     return ok and can or false
 end
 
@@ -1713,12 +1722,11 @@ local function UpdateBuffFoodGlow()
     if not btn then return end
     local db  = DB()
     local glowEnabled = db.buffFood and db.buffFood.glowOnMissingBuff
-    -- The same item glowing on Buff Food and XP Food would read as "two
-    -- things to eat": when XP Food glows for that very item, only it does.
-    local xp = Apotheca.buttons["xpfood"]
-    local sameAsXP = xp and xp.itemID == btn.itemID and XPFoodGlowWanted()
-    if readyCheckActive and glowEnabled and btn.itemID and not sameAsXP
-            and Apotheca.HasFoodBuff() == false then
+    -- Only a button on the bar (a hidden one keeps its last itemID). And not
+    -- while XP Food asks to be eaten: Well Fed doesn't stack, so two glows
+    -- would read as "eat both" when the second replaces the first.
+    if readyCheckActive and glowEnabled and btn.itemID and btn:IsShown()
+            and not XPFoodGlowWanted() and Apotheca.HasFoodBuff() == false then
         ShowBuffFoodGlow()
     else
         HideBuffFoodGlow()
@@ -2613,8 +2621,30 @@ function UpdateAllButtonsBody()
         if show then btn:Show() else btn:Hide() end
     end
 
+    -- ── XP food (optional, while levelling) ───────────────────────
+    -- Resolved before Food, Drink and Buff Food: while it offers an item,
+    -- every XP food is its own, and they offer only the others, so one food
+    -- never shows on two buttons. That includes Food and Drink: XP food
+    -- whose Well Fed is movement speed, fishing or herbalism (Sweetpaw Jam,
+    -- Goldthorn Tea) is plain food or drink (Codex review of #22). When it
+    -- offers nothing (none held, or all above the level), they offer
+    -- everything as usual.
+    local xpOn = Apotheca.XPFoodEnabled()
+    local xpID, xpCnt, xpTex
+    if xpOn then
+        xpID, xpCnt, xpTex = Apotheca.FindBestXPFood(bagMap)
+    end
+    local xpOwned = xpID and Apotheca.XP_FOOD_IDS or nil
+    local recoveryBags = bagMap
+    if xpOwned then
+        recoveryBags = {}
+        for id, n in pairs(bagMap) do
+            if not xpOwned[id] then recoveryBags[id] = n end
+        end
+    end
+
     -- ── Recovery + Elixirs ───────────────────────────────────────
-    local rec     = ResolveRecovery(bagMap)
+    local rec     = ResolveRecovery(recoveryBags)
     local elixRes = Apotheca.ResolveElixirs(bagMap)
 
     local recovMode
@@ -2679,14 +2709,8 @@ function UpdateAllButtonsBody()
     -- ── Buff food ────────────────────────────────────────────────
     local buffFoodID, buffFoodCnt, buffFoodTex
     if db.buffFood and db.buffFood.enabled then
-        buffFoodID, buffFoodCnt, buffFoodTex = Apotheca.FindBestBuffFood(bagMap)
-    end
-
-    -- ── XP food (optional, while levelling) ───────────────────────
-    local xpOn = db.xpFood and db.xpFood.enabled and Apotheca.CanGainXP()
-    local xpID, xpCnt, xpTex
-    if xpOn then
-        xpID, xpCnt, xpTex = Apotheca.FindBestXPFood(bagMap)
+        buffFoodID, buffFoodCnt, buffFoodTex =
+            Apotheca.FindBestBuffFood(bagMap, xpOwned)
     end
 
     -- ── Bandage ──────────────────────────────────────────────────

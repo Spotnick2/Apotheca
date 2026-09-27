@@ -488,7 +488,8 @@ function Apotheca.BuildOptionsPanelContent(panel)
     SmallLabel("|cff888888Offers food with the 5% kill-XP bonus you can eat at your level, preferring\n"
         .. "a stat your role uses, and glows for a few seconds after combat, and on a ready\n"
         .. "check, while that buff is not up: even over other buff food, since Well Fed\n"
-        .. "doesn't stack and XP food replaces it.|r")
+        .. "doesn't stack and XP food replaces it. While it offers one, XP food is its own:\n"
+        .. "the Buff Food button offers only your other buff food.|r")
 
     SectionHeader("Buff Food Priority")
     SmallLabel("Priority order for stat categories (1 = most preferred).")
