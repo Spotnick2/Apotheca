@@ -583,8 +583,11 @@ D.XP_FOOD = {
 -- Fed", like ordinary food, with its own spell ID: these are the XP ones
 -- ("A nutritious meal / A tasty drink has made you Well Fed").
 D.XP_WELL_FED_SPELLS = { 1248406, 1248420, 1248421, 1248422, 1248688, 1249519, 1249520, 1249521, 1249523, 1249907, 1249926, 1249927, 1294007, 1302064, 1319310 }
--- Every Well Fed aura the scan found, XP or not. A Well Fed aura in
--- neither list is unknown (a spell revealed by a later build).
+-- Well Fed auras known NOT to be XP (described, or Vanilla). A Well Fed
+-- aura in neither list is unknown: a Forever spell with no text, or one
+-- a later build revealed.
+D.ORDINARY_WELL_FED_SPELLS = { 19705, 19706, 19708, 19709, 19710, 19711, 24799, 24870, 25694, 25941, 1225778, 1225779, 1225780, 1225782 }
+-- Every Well Fed aura the scan found (its localized name matches any).
 D.WELL_FED_SPELLS = { 19705, 19706, 19708, 19709, 19710, 19711, 24799, 24870, 25694, 25941, 1225778, 1225779, 1225780, 1225782, 1248406, 1248420, 1248421, 1248422, 1248688, 1249519, 1249520, 1249521, 1249523, 1249907, 1249926, 1249927, 1283082, 1294007, 1302064, 1319310 }
 
 -- Every healthstone, strongest first. All ranks share one cooldown.

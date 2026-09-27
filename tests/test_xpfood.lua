@@ -54,10 +54,25 @@ WoW.class, WoW.lfgRoles = "WARRIOR", { damage = true }
 update()
 H.eq(btn().itemID, 2888, "a melee warrior gets the Strength one (Beer Basted Boar Ribs)")
 
--- Level beats stat: at level 5 the level-5 food wins, whatever its stat.
+-- A stat the role wants beats one it doesn't, whatever the level (same 5%
+-- XP): a warrior keeps the level-1 Strength food over level-5 Intellect.
 WoW.level = 5
 update()
-H.eq(btn().itemID, 1082, "at level 5 the level-5 food (Redridge Goulash) wins over a level-1 Strength food")
+H.eq(btn().itemID, 2888, "a warrior's level-1 Strength food beats level-5 Intellect food")
+-- Among foods with a wanted stat, the higher level wins.
+WoW.AddItem(0, 5, 724, 5, "Goretusk Liver Pie")          -- L5, Strength
+update()
+H.eq(btn().itemID, 724, "among Strength foods, the level-5 one wins")
+-- A healer: Intellect is wanted, so the level-5 Intellect food.
+WoW.class, WoW.lfgRoles = "PRIEST", { healer = true }
+update()
+H.eq(btn().itemID, 1082, "a healer gets the level-5 Intellect food (Redridge Goulash)")
+-- A switched-off stat category is never offered.
+ApothecaDB.profiles[ApothecaDB.activeProfile].categories.intellect = false
+update()
+H.check(btn().itemID ~= 1082 and btn().itemID ~= 12224, "Intellect switched off in the Buff Food filters: no Intellect XP food")
+ApothecaDB.profiles[ApothecaDB.activeProfile].categories.intellect = true
+update()
 
 -- No XP to gain: hidden.
 WoW.level = 60
@@ -104,6 +119,19 @@ WoW.auras.HELPFUL = {}
 WoW.SetAura("HELPFUL", "Well Fed", 1399999)
 H.eq(Apotheca.HasXPFoodBuff(), nil, "a Well Fed the scan did not know is unknown, not missing")
 WoW.auras.HELPFUL = {}
+-- A Forever Well Fed with no text (1283082) may be an XP aura: unknown.
+WoW.SetAura("HELPFUL", "Well Fed", 1283082)
+H.eq(Apotheca.HasXPFoodBuff(), nil, "a Forever Well Fed with no description is unknown, not ordinary")
+WoW.auras.HELPFUL = {}
+-- A German client where only some Well Fed names have loaded: an unknown
+-- Well Fed is still recognised by its localized name.
+WoW.spellNames[19705] = nil
+WoW.spellNames[1248406] = "Gut gesättigt"
+WoW.SetAura("HELPFUL", "Gut gesättigt", 1399999)
+H.eq(Apotheca.HasXPFoodBuff(), nil, "an unknown Well Fed matches by the localized name of any scanned one")
+WoW.auras.HELPFUL = {}
+WoW.spellNames[1248406] = nil
+WoW.spellNames[19705] = "Well Fed"
 WoW.aurasThrow = true
 H.eq(Apotheca.HasXPFoodBuff(), nil, "unreadable auras (combat) are unknown")
 WoW.aurasThrow = false
@@ -142,6 +170,20 @@ WoW.enterCombat()
 H.check(not glowing(), "re-entering combat ends the reminder")
 WoW.leaveCombat() ; settle() ; WoW.tick(6)
 
+-- No reminder for a corpse: dying ends combat too.
+WoW.enterCombat() ; WoW.dead = true ; WoW.leaveCombat() ; settle()
+H.check(not glowing(), "dying does not start the reminder")
+WoW.dead = false
+WoW.tick(6)
+
+-- A pull during an open ready check hides the glow for the fight, even if
+-- lockdown is not engaged yet when combat starts.
+WoW.fire("READY_CHECK")
+H.check(glowing(), "ready check glow on")
+WoW.fire("PLAYER_REGEN_DISABLED")        -- lockdown not yet engaged
+H.check(not glowing(), "combat start hides it outright")
+WoW.fire("READY_CHECK_FINISHED")
+
 -- Unknown Well Fed: no nagging.
 WoW.SetAura("HELPFUL", "Well Fed", 1399999)
 WoW.enterCombat() ; WoW.leaveCombat() ; settle()
@@ -165,6 +207,24 @@ WoW.tick(6)                                   -- the reminder expires...
 H.check(glowing(), "...but the ready check still wants the glow: it stays")
 WoW.fire("READY_CHECK_FINISHED")
 H.check(not glowing(), "the ready check ends: the glow goes")
+
+-- Buff Food offering the same item: only XP Food glows (one reminder for
+-- one thing to eat).
+local bf = Apotheca.buttons.bufffood
+ApothecaDB.profiles[ApothecaDB.activeProfile].buffFoodPriority = { HEALER = { "intellect", "spirit" } }
+update()
+H.eq(bf.itemID, btn().itemID, "both buttons offer the same item here")
+local function bfGlowing() local o = bf.__apothecaGlow return o ~= nil and not o.animOut:IsPlaying() end
+WoW.fire("READY_CHECK")
+H.check(glowing() and not bfGlowing(), "only XP Food glows for the shared item")
+WoW.fire("READY_CHECK_FINISHED")
+setXP(false) ; update()
+WoW.fire("READY_CHECK")
+H.check(bfGlowing(), "with XP Food off, Buff Food glows as before")
+WoW.fire("READY_CHECK_FINISHED")
+setXP(true)
+ApothecaDB.profiles[ApothecaDB.activeProfile].buffFoodPriority = nil
+update()
 
 -- A reminder armed while the bar is hidden must not fire later.
 ApothecaDB.profiles[ApothecaDB.activeProfile].enabled = false

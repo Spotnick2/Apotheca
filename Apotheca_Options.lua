@@ -485,9 +485,10 @@ function Apotheca.BuildOptionsPanelContent(panel)
     Checkbox("Enable XP Food button  |cff888888(while levelling)|r",
         function() return DBGet("xpFood", "enabled") == true end,
         function(v) DBSet(v, "xpFood", "enabled") end)
-    SmallLabel("|cff888888Offers food with the 5% kill-XP bonus you can eat at your level, and glows\n"
-        .. "for a few seconds after combat, and on a ready check, while that buff is not up.\n"
-        .. "Well Fed doesn't stack: XP food replaces another Well Fed.|r")
+    SmallLabel("|cff888888Offers food with the 5% kill-XP bonus you can eat at your level, preferring\n"
+        .. "a stat your role uses, and glows for a few seconds after combat, and on a ready\n"
+        .. "check, while that buff is not up: even over other buff food, since Well Fed\n"
+        .. "doesn't stack and XP food replaces it.|r")
 
     SectionHeader("Buff Food Priority")
     SmallLabel("Priority order for stat categories (1 = most preferred).")

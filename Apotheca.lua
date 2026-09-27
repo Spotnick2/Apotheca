@@ -198,6 +198,17 @@ local function MigrateProfile(prof)
         end
         prof.preventWaste = nil
     end
+    -- A custom button order saved before the XP Food button (#19) gets it
+    -- next to Buff Food, as in the default order, not after Bandage where
+    -- GetButtonOrder would append it.
+    if type(prof.buttonOrder) == "table" and #prof.buttonOrder > 0 then
+        local at, has = nil, false
+        for i, k in ipairs(prof.buttonOrder) do
+            if k == "xpfood" then has = true end
+            if k == "bufffood" then at = i end
+        end
+        if not has and at then table.insert(prof.buttonOrder, at + 1, "xpfood") end
+    end
     -- showOnlyHealingSpec was a class check that defaulted to TRUE, so every
     -- saved profile holds true whether or not anyone chose it. Under the new
     -- role check it would hide the whole bar for a healer class playing
@@ -1056,9 +1067,9 @@ end
 -- shared). DATA.XP_WELL_FED_SPELLS and DATA.WELL_FED_SPELLS come from the
 -- client's own spell data (/apo scan3, docs/FOREVER-PROBE.md).
 -- ============================================================
-local XP_WELL_FED, KNOWN_WELL_FED = {}, {}
+local XP_WELL_FED, ORDINARY_WELL_FED = {}, {}
 for _, id in ipairs(DATA.XP_WELL_FED_SPELLS or {}) do XP_WELL_FED[id] = true end
-for _, id in ipairs(DATA.WELL_FED_SPELLS or {}) do KNOWN_WELL_FED[id] = true end
+for _, id in ipairs(DATA.ORDINARY_WELL_FED_SPELLS or {}) do ORDINARY_WELL_FED[id] = true end
 
 -- While the player can still gain XP: below the level cap, and XP not
 -- turned off (measured on 70009: GetMaxPlayerLevel 60, IsXPUserDisabled).
@@ -1071,28 +1082,44 @@ end
 
 -- Is the XP food buff up? true / false, or nil when unknown:
 -- - auras unreadable (combat);
--- - a Well Fed aura the scan did not know (a spell a later build revealed:
---   Blizzard keeps some data encrypted until it is discovered). Unknown
---   never glows, so a new XP food cannot make the button nag.
+-- - a Well Fed aura that is neither XP nor known ordinary: a Forever spell
+--   with no text (1283082), or one a later build revealed (Blizzard keeps
+--   some data encrypted until it is discovered). Unknown never glows, so
+--   such a buff cannot make the button nag.
+-- IDs decide first. "Is some other aura a Well Fed?" is by name, in the
+-- client's language: every scanned Well Fed spell's name, so it matches as
+-- soon as any has loaded, and the English name only if none has.
 function Apotheca.HasXPFoodBuff(auras)
     auras = auras or ReadAuras("HELPFUL")
     if not auras then return nil end
+    local ordinary = false
     for id in pairs(auras.ids) do
         if XP_WELL_FED[id] then return true end
+        if ORDINARY_WELL_FED[id] then ordinary = true end
     end
-    local wellFedName = SpellName(WELL_FED_SPELLS[1]) or "Well Fed"
-    if auras.names[wellFedName] then
-        for id in pairs(auras.ids) do
-            if KNOWN_WELL_FED[id] then return false end   -- ordinary Well Fed
+    if ordinary then return false end
+    local named = false
+    for _, id in ipairs(DATA.WELL_FED_SPELLS or WELL_FED_SPELLS) do
+        local n = SpellName(id)
+        if n then
+            named = true
+            if auras.names[n] then return nil end   -- a Well Fed we don't know
         end
-        return nil                                        -- a Well Fed we don't know
     end
+    if not named and auras.names["Well Fed"] then return nil end
     return false
 end
 
 -- The XP food to offer: one the player carries and can eat at their level.
--- Highest required level first (better food); among equals, a stat the
--- role's buff food priority wants, earliest first; then the bigger bonus.
+-- Every XP food gives the same 5%, so what differs is the Well Fed stat
+-- (Codex design consult on #21):
+--   1. a stat in the role's buff food priority beats one that isn't (or
+--      none: movement speed, fishing, herbalism), whatever the level;
+--   2. then the highest required level (a bigger bonus of a wanted stat);
+--   3. then the earliest stat in the priority;
+--   4. then the bigger value (same stat by then), then the lower item ID.
+-- So a level-1 role-stat food beats a level-55 stat-less one: same XP,
+-- and a stat the role wants.
 function Apotheca.FindBestXPFood(bagMap)
     local level = UnitLevel("player") or 1
     local rank = {}
@@ -1100,14 +1127,18 @@ function Apotheca.FindBestXPFood(bagMap)
     for i, stat in ipairs(Apotheca.GetStatPriority() or {}) do
         if not rank[stat] then rank[stat] = i end
     end
+    -- A stat category switched off in the Buff Food filters is never offered.
+    local categories = DB().categories or PROFILE_DEFAULTS.categories
     local best, bestKey
     for _, e in ipairs(DATA.XP_FOOD or {}) do
         local count = bagMap[e.id]
-        if count and count > 0 and e.level <= level then
-            local key = { e.level, -(e.stat and rank[e.stat] or 99), e.value }
+        if count and count > 0 and e.level <= level
+                and not (e.stat and categories[e.stat] == false) then
+            local r = e.stat and rank[e.stat]
+            local key = { r and 1 or 0, e.level, -(r or 99), e.value, -e.id }
             local better = not best
             if best then
-                for i = 1, 3 do
+                for i = 1, 5 do
                     if key[i] ~= bestKey[i] then better = key[i] > bestKey[i] break end
                 end
             end
@@ -1651,12 +1682,43 @@ end
 
 local readyCheckActive = false
 
+-- XP food glow: ONE function decides, for both reasons it can glow (Codex
+-- review of #19): a ready check, or the reminder for a few seconds after
+-- combat. Recomputed from state on every call, so a stale timer or event
+-- can never hide a glow another reason still wants. Only a button on the
+-- bar with an item, and only when the XP buff is confirmed missing.
+local XP_REMIND_SECONDS = 5
+local xpRemindUntil     = 0
+local xpRemindPending   = false
+
+local function XPFoodGlowWanted()
+    local btn = Apotheca.buttons["xpfood"]
+    if not btn then return false end
+    local reason = readyCheckActive or GetTime() < xpRemindUntil
+    -- Not while dead: dying ends combat too, and a ghost cannot eat.
+    return (reason and btn.itemID and btn:IsShown() and not InCombatLockdown()
+            and not UnitIsDeadOrGhost("player")
+            and Apotheca.HasXPFoodBuff() == false) and true or false
+end
+
+local function UpdateXPFoodGlow()
+    local btn = Apotheca.buttons["xpfood"]
+    if not btn then return end
+    if XPFoodGlowWanted() then ShowGlow(btn) else HideGlow(btn) end
+end
+
+
 local function UpdateBuffFoodGlow()
     local btn = Apotheca.buttons["bufffood"]
     if not btn then return end
     local db  = DB()
     local glowEnabled = db.buffFood and db.buffFood.glowOnMissingBuff
-    if readyCheckActive and glowEnabled and btn.itemID and Apotheca.HasFoodBuff() == false then
+    -- The same item glowing on Buff Food and XP Food would read as "two
+    -- things to eat": when XP Food glows for that very item, only it does.
+    local xp = Apotheca.buttons["xpfood"]
+    local sameAsXP = xp and xp.itemID == btn.itemID and XPFoodGlowWanted()
+    if readyCheckActive and glowEnabled and btn.itemID and not sameAsXP
+            and Apotheca.HasFoodBuff() == false then
         ShowBuffFoodGlow()
     else
         HideBuffFoodGlow()
@@ -1707,27 +1769,6 @@ local function UpdateWeaponOilGlow()
     if not btn then return end
     local glowEnabled = db.weaponOil and db.weaponOil.glowOnMissingBuff
     if readyCheckActive and glowEnabled and btn.itemID and Apotheca.HasMainHandTempEnchant() == false then
-        ShowGlow(btn)
-    else
-        HideGlow(btn)
-    end
-end
-
--- XP food glow: ONE function decides, for both reasons it can glow (Codex
--- review of #19): a ready check, or the reminder for a few seconds after
--- combat. Recomputed from state on every call, so a stale timer or event
--- can never hide a glow another reason still wants. Only a button on the
--- bar with an item, and only when the XP buff is confirmed missing.
-local XP_REMIND_SECONDS = 5
-local xpRemindUntil     = 0
-local xpRemindPending   = false
-
-local function UpdateXPFoodGlow()
-    local btn = Apotheca.buttons["xpfood"]
-    if not btn then return end
-    local reason = readyCheckActive or GetTime() < xpRemindUntil
-    if reason and btn.itemID and btn:IsShown() and not InCombatLockdown()
-            and Apotheca.HasXPFoodBuff() == false then
         ShowGlow(btn)
     else
         HideGlow(btn)
@@ -2826,7 +2867,8 @@ function UpdateAllButtonsBody()
     -- the post-combat bags, so it glows the item the button now holds.
     if xpRemindPending then
         xpRemindPending = false
-        xpRemindUntil = GetTime() + XP_REMIND_SECONDS
+        -- Death ends combat as well; no reminder for a corpse.
+        if not UnitIsDeadOrGhost("player") then xpRemindUntil = GetTime() + XP_REMIND_SECONDS end
     end
     UpdateXPFoodGlow()
 end
@@ -3130,8 +3172,10 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         UpdateElixirGlow(nil)
         UpdateScrollGlow()
         UpdateWeaponOilGlow()
+        -- Hide outright, like the other glows: at this event lockdown may not
+        -- be engaged yet, so a recompute could still show it for the fight.
         xpRemindPending, xpRemindUntil = false, 0
-        UpdateXPFoodGlow()
+        HideGlow(Apotheca.buttons["xpfood"])
 
     elseif event == "PLAYER_LEVEL_UP" or event == "DISABLE_XP_GAIN" or event == "ENABLE_XP_GAIN" then
         -- A new level opens better XP food; the cap, or XP turned off,

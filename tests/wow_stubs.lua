@@ -375,6 +375,8 @@ function debugprofilestop() WoW.profileMs = WoW.profileMs + 0.0005 return WoW.pr
 -- Levels (XP food, #19).
 WoW.level, WoW.maxLevel, WoW.xpDisabled = 3, 60, false
 function UnitLevel() return WoW.level end
+WoW.dead = false
+function UnitIsDeadOrGhost() return WoW.dead end
 function GetMaxPlayerLevel() return WoW.maxLevel end
 function GetMaxLevelForPlayerExpansion() return WoW.maxLevel end
 function IsXPUserDisabled() return WoW.xpDisabled end

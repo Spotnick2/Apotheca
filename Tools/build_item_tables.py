@@ -457,6 +457,9 @@ def build(rows):
 XP_LINE = 'kills is increased by 5%'
 XP_AURA_TEXT = re.compile(r'^A (?:nutritious meal|tasty drink) has made you Well Fed, increasing your (.+?)\.*$')
 MEASURED_XP_AURAS = [1248422]   # Beer Basted Boar Ribs, eaten on 70009
+# Forever's new spells start at 1.22M; XP food exists only on Forever. A
+# Well Fed spell below this is a Vanilla one, never XP, even with no text.
+FOREVER_SPELLS_FROM = 1000000
 
 
 def xp_food(rows):
@@ -512,6 +515,17 @@ def xp_auras(spells, foods):
     if absent:
         sys.exit('the XP aura measured in game is not in the XP set: %s' % absent)
     return xp
+
+
+def ordinary_well_fed(spells, xp):
+    """Well Fed auras known NOT to be XP: a described non-XP one, or a
+    Vanilla spell. A Forever spell with no description (1283082 on 70009)
+    is left out: it could be the unmeasured drink's XP aura, and at runtime
+    a Well Fed in neither list is unknown, which never glows (/code-review
+    of #21)."""
+    xp = set(xp)
+    return [sid for sid, desc in sorted(spells.items())
+            if sid not in xp and (desc.strip() or sid < FOREVER_SPELLS_FROM)]
 
 
 def offered_item_ids(out):
@@ -636,8 +650,11 @@ def emit(out, build_id, src):
     w('-- Fed", like ordinary food, with its own spell ID: these are the XP ones')
     w('-- ("A nutritious meal / A tasty drink has made you Well Fed").')
     w('D.XP_WELL_FED_SPELLS = { %s }' % ', '.join(str(x) for x in out['XP_WELL_FED_SPELLS']))
-    w('-- Every Well Fed aura the scan found, XP or not. A Well Fed aura in')
-    w('-- neither list is unknown (a spell revealed by a later build).')
+    w('-- Well Fed auras known NOT to be XP (described, or Vanilla). A Well Fed')
+    w('-- aura in neither list is unknown: a Forever spell with no text, or one')
+    w('-- a later build revealed.')
+    w('D.ORDINARY_WELL_FED_SPELLS = { %s }' % ', '.join(str(x) for x in out['ORDINARY_WELL_FED_SPELLS']))
+    w('-- Every Well Fed aura the scan found (its localized name matches any).')
     w('D.WELL_FED_SPELLS = { %s }' % ', '.join(str(x) for x in out['WELL_FED_SPELLS']))
     w('')
 
@@ -730,6 +747,7 @@ if __name__ == '__main__':
     out['XP_FOOD'] = xp_food(rows)
     out['XP_WELL_FED_SPELLS'] = xp_auras(wellfed, out['XP_FOOD'])
     out['WELL_FED_SPELLS'] = sorted(wellfed)
+    out['ORDINARY_WELL_FED_SPELLS'] = ordinary_well_fed(wellfed, out['XP_WELL_FED_SPELLS'])
     lua = emit(out, build_id.group(1) if build_id else '?', src.replace('\\', '/'))
     open('ApothecaItems.lua', 'w', encoding='utf-8', newline='\r\n').write(lua)
     for k, v in out.items():
