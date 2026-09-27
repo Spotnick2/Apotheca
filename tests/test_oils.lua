@@ -36,6 +36,25 @@ WoW.bags[0][1] = nil                    -- no wizard oil left
 as("WARLOCK", { damage = true })
 H.eq(oil.itemID, 20745, "a caster with only mana oil: mana oil")
 WoW.AddItem(0, 1, 20744, 3, "Minor Wizard Oil")
+WoW.fire("BAG_UPDATE_DELAYED")          -- the bags changed, as the client says
+for _ = 1, 2 do WoW.tick(1) end
+
+-- A role change refreshes the oil by itself, with no manual update: a
+-- druid switching Spell to Physical damage (a setting), and a priest
+-- whose role selector changes (the out-of-combat poll).
+WoW.class, WoW.lfgRoles = "DRUID", { damage = true }
+Apotheca.SetCharSetting("damageStyle", "SPELL")
+for _ = 1, 4 do WoW.tick(1) end
+H.eq(oil.itemID, 20744, "a spell-damage druid: wizard oil")
+Apotheca.SetCharSetting("damageStyle", "PHYSICAL")
+for _ = 1, 4 do WoW.tick(1) end
+H.eq(oil.itemID, 20745, "switched to physical damage: mana oil, without a manual update")
+WoW.class, WoW.lfgRoles = "PRIEST", { damage = true }
+for _ = 1, 4 do WoW.tick(1) end
+H.eq(oil.itemID, 20744, "a shadow priest (damage): wizard oil")
+WoW.lfgRoles = { healer = true }
+for _ = 1, 4 do WoW.tick(1) end
+H.eq(oil.itemID, 20745, "the role selector changed to healer: mana oil, picked up by the poll")
 
 -- An explicit choice overrides the role.
 prof().weaponOil.kind = "MANA_ONLY"
