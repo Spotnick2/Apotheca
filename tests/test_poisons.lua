@@ -164,4 +164,15 @@ WoW.fire("READY_CHECK")
 H.check(not glowing(mh), "ready-check glow switched off")
 WoW.fire("READY_CHECK_FINISHED")
 
+------------------------------------------------------------
+-- Weapon Oil: straight onto the main hand (measured on 70009, #24)
+------------------------------------------------------------
+WoW.class = "MAGE"
+WoW.AddItem(0, 5, 20744, 3, "Minor Wizard Oil")
+prof().weaponOil.includeWizardOils = true
+update()
+local oil = Apotheca.buttons.weaponoil
+H.eq(oil.itemID, 20744, "a mage is offered the wizard oil")
+H.eq(oil:GetAttribute("target-slot"), 16, "aimed at the main hand, as measured")
+
 H.done("test_poisons")

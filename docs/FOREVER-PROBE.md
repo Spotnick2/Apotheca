@@ -190,9 +190,25 @@ Measured on a level 3 Undead at full health and mana: the Food and Drink buttons
 - `GetMaxLevelForPlayerExpansion()` = 60.
 - `IsXPUserDisabled()` = false.
 
+## Applying a weapon coating from a secure button (#24), 2026-09-27, build 70009
+
+Measured with `/apo applytest 20744` (Minor Wizard Oil) on a warlock with a two-handed staff, out of combat, standing still, `ActionButtonUseKeyDown = 1`:
+
+| Attempt | Result |
+|---|---|
+| **A** (`type=item` + `target-slot` 16), main hand | **Applied.** No targeting cursor after the click; a 3-second cast (spell 25117); the oil already on the staff renewed. |
+| **B** (`/use item:20744` + `/use 16` macro), main hand | **Applied**, the same way. |
+| A, off hand (empty) | Failed at once: "Item is not ready yet." That was the oil's 1-second cooldown after the previous cast, so it says nothing about an empty hand. |
+| B, off hand (empty) | Left a **targeting cursor**: `/use 17` had no weapon to aim at. |
+
+- **Events, in order:** `UNIT_SPELLCAST_START`; then after 3 s `UNIT_SPELLCAST_SUCCEEDED`, `ENCHANT_SPELL_COMPLETED (true, <item location>)`, `UNIT_INVENTORY_CHANGED (player)`, `WEAPON_ENCHANT_CHANGED`.
+- **Re-applying the same oil** raised no replace popup.
+- **`GetWeaponEnchantInfo()`** out of combat: `true, <ms left>, 0, 2623` for the main hand. Minor Wizard Oil is **enchant ID 2623**. An oil has **0 charges**.
+- **Consequence:** the Weapon Oil button now sets `target-slot` 16, so a click applies the oil to the main hand. The poison buttons use the same method A. It's measured on the main hand with an oil, but poisons and the off hand are not measured yet.
+
 ## Still to measure
 
-- **Applying a weapon coating from a secure button (#24).** `/apo applytest <itemID>` shows four buttons:
+- **Poisons and the off hand (#24).** The main hand is measured with an oil (above). `/apo applytest <itemID>` shows four buttons:
   - method A (`type=item` + `target-slot`) for each hand;
   - method B (the `/use item:<id>` + `/use 16|17` macro) for each hand.
 

@@ -469,10 +469,12 @@ local function Snapshot(itemID)
     s.weapon = {}
     for _, slot in ipairs({ 16, 17 }) do
         local ok, id = pcall(GetInventoryItemID, "player", slot)
-        s.weapon[slot] = ok and plain(id) or "ERROR"
+        -- Not `ok and plain(id) or "ERROR"`: an empty slot (nil) fell
+        -- through to "ERROR" (70009 run).
+        if ok then s.weapon[slot] = plain(id) or "empty" else s.weapon[slot] = "ERROR" end
     end
     local okC, n = pcall(C_Item.GetItemCount, itemID)
-    s.count = okC and plain(n) or "ERROR"
+    if okC then s.count = plain(n) else s.count = "ERROR" end
     return s
 end
 

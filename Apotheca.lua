@@ -754,8 +754,8 @@ local MANAGEM_BUTTON_CONFIG = {
 
 -- Rogue poisons (#24, experimental): one button per hand. targetSlot makes
 -- the secure button apply the item to that hand ("target-slot", read by
--- the client's secure item action after the use; upstream behaviour, not
--- yet measured on Forever).
+-- the client's secure item action after the use). Measured on the main
+-- hand with a weapon oil (70009); poisons and the off hand are not yet.
 local POISON_BUTTON_CONFIG = {
     { key = "poisonmh", label = "Poison (main hand)", classOnly = "ROGUE", targetSlot = 16,
       emptyIcon = "Interface\\Icons\\Ability_Poisons", emptyTooltip = "No poison of the chosen kind in bags" },
@@ -763,9 +763,13 @@ local POISON_BUTTON_CONFIG = {
       emptyIcon = "Interface\\Icons\\Ability_Poisons", emptyTooltip = "No poison of the chosen kind in bags" },
 }
 
+-- targetSlot 16: a click applies the oil to the main hand directly, with
+-- no targeting cursor (measured on 70009 with Minor Wizard Oil,
+-- /apo applytest: a 3-second cast, then the oil renewed; #24).
 local WEAPONOIL_BUTTON_CONFIG = {
     requiresMana = true,   -- mana and wizard oils are for casters and healers
     key = "weaponoil", label = "Weapon Oil", emptyIcon = "Interface\\Icons\\INV_Potion_95",
+    targetSlot = 16,
 }
 
 local BANDAGE_BUTTON_CONFIG = {

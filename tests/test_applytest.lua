@@ -186,6 +186,13 @@ H.eq(ApothecaProbeDB.applyTests[#ApothecaProbeDB.applyTests].ended, "superseded 
     "a new click closes the open attempt")
 for _ = 1, 8 do WoW.tick(1) end
 
+-- An empty hand is recorded as "empty", not as an error (70009 run: the
+-- and/or idiom turned nil into "ERROR").
+WoW.equipped[17] = nil
+r = click(A16, function() WoW.enchants[16] = { true, 1800000, 40, 42, t = WoW.time } end)
+H.eq(r.before.weapon[17], "empty", "an empty off hand is recorded as empty")
+WoW.equipped[17] = 2209
+
 slash("applytest close")
 H.check(not f:IsShown(), "close hides the buttons")
 
