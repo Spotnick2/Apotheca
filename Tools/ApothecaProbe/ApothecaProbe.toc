@@ -1,6 +1,6 @@
 ## Interface: 16001
 ## Title: Apotheca Probe (dev)
-## Notes: Development-only measurement tool for Apotheca: /apo probe, /apo scan, /apo scan2. Not shipped to players.
+## Notes: Development-only measurement tool for Apotheca: /apo probe, /apo scan, /apo scan2, /apo scan3. Not shipped to players.
 ## Author: Spotnick
 ## Version: dev
 ## RequiredDeps: Apotheca

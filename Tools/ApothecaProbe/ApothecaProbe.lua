@@ -10,7 +10,8 @@
 --
 -- A separate, development-only addon (Tools/ApothecaProbe, loaded after
 -- Apotheca): it is never packaged, and `pwsh Tools/deploy.ps1 -Probe`
--- installs it. /apo probe, /apo scan and /apo scan2 do nothing without it.
+-- installs it. /apo probe, /apo scan, /apo scan2 and /apo scan3 do nothing
+-- without it.
 -- ============================================================
 
 Apotheca = Apotheca or {}
@@ -113,8 +114,55 @@ local TEMPLATES = {
 
 local SCAN_MAX_ID    = 300000   -- Wowhead's highest Forever consumable is ~286k
 local SCAN_PER_FRAME = 3000
-local TIP_PER_FRAME  = 20
 local TIP_TRIES      = 20       -- 0.5 s apart: ~10 s for a slow item load
+local FRAME_MS       = 8        -- work per frame in the retry phases
+local RETRY_DELAY    = 0.5
+
+-- A retry queue, shared by the three scans. Drain() tries entries with
+-- step(id, try) until the frame's time budget is spent; step returns true
+-- when the entry is settled, false to try it again RETRY_DELAY later.
+-- A retry is appended and the head moves on, which is O(1) (/code-review
+-- of #20: table.remove shifted the whole queue on every retry). Retries
+-- are appended in the order they fall due, so a head that is not due yet
+-- means nothing behind it is either: wait for the next frame.
+local function NewQueue(ids)
+    local copy = {}                -- the queue grows; never the caller's list
+    for i = 1, #ids do copy[i] = ids[i] end
+    return { ids = copy, head = 1, tries = {}, due = {} }
+end
+
+local function Drain(q, step)
+    local deadline = debugprofilestop() + FRAME_MS
+    local ids = q.ids
+    while q.head <= #ids do
+        if debugprofilestop() > deadline then return false end
+        local id = ids[q.head]
+        if q.due[id] and q.due[id] > GetTime() then return false end
+        local n = (q.tries[id] or 0) + 1
+        q.tries[id] = n
+        q.head = q.head + 1
+        if not step(id, n) then
+            q.due[id] = GetTime() + RETRY_DELAY
+            ids[#ids + 1] = id
+        end
+    end
+    return true
+end
+
+-- Runs body() every frame until it returns true. An error stops the scan
+-- and says so, instead of erroring every frame with the "scan already
+-- running" guard stuck until /reload (/code-review of #20).
+local function RunScanFrames(body)
+    local f = CreateFrame("Frame")
+    f:SetScript("OnUpdate", function(self)
+        local ok, finished = pcall(body)
+        if not ok or finished then
+            self:SetScript("OnUpdate", nil)
+            Apotheca._scanRunning = false
+            if not ok then print(PREFIX .. "scan stopped by an error: " .. tostring(finished)) end
+        end
+    end)
+end
 
 local function TooltipLines(id)
     local ok, lines = pcall(function()
@@ -137,13 +185,11 @@ function Apotheca.RunItemScan()
     end
     Apotheca._scanRunning = true
     local found, order = {}, {}
-    local nextID = 1
+    local nextID, tips = 1, nil
     print(PREFIX .. "scanning item IDs 1-" .. SCAN_MAX_ID .. " for consumables...")
 
-    local f = CreateFrame("Frame")
-    local phase, tipIndex, tries = "ids", 1, {}
-    f:SetScript("OnUpdate", function(self)
-        if phase == "ids" then
+    RunScanFrames(function()
+        if not tips then
             local last = math.min(nextID + SCAN_PER_FRAME - 1, SCAN_MAX_ID)
             for id = nextID, last do
                 local itemID, _, subType, _, _, classID, subClassID = C_Item.GetItemInfoInstant(id)
@@ -155,44 +201,31 @@ function Apotheca.RunItemScan()
             end
             nextID = last + 1
             if nextID > SCAN_MAX_ID then
-                phase = "tips"
+                tips = NewQueue(order)
                 print(PREFIX .. #order .. " consumables found; reading tooltips...")
             end
-        elseif phase == "tips" then
-            local done = 0
-            while done < TIP_PER_FRAME and tipIndex <= #order do
-                local id = order[tipIndex]
-                local e = found[id]
-                -- The queue is FIFO, so if the head was retried too
-                -- recently, everything behind it was too: wait a frame.
-                if e.retryAt and e.retryAt > GetTime() then break end
-                local lines = TooltipLines(id)
-                tries[id] = (tries[id] or 0) + 1
-                if lines or tries[id] >= TIP_TRIES then
-                    e.t, e.retryAt = lines, nil
-                    e.n = C_Item.GetItemInfo(id)
-                    local okSpell, spellName, spellID = pcall(C_Item.GetItemSpell, id)
-                    if okSpell then e.sp, e.spn = spellID, spellName end
-                    tipIndex = tipIndex + 1
-                else
-                    -- Not loaded yet: ask again and move it to the back.
-                    C_Item.RequestLoadItemDataByID(id)
-                    e.retryAt = GetTime() + 0.5
-                    table.remove(order, tipIndex)
-                    order[#order + 1] = id
-                end
-                done = done + 1
-            end
-            if tipIndex > #order then
-                self:SetScript("OnUpdate", nil)
-                Apotheca._scanRunning = false
-                local missing = 0
-                for _, e in pairs(found) do if not e.t then missing = missing + 1 end end
-                ProbeDB().itemScan = { build = select(2, GetBuildInfo()), items = found }
-                print(PREFIX .. "scan done: " .. #order .. " consumables, " .. missing
-                      .. " without tooltip text. /reload or log out to write the file.")
-            end
+            return false
         end
+        local done = Drain(tips, function(id, try)
+            local lines = TooltipLines(id)
+            if not lines and try < TIP_TRIES then
+                C_Item.RequestLoadItemDataByID(id)   -- not loaded yet: ask again
+                return false
+            end
+            local e = found[id]
+            e.t = lines
+            e.n = C_Item.GetItemInfo(id)
+            local okSpell, spellName, spellID = pcall(C_Item.GetItemSpell, id)
+            if okSpell then e.sp, e.spn = spellID, spellName end
+            return true
+        end)
+        if not done then return false end
+        local missing = 0
+        for _, e in pairs(found) do if not e.t then missing = missing + 1 end end
+        ProbeDB().itemScan = { build = select(2, GetBuildInfo()), items = found }
+        print(PREFIX .. "scan done: " .. #order .. " consumables, " .. missing
+              .. " without tooltip text. /reload or log out to write the file.")
+        return true
     end)
 end
 
@@ -229,53 +262,162 @@ function Apotheca.RunSpellScan()
     end
     Apotheca._scanRunning = true
 
-    local queue = {}
+    local ids = {}
     for id, e in pairs(scan.items) do
         local oil = e.n and e.n:find("Oil")
         if (RELEVANT_SUB[e.s] or oil) and e.sp and not HasUseLine(e.t) and not e.d then
-            queue[#queue + 1] = id
+            ids[#ids + 1] = id
             C_Spell.RequestLoadSpellData(e.sp)
             C_Item.RequestLoadItemDataByID(id)
         end
     end
-    print(PREFIX .. #queue .. " items need their spell text; loading...")
+    local count = #ids
+    print(PREFIX .. count .. " items need their spell text; loading...")
 
-    local head, tries = 1, {}
-    local f = CreateFrame("Frame")
-    f:SetScript("OnUpdate", function(self)
-        local done = 0
-        while done < TIP_PER_FRAME and head <= #queue do
-            local id = queue[head]
+    local q = NewQueue(ids)
+    RunScanFrames(function()
+        local done = Drain(q, function(id, try)
             local e = scan.items[id]
-            if e.retryAt and e.retryAt > GetTime() then break end
             local okD, desc = pcall(C_Spell.GetSpellDescription, e.sp)
             local lines = TooltipLines(id)
-            tries[id] = (tries[id] or 0) + 1
             local got = (okD and desc and desc ~= "") or HasUseLine(lines)
-            if got or tries[id] >= DESC_TRIES then
-                if okD and desc and desc ~= "" then e.d = desc end
-                if lines and HasUseLine(lines) then e.t = lines end
-                e.retryAt = nil
-                head = head + 1
-            else
+            if not got and try < DESC_TRIES then
                 C_Spell.RequestLoadSpellData(e.sp)
-                e.retryAt = GetTime() + 0.5
-                table.remove(queue, head)
-                queue[#queue + 1] = id
+                return false
             end
-            done = done + 1
+            if okD and desc and desc ~= "" then e.d = desc end
+            if lines and HasUseLine(lines) then e.t = lines end
+            return true
+        end)
+        if not done then return false end
+        local still = 0
+        for id in pairs(q.tries) do
+            local e = scan.items[id]
+            if not e.d and not HasUseLine(e.t) then still = still + 1 end
         end
-        if head > #queue then
-            self:SetScript("OnUpdate", nil)
-            Apotheca._scanRunning = false
-            local still = 0
-            for _, id in ipairs(queue) do
-                local e = scan.items[id]
-                if not e.d and not HasUseLine(e.t) then still = still + 1 end
+        print(PREFIX .. "spell scan done: " .. count .. " items, " .. still
+              .. " still without text. /reload to write the file.")
+        return true
+    end)
+end
+
+-- /apo scan3: the Well Fed buffs (#19). Forever's XP food ("experience
+-- gained from kills is increased by 5%") gives ONE aura named "Well Fed",
+-- like ordinary food, and its spell ID is not the item's spell (measured:
+-- item spell 1248380 gives aura 1248422). The only language-independent
+-- way to tell an XP Well Fed from an ordinary one is its aura spell ID, so
+-- this pass collects every spell named "Well Fed" with its description.
+-- The XP line is in neither the description nor the spell tooltip
+-- (measured on 70009), so the probe does not classify: the generator does.
+--
+-- Nothing assumes where those IDs are (Codex reviews of #19 and #20):
+-- - the sweep goes on until SPELL_SCAN_TAIL IDs past the highest spell that
+--   exists, and at least to SPELL_SCAN_MIN;
+-- - every spell whose name was not loaded is requested and retried, unless
+--   there are more than SPELL_LOAD_ALL_LIMIT of them; then only those in
+--   SPELL_LOAD_FROM..SPELL_LOAD_TO (Forever's new food spells) are, and the
+--   rest are counted as skipped: only a skip makes the scan INCOMPLETE.
+-- - Names that never load are listed as `hidden`: Blizzard keeps some spell
+--   data encrypted until it is discovered, so these are permanent on a
+--   build, not a failure to retry (/code-review of #20). Empty descriptions
+--   are recorded as they are: old Vanilla Well Fed spells have none.
+-- Each frame stops after FRAME_MS of work. Names are compared in English:
+-- run it on an enUS client.
+local SPELL_SCAN_MIN        = 1500000
+local SPELL_SCAN_TAIL       = 200000
+local SPELL_LOAD_ALL_LIMIT  = 60000
+local SPELL_LOAD_FROM, SPELL_LOAD_TO = 1200000, 1400000
+local SPELL_LOAD_TRIES      = 30      -- 0.5 s apart: 13 names outlasted 10 on 70009
+local WELL_FED = "Well Fed"
+
+function Apotheca.RunWellFedScan()
+    if Apotheca._scanRunning then print(PREFIX .. "scan already running") return end
+    Apotheca._scanRunning = true
+    local result = { build = select(2, GetBuildInfo()), highest = 0, scannedTo = 0, exist = 0,
+                     unnamedSkipped = 0, hidden = {}, emptyDescription = 0,
+                     complete = false, spells = {} }
+    local unnamed, candidates = {}, {}
+    local nextID, names, descs = 1, nil, nil
+
+    local function named(id)
+        local name = C_Spell.GetSpellName(id)
+        if name == WELL_FED then candidates[#candidates + 1] = id end
+        return name ~= nil
+    end
+    local function lastID() return math.max(SPELL_SCAN_MIN, result.highest + SPELL_SCAN_TAIL) end
+
+    print(PREFIX .. "Well Fed scan: walking spell IDs...")
+    RunScanFrames(function()
+        if not names then
+            -- Which spells exist, and the names that are already loaded.
+            local deadline = debugprofilestop() + FRAME_MS
+            while nextID <= lastID() and debugprofilestop() <= deadline do
+                local id = nextID
+                nextID = nextID + 1
+                if C_Spell.DoesSpellExist(id) then
+                    result.exist, result.highest = result.exist + 1, id
+                    if not named(id) then unnamed[#unnamed + 1] = id end
+                end
             end
-            print(PREFIX .. "spell scan done: " .. #queue .. " items, " .. still
-                  .. " still without text. /reload to write the file.")
+            if nextID <= lastID() then return false end
+            result.scannedTo = nextID - 1
+            if #unnamed > SPELL_LOAD_ALL_LIMIT then
+                local keep = {}
+                for _, id in ipairs(unnamed) do
+                    if id >= SPELL_LOAD_FROM and id <= SPELL_LOAD_TO then keep[#keep + 1] = id
+                    else result.unnamedSkipped = result.unnamedSkipped + 1 end
+                end
+                unnamed = keep
+            end
+            names = NewQueue(unnamed)
+            print(PREFIX .. result.exist .. " spells exist (highest " .. result.highest .. "); loading "
+                  .. #unnamed .. " unnamed ones" .. (result.unnamedSkipped > 0
+                  and (", skipping " .. result.unnamedSkipped .. " outside " .. SPELL_LOAD_FROM
+                       .. ".." .. SPELL_LOAD_TO) or "") .. "...")
+            return false
         end
+        if not descs then
+            -- Names that were not loaded: request under the frame budget,
+            -- retry, and list the ones that never load.
+            if not Drain(names, function(id, try)
+                if try > 1 and named(id) then return true end
+                if try > SPELL_LOAD_TRIES then
+                    result.hidden[#result.hidden + 1] = id
+                    return true
+                end
+                C_Spell.RequestLoadSpellData(id)
+                return false
+            end) then return false end
+            table.sort(result.hidden)
+            descs = NewQueue(candidates)
+            print(PREFIX .. #candidates .. " spells named " .. WELL_FED .. "; loading their descriptions...")
+            return false
+        end
+        -- Descriptions of the Well Fed spells.
+        if not Drain(descs, function(id, try)
+            local ok, desc = pcall(C_Spell.GetSpellDescription, id)
+            if ok and desc and desc ~= "" then
+                result.spells[id] = desc
+                return true
+            end
+            if try >= DESC_TRIES then
+                result.spells[id] = ""
+                result.emptyDescription = result.emptyDescription + 1
+                return true
+            end
+            C_Spell.RequestLoadSpellData(id)
+            return false
+        end) then return false end
+        result.complete = result.unnamedSkipped == 0
+        ProbeDB().wellFedScan = result
+        print(PREFIX .. "Well Fed scan done (" .. (result.complete and "complete" or "INCOMPLETE")
+              .. "): " .. #candidates .. " Well Fed spells, " .. result.emptyDescription
+              .. " with an empty description; " .. result.exist .. " spells to " .. result.scannedTo
+              .. "; names skipped " .. result.unnamedSkipped .. ", hidden " .. #result.hidden
+              .. (#result.hidden > 0 and (" (" .. table.concat(result.hidden, ", ", 1,
+                  math.min(#result.hidden, 20)) .. ")") or "")
+              .. ". /reload to write the file.")
+        return true
     end)
 end
 
@@ -361,6 +503,10 @@ function Apotheca.RunProbe()
     try("UnitPowerType / UnitPowerMax(Mana)", function()
         return UnitPowerType("player"), UnitPowerMax("player", Enum.PowerType.Mana)
     end)
+    -- XP food (#19): the button hides at the level cap or with XP turned off.
+    try("UnitLevel / GetMaxPlayerLevel", function() return UnitLevel("player"), GetMaxPlayerLevel() end)
+    try("GetMaxLevelForPlayerExpansion", function() return GetMaxLevelForPlayerExpansion() end)
+    try("IsXPUserDisabled", function() return IsXPUserDisabled() end)
 
     -- Weapons (#9 stones and poisons): main hand 16, off hand 17, with the
     -- item class and subclass that tell a blade from a blunt weapon.
