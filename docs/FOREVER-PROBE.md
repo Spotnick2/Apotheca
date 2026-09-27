@@ -212,6 +212,7 @@ Measured with `/apo applytest 20744` (Minor Wizard Oil) on a warlock with a two-
 - **Consequence:**
   - The Weapon Oil button's **left-click** sets `target-slot1` 16 and applies to the main hand. **Right-click** leaves the cursor to pick any weapon, as before. A main hand that can't take a coating gets no target.
   - The poison buttons use method A on both clicks. Poisons and the off hand are not measured yet.
+- **Confirmed on the Weapon Oil button (owner, same day):** left-click applied the oil straight to the main hand, and right-click gave the targeting cursor to pick the weapon. So the left-button variant `target-slot1` works on Forever.
 
 ## Still to measure
 
