@@ -208,21 +208,29 @@ H.check(glowing(), "...but the ready check still wants the glow: it stays")
 WoW.fire("READY_CHECK_FINISHED")
 H.check(not glowing(), "the ready check ends: the glow goes")
 
--- Buff Food offering the same item: only XP Food glows (one reminder for
--- one thing to eat).
+-- XP food belongs to the XP Food button while it is on the bar: Buff Food
+-- offers only the other buff food, so one item never shows twice (owner,
+-- in game on #21). Nearly all buff food is XP food, so the non-XP one here
+-- is Dirge's Kickin' Chimaerok Chops (Stamina).
 local bf = Apotheca.buttons.bufffood
-ApothecaDB.profiles[ApothecaDB.activeProfile].buffFoodPriority = { HEALER = { "intellect", "spirit" } }
+ApothecaDB.profiles[ApothecaDB.activeProfile].buffFoodPriority = { HEALER = { "intellect", "stamina" } }
 update()
-H.eq(bf.itemID, btn().itemID, "both buttons offer the same item here")
-local function bfGlowing() local o = bf.__apothecaGlow return o ~= nil and not o.animOut:IsPlaying() end
-WoW.fire("READY_CHECK")
-H.check(glowing() and not bfGlowing(), "only XP Food glows for the shared item")
-WoW.fire("READY_CHECK_FINISHED")
+H.check(btn().itemID == 1082, "XP Food holds the Intellect XP food")
+H.check(bf.itemID ~= 1082 and bf.itemID ~= 12224, "Buff Food does not offer XP food while XP Food is on")
+WoW.AddItem(0, 6, 21023, 2, "Dirge's Kickin' Chimaerok Chops")
+update()
+H.eq(bf.itemID, 21023, "Buff Food offers the non-XP buff food instead")
+-- Strict mode compares only what Buff Food can offer.
+ApothecaDB.profiles[ApothecaDB.activeProfile].buffFood.strictBestOnly = true
+update()
+H.eq(bf.itemID, 21023, "strict mode is not beaten by XP food it cannot offer")
+ApothecaDB.profiles[ApothecaDB.activeProfile].buffFood.strictBestOnly = false
+-- XP Food off, or at the cap: Buff Food offers every buff food again.
 setXP(false) ; update()
-WoW.fire("READY_CHECK")
-H.check(bfGlowing(), "with XP Food off, Buff Food glows as before")
-WoW.fire("READY_CHECK_FINISHED")
-setXP(true)
+H.eq(bf.itemID, 1082, "XP Food off: Buff Food offers the XP food again")
+setXP(true) ; WoW.level = 60 ; update()
+H.eq(bf.itemID, 1082, "at the level cap: Buff Food offers it again")
+WoW.level = 5
 ApothecaDB.profiles[ApothecaDB.activeProfile].buffFoodPriority = nil
 update()
 
