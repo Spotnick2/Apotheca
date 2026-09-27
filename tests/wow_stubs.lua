@@ -286,7 +286,23 @@ function UnitName() return "Testcase Surname", nil end
 function UnitClass() return WoW.class:sub(1, 1) .. WoW.class:sub(2):lower(), WoW.class, 5 end
 -- Outdoors this client returns the CONTINENT, not an empty name.
 function GetInstanceInfo() return WoW.instanceName, WoW.instanceType, 0, "", 0, 0, false, WoW.instanceMap end
-function GetWeaponEnchantInfo() return false, nil, nil, nil, false, nil, nil, nil, false end
+-- Temporary weapon enchants by slot: { has, exp (ms), charges, id }. The
+-- time left runs down from the first read, as the client's does.
+WoW.enchants = {}
+local function left(e)
+    if type(e[2]) ~= "number" then return e[2] end
+    e.t = e.t or WoW.time
+    return e[2] - (WoW.time - e.t) * 1000
+end
+WoW.enchantThrow = false
+function GetWeaponEnchantInfo()
+    if WoW.enchantThrow then error("GetWeaponEnchantInfo refused") end
+    local m, o = WoW.enchants[16] or {}, WoW.enchants[17] or {}
+    return m[1] or false, left(m), m[3], m[4], o[1] or false, left(o), o[3], o[4], false
+end
+WoW.targeting, WoW.popup = false, nil
+function SpellIsTargeting() return WoW.targeting end
+function StaticPopup_Visible(which) return WoW.popup == which and {} or nil end
 
 local function maybeSecret(v) if WoW.healthSecret then return Secret() end return v end
 function UnitHealth()    return maybeSecret(WoW.health) end

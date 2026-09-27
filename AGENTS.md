@@ -16,7 +16,7 @@ ApothecaCompat.lua     — Apotheca.API: every moved or removed API; loads first
 ApothecaItems.lua      — GENERATED item data (Apotheca.DATA); see Item Data
 Apotheca.lua           — Main addon: all logic, item data, frame creation, events
 Apotheca_Options.lua   — In-game options panel: tabbed UI, DB read/write helpers
-Tools/ApothecaProbe/   — DEV-ONLY addon (never packaged): /apo probe, /apo scan, /apo scan2, /apo scan3; `deploy.ps1 -Probe`
+Tools/ApothecaProbe/   — DEV-ONLY addon (never packaged): /apo probe, /apo scan, /apo scan2, /apo scan3, /apo applytest; `deploy.ps1 -Probe`
 .pkgmeta               — BigWigs packager config (release packaging only, not used locally)
 tests/                 — Lua 5.1 unit tests against a strict-globals stub; tests/run.ps1
 Tools/deploy.ps1       — deploy to the local Forever AddOns folder
