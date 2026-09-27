@@ -287,6 +287,24 @@ WoW.level = 5
 prof.buffFoodPriority = { HEALER = { "intellect", "stamina" } }
 update()
 
+-- XP food on the plain Food and Drink lists (its Well Fed is movement
+-- speed, fishing or herbalism) is XP Food's too (Codex review of #22).
+local food, drink = Apotheca.buttons.food, Apotheca.buttons.drink
+WoW.AddItem(1, 1, 267341, 4, "Sweetpaw Jam")             -- L55, movement speed in Hyjal
+WoW.AddItem(1, 2, 10841, 4, "Goldthorn Tea")             -- L25, herbalism
+WoW.level = 55
+update()
+H.check(btn():IsShown(), "XP Food offers an XP food at level 55")
+H.check(food.itemID ~= 267341, "Food does not offer Sweetpaw Jam while XP Food owns XP food")
+H.check(drink.itemID ~= 10841, "Drink does not offer Goldthorn Tea either")
+setXP(false) ; update()
+H.eq(food.itemID, 267341, "XP Food off: Food offers Sweetpaw Jam again")
+H.eq(drink.itemID, 10841, "and Drink offers Goldthorn Tea again")
+setXP(true)
+WoW.bags[1][1], WoW.bags[1][2] = nil, nil
+WoW.level = 5
+update()
+
 -- XP Food off, or at the cap: Buff Food offers every buff food again.
 setXP(false) ; update()
 H.eq(bf.itemID, 1082, "XP Food off: Buff Food offers the XP food again")

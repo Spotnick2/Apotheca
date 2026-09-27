@@ -2621,8 +2621,30 @@ function UpdateAllButtonsBody()
         if show then btn:Show() else btn:Hide() end
     end
 
+    -- ── XP food (optional, while levelling) ───────────────────────
+    -- Resolved before Food, Drink and Buff Food: while it offers an item,
+    -- every XP food is its own, and they offer only the others, so one food
+    -- never shows on two buttons. That includes Food and Drink: XP food
+    -- whose Well Fed is movement speed, fishing or herbalism (Sweetpaw Jam,
+    -- Goldthorn Tea) is plain food or drink (Codex review of #22). When it
+    -- offers nothing (none held, or all above the level), they offer
+    -- everything as usual.
+    local xpOn = Apotheca.XPFoodEnabled()
+    local xpID, xpCnt, xpTex
+    if xpOn then
+        xpID, xpCnt, xpTex = Apotheca.FindBestXPFood(bagMap)
+    end
+    local xpOwned = xpID and Apotheca.XP_FOOD_IDS or nil
+    local recoveryBags = bagMap
+    if xpOwned then
+        recoveryBags = {}
+        for id, n in pairs(bagMap) do
+            if not xpOwned[id] then recoveryBags[id] = n end
+        end
+    end
+
     -- ── Recovery + Elixirs ───────────────────────────────────────
-    local rec     = ResolveRecovery(bagMap)
+    local rec     = ResolveRecovery(recoveryBags)
     local elixRes = Apotheca.ResolveElixirs(bagMap)
 
     local recovMode
@@ -2684,22 +2706,11 @@ function UpdateAllButtonsBody()
         oilID, oilCnt, oilTex = Apotheca.FindBestWeaponOil(bagMap)
     end
 
-    -- ── XP food (optional, while levelling) ───────────────────────
-    -- Resolved first: while it offers an item, every XP food is its own,
-    -- and Buff Food offers only the other buff food (one food never shows
-    -- on two buttons). When it offers nothing (none held, or all above
-    -- the player's level), Buff Food offers everything as usual.
-    local xpOn = Apotheca.XPFoodEnabled()
-    local xpID, xpCnt, xpTex
-    if xpOn then
-        xpID, xpCnt, xpTex = Apotheca.FindBestXPFood(bagMap)
-    end
-
     -- ── Buff food ────────────────────────────────────────────────
     local buffFoodID, buffFoodCnt, buffFoodTex
     if db.buffFood and db.buffFood.enabled then
         buffFoodID, buffFoodCnt, buffFoodTex =
-            Apotheca.FindBestBuffFood(bagMap, xpID and Apotheca.XP_FOOD_IDS or nil)
+            Apotheca.FindBestBuffFood(bagMap, xpOwned)
     end
 
     -- ── Bandage ──────────────────────────────────────────────────
