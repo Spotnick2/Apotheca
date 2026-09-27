@@ -181,6 +181,11 @@ CurseForge builds from the repository webhook (project `1498195`) when it sees a
 
 **Every tag needs a `CHANGELOG.md` entry, committed before the tag is pushed.** A tag without one publishes the *previous* release's notes against the new build.
 
+**Version numbers** (MAJOR.MINOR.PATCH):
+- **Patch** (2.4.1): fixes only, such as a Lua error, a wrong item picked, or a broken button. Nothing new, and nothing that behaves differently on purpose.
+- **Minor** (2.5.0): new features, or behaviour that changes on purpose (anything under "Read this after updating").
+- **Major** (3.0.0): a break, such as a new client target or settings that reset (2.0.0 moved to Forever).
+
 1. Add a `## [<version>] - <date>` section at the top. Write it for players, not from the diff: what changed for someone using the addon, in their words. Anything that resets or behaves differently after updating goes under its own heading.
 2. Commit, then tag and push: `git tag v2.0.1 && git push origin v2.0.1`.
 3. **The release type comes from the tag name**: `alpha` → Alpha, `beta` → Beta, anything else → Release. This is a distribution channel, not a stability claim. CurseForge defaults every user to Release, so tag `beta` only to hold a build back on purpose. The game client being in beta is not a reason: say that in the notes and ship a Release.

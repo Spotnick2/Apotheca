@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [2.4.0] - 2026-09-27
 
 ### Read this after updating
 - **Weapon Oil follows your role now.** Unless you had ticked "Include Wizard Oils", your Weapon Oil button may offer a different oil:
