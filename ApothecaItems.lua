@@ -579,6 +579,65 @@ D.XP_FOOD = {
     { id = 250079, level = 1 , stat = "intellect",  value = 1   },  -- Tasty Raptor Bites
 }
 
+-- Rogue poisons (#24) by family, highest rank first. level = required level.
+D.POISONS = {
+    atrophic = {
+        { id = 217347, level = 60, rank = 1 },  -- Atrophic Poison
+    },
+    crippling = {
+        { id = 3776  , level = 50, rank = 2 },  -- Crippling Poison II
+        { id = 3775  , level = 20, rank = 1 },  -- Crippling Poison
+    },
+    deadly = {
+        { id = 20844 , level = 60, rank = 5 },  -- Deadly Poison V
+        { id = 8985  , level = 54, rank = 4 },  -- Deadly Poison IV
+        { id = 8984  , level = 46, rank = 3 },  -- Deadly Poison III
+        { id = 2893  , level = 38, rank = 2 },  -- Deadly Poison II
+        { id = 2892  , level = 30, rank = 1 },  -- Deadly Poison
+    },
+    instant = {
+        { id = 8928  , level = 60, rank = 6 },  -- Instant Poison VI
+        { id = 8927  , level = 52, rank = 5 },  -- Instant Poison V
+        { id = 8926  , level = 44, rank = 4 },  -- Instant Poison IV
+        { id = 6950  , level = 36, rank = 3 },  -- Instant Poison III
+        { id = 6949  , level = 28, rank = 2 },  -- Instant Poison II
+        { id = 6947  , level = 20, rank = 1 },  -- Instant Poison
+    },
+    mindnumbing = {
+        { id = 9186  , level = 52, rank = 3 },  -- Mind-numbing Poison III
+        { id = 6951  , level = 38, rank = 2 },  -- Mind-numbing Poison II
+        { id = 5237  , level = 24, rank = 1 },  -- Mind-numbing Poison
+    },
+    numbing = {
+        { id = 217346, level = 60, rank = 1 },  -- Numbing Poison
+    },
+    occult = {
+        { id = 234444, level = 60, rank = 2 },  -- Occult Poison II
+        { id = 226374, level = 54, rank = 1 },  -- Occult Poison I
+    },
+    sebacious = {
+        { id = 217345, level = 60, rank = 1 },  -- Sebacious Poison
+    },
+    wound = {
+        { id = 10922 , level = 56, rank = 4 },  -- Wound Poison IV
+        { id = 10921 , level = 48, rank = 3 },  -- Wound Poison III
+        { id = 10920 , level = 40, rank = 2 },  -- Wound Poison II
+        { id = 10918 , level = 32, rank = 1 },  -- Wound Poison
+    },
+}
+-- The families in the order the options list them.
+D.POISON_FAMILIES = {
+    { key = "instant", label = "Instant Poison" },
+    { key = "deadly", label = "Deadly Poison" },
+    { key = "wound", label = "Wound Poison" },
+    { key = "crippling", label = "Crippling Poison" },
+    { key = "mindnumbing", label = "Mind-numbing Poison" },
+    { key = "occult", label = "Occult Poison" },
+    { key = "atrophic", label = "Atrophic Poison" },
+    { key = "numbing", label = "Numbing Poison" },
+    { key = "sebacious", label = "Sebacious Poison" },
+}
+
 -- Well Fed auras (from /apo scan3). XP food gives ONE aura named "Well
 -- Fed", like ordinary food, with its own spell ID: these are the XP ones
 -- ("A nutritious meal / A tasty drink has made you Well Fed").

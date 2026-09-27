@@ -517,6 +517,36 @@ def xp_auras(spells, foods):
     return xp
 
 
+# ------------------------------------------------------------------
+# Rogue poisons (#24)
+# ------------------------------------------------------------------
+# "Coats a weapon with poison": one family per name ("Instant Poison III"
+# is family Instant, rank 3; no numeral is rank 1). Test items in the
+# client DB ("Runecarving Test - Crippling Poison") are left out.
+POISON_TEXT = 'Coats a weapon with poison'
+POISON_NAME = re.compile(r'^([A-Z][\w-]*(?: [A-Z][\w-]*)*?) Poison(?: ([IVX]+))?$')
+ROMAN = {'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5, 'VI': 6, 'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10}
+# The order the options list them in: the usual ones first.
+POISON_ORDER = ['instant', 'deadly', 'wound', 'crippling', 'mindnumbing', 'occult']
+
+
+def poisons(rows):
+    """{family: [(-rank, id, name, level, rank)]} highest rank first, and
+    {family: label}."""
+    fam, labels = defaultdict(list), {}
+    for r in rows:
+        if POISON_TEXT not in r['use'] or 'Test' in r['name']:
+            continue
+        m = POISON_NAME.match(r['name'])
+        if not m:
+            continue
+        key = m.group(1).lower().replace('-', '').replace(' ', '')
+        rank = ROMAN[m.group(2)] if m.group(2) else 1
+        labels[key] = m.group(1) + ' Poison'
+        fam[key].append((-rank, r['id'], r['name'], max(1, r['lvl']), rank))
+    return {k: sorted(v) for k, v in fam.items()}, labels
+
+
 def ordinary_well_fed(spells, xp):
     """Well Fed auras known NOT to be XP: a described non-XP one, or a
     Vanilla spell. A Forever spell with no description (1283082 on 70009)
@@ -543,6 +573,8 @@ def offered_item_ids(out):
     ids.update(t[0] for t in out['OILS'])
     ids.update(t[0] for t in out['PERCENT_POTIONS'])
     ids.update(t[2] for t in out.get('XP_FOOD', []))
+    for lst in out.get('POISONS', {}).values():
+        ids.update(t[1] for t in lst)
     return ids
 
 
@@ -646,6 +678,22 @@ def emit(out, build_id, src):
             t[2], t[4], ('"%s",' % t[5]) if t[5] else 'nil,', t[6], t[3]))
     w('}')
     w('')
+    w('-- Rogue poisons (#24) by family, highest rank first. level = required level.')
+    w('D.POISONS = {')
+    for k in sorted(out['POISONS']):
+        w('    %s = {' % k)
+        for t in out['POISONS'][k]:
+            w('        { id = %-6d, level = %-2d, rank = %d },  -- %s' % (t[1], t[3], t[4], t[2]))
+        w('    },')
+    w('}')
+    order = [k for k in POISON_ORDER if k in out['POISONS']] + \
+            sorted(k for k in out['POISONS'] if k not in POISON_ORDER)
+    w('-- The families in the order the options list them.')
+    w('D.POISON_FAMILIES = {')
+    for k in order:
+        w('    { key = "%s", label = "%s" },' % (k, out['POISON_LABELS'][k]))
+    w('}')
+    w('')
     w('-- Well Fed auras (from /apo scan3). XP food gives ONE aura named "Well')
     w('-- Fed", like ordinary food, with its own spell ID: these are the XP ones')
     w('-- ("A nutritious meal / A tasty drink has made you Well Fed").')
@@ -745,6 +793,7 @@ if __name__ == '__main__':
                  % (src, wellfed_src))
     wellfed = load_wellfed(wellfed_src)
     out['XP_FOOD'] = xp_food(rows)
+    out['POISONS'], out['POISON_LABELS'] = poisons(rows)
     out['XP_WELL_FED_SPELLS'] = xp_auras(wellfed, out['XP_FOOD'])
     out['WELL_FED_SPELLS'] = sorted(wellfed)
     out['ORDINARY_WELL_FED_SPELLS'] = ordinary_well_fed(wellfed, out['XP_WELL_FED_SPELLS'])

@@ -346,6 +346,31 @@ end
 -- use the item twice.
 -- ------------------------------------------------------------
 
+-- Weapons (#24). Plain values only; nil means unknown or none.
+-- The item ID of the WEAPON in an inventory slot (16 main hand, 17 off
+-- hand): nil for an empty slot, a shield or a held off-hand item.
+function API.HandWeapon(slot)
+    local ok, id = pcall(GetInventoryItemID, "player", slot)
+    if not ok or id == nil or (issecretvalue and issecretvalue(id)) then return nil end
+    local okI, _, _, _, _, _, classID = pcall(C_Item.GetItemInfoInstant, id)
+    if not okI or classID ~= 2 then return nil end
+    return id
+end
+
+-- Does this hand carry a temporary coating (poison, oil, stone)? true /
+-- false, or nil when the read is refused or secret. Any coating counts:
+-- which one is on is not measured yet (enchant IDs, #24).
+function API.HandCoated(slot)
+    local ok, has = pcall(function()
+        local v = { GetWeaponEnchantInfo() }
+        local h = v[slot == 17 and 5 or 1]
+        if issecretvalue and issecretvalue(h) then return nil end
+        return h and true or false
+    end)
+    if ok then return has end
+    return nil
+end
+
 function API.ClickEdges()
     return "AnyUp", "AnyDown"
 end
