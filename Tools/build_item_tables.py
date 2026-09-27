@@ -568,6 +568,9 @@ def stones(rows):
     blunt / any, strongest first, and the skipped stones with why."""
     out, skipped = defaultdict(list), []
     for r in rows:
+        # "Craftsman's Writ: Solid Sharpening Stone" (a quest item in the
+        # 70009 scan) also ends in "Sharpening Stone": the Writ check is
+        # what keeps it out.
         if not STONE_NAME.search(r['name']) or 'Writ' in r['name'] or r['quest']:
             continue
         u = r['use']

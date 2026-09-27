@@ -799,6 +799,15 @@ local POISON_BUTTON_CONFIG = {
 -- "target-slot1" (the secure template's left-button variant, upstream);
 -- if a client ignored it, left-click would just fall back to the cursor.
 -- No target at all while the main hand can't take a coating.
+local WEAPONOIL_BUTTON_CONFIG = {
+    requiresMana = true,   -- mana and wizard oils are for casters and healers
+    key = "weaponoil", label = "Weapon Oil", emptyIcon = "Interface\\Icons\\INV_Potion_95",
+    targetSlot = 16, leftClickOnly = true,
+    -- Shown with Show Empty Buttons: the role's oil choice may skip an oil
+    -- you do carry.
+    emptyTooltip = "No usable oil for your oil choice in bags (Options: Scrolls & Weapon Oil, Oil)",
+}
+
 -- Weapon stones (#32, experimental): one button per hand, only for a hand
 -- the character chose a stone for (StoneChoice). target-slot on every
 -- click, like the poisons.
@@ -813,15 +822,6 @@ local COATING_BUTTON_CONFIG = {}
 for _, list in ipairs({ POISON_BUTTON_CONFIG, STONE_BUTTON_CONFIG }) do
     for _, cfg in ipairs(list) do COATING_BUTTON_CONFIG[#COATING_BUTTON_CONFIG + 1] = cfg end
 end
-
-local WEAPONOIL_BUTTON_CONFIG = {
-    requiresMana = true,   -- mana and wizard oils are for casters and healers
-    key = "weaponoil", label = "Weapon Oil", emptyIcon = "Interface\\Icons\\INV_Potion_95",
-    targetSlot = 16, leftClickOnly = true,
-    -- Shown with Show Empty Buttons: the role's oil choice may skip an oil
-    -- you do carry.
-    emptyTooltip = "No usable oil for your oil choice in bags (Options: Scrolls & Weapon Oil, Oil)",
-}
 
 local BANDAGE_BUTTON_CONFIG = {
     restores = "health",
@@ -1367,22 +1367,50 @@ end
 local POISON_KEYS = { none = true }
 for _, f in ipairs(DATA.POISON_FAMILIES or {}) do POISON_KEYS[f.key] = true end
 
--- The poison family chosen for a hand (16 / 17), per character: "none"
--- or a family key; an unknown saved key falls back to the default.
-function Apotheca.PoisonChoice(slot)
-    local v = Apotheca.CharSetting(slot == 17 and "poisonOH" or "poisonMH", POISON_DEFAULTS[slot])
-    if not POISON_KEYS[v] then v = POISON_DEFAULTS[slot] end
+-- Per-character, per-hand choices (poisons, stones), saved as
+-- <prefix>MH / <prefix>OH: the saved value if it is valid, else the
+-- default. Setting one saves only a valid value and asks for an update:
+-- the button must change item (Codex review of #24). Not through
+-- SetCharSetting, which re-resolves the role for nothing; and a caller's
+-- own full update right after satisfies the request (/code-review of #26).
+local function HandChoice(prefix, slot, valid, default)
+    local v = Apotheca.CharSetting(prefix .. (slot == 17 and "OH" or "MH"), default)
+    if not valid[v] then v = default end
     return v
 end
 
--- Saves the choice and asks for an update: the button must change item
--- (Codex review of #24). Not through SetCharSetting, which re-resolves the
--- role for nothing; and a caller's own full update right after satisfies
--- the request, so it does not cost a second one (/code-review of #26).
-function Apotheca.SetPoisonChoice(slot, family)
+local function SetHandChoice(prefix, slot, valid, value)
+    if not valid[value] then return end
     ApothecaCharDB = type(ApothecaCharDB) == "table" and ApothecaCharDB or {}
-    ApothecaCharDB[slot == 17 and "poisonOH" or "poisonMH"] = family
+    ApothecaCharDB[prefix .. (slot == 17 and "OH" or "MH")] = value
     Apotheca.RequestUpdate()
+end
+
+-- The poison family chosen for a hand (16 / 17): "none" or a family key.
+function Apotheca.PoisonChoice(slot)
+    return HandChoice("poison", slot, POISON_KEYS, POISON_DEFAULTS[slot])
+end
+
+function Apotheca.SetPoisonChoice(slot, family)
+    SetHandChoice("poison", slot, POISON_KEYS, family)
+end
+
+-- The first entry ({ id, level }) of these lists, in order, that the
+-- player carries and can use: its required level, and whatever else the
+-- client says (a rune, a class). One loop for the poison, oil and stone
+-- finders (/code-review of #33).
+local function FirstUsable(lists, bagMap)
+    local level = UnitLevel("player") or 1
+    for _, list in ipairs(lists) do
+        for _, e in ipairs(list) do
+            local count = bagMap[e.id]
+            if count and count > 0 and e.level <= level
+                    and Apotheca.API.ItemUsable(e.id) ~= false then
+                return e.id, count, GetCachedTexture(e.id)
+            end
+        end
+    end
+    return nil, 0, nil
 end
 
 -- The strongest poison of a family the player carries and can use: its
@@ -1392,15 +1420,7 @@ end
 function Apotheca.FindBestPoison(family, bagMap)
     local list = DATA.POISONS and DATA.POISONS[family]
     if not list then return nil, 0, nil end
-    local level = UnitLevel("player") or 1
-    for _, e in ipairs(list) do
-        local count = bagMap[e.id]
-        if count and count > 0 and e.level <= level
-                and Apotheca.API.ItemUsable(e.id) ~= false then
-            return e.id, count, GetCachedTexture(e.id)
-        end
-    end
-    return nil, 0, nil
+    return FirstUsable({ list }, bagMap)
 end
 
 -- The oil lists to try, in order, for a weaponOil.kind (#29). "AUTO"
@@ -1425,6 +1445,10 @@ end
 -- The first oil, in the kind's order, that the player carries and can
 -- use: its required level, and whatever else the client says. So the
 -- fallback to the other kind reaches a usable oil (/code-review of #30).
+function Apotheca.FindBestWeaponOil(bagMap)
+    return FirstUsable(OIL_ORDER[Apotheca.OilKind()], bagMap)
+end
+
 -- ============================================================
 -- WEAPON STONES (#32, experimental)
 -- ============================================================
@@ -1447,15 +1471,11 @@ end
 -- The stone choice for a hand (16 / 17), per character: "none" (default),
 -- "damage" (a damage stone first) or "elemental" (Elemental first).
 function Apotheca.StoneChoice(slot)
-    local v = Apotheca.CharSetting(slot == 17 and "stoneOH" or "stoneMH", "none")
-    if not STONE_CHOICES[v] then v = "none" end
-    return v
+    return HandChoice("stone", slot, STONE_CHOICES, "none")
 end
 
 function Apotheca.SetStoneChoice(slot, choice)
-    ApothecaCharDB = type(ApothecaCharDB) == "table" and ApothecaCharDB or {}
-    ApothecaCharDB[slot == 17 and "stoneOH" or "stoneMH"] = choice
-    Apotheca.RequestUpdate()
+    SetHandChoice("stone", slot, STONE_CHOICES, choice)
 end
 
 -- The stone to offer for a hand: the chosen order, then the other type,
@@ -1464,30 +1484,35 @@ function Apotheca.FindBestStone(choice, weaponKind, bagMap)
     local S = DATA.STONES or {}
     local damage = (weaponKind == "sharp" or weaponKind == "blunt") and S[weaponKind] or {}
     local order = choice == "elemental" and { S.any or {}, damage } or { damage, S.any or {} }
-    local level = UnitLevel("player") or 1
-    for _, list in ipairs(order) do
-        for _, e in ipairs(list) do
-            local count = bagMap[e.id]
-            if count and count > 0 and e.level <= level and Apotheca.API.ItemUsable(e.id) ~= false then
-                return e.id, count, GetCachedTexture(e.id)
-            end
-        end
-    end
-    return nil, 0, nil
+    return FirstUsable(order, bagMap)
 end
 
-function Apotheca.FindBestWeaponOil(bagMap)
-    local level = UnitLevel("player") or 1
-    for _, list in ipairs(OIL_ORDER[Apotheca.OilKind()]) do
-        for _, e in ipairs(list) do
-            local count = bagMap[e.id]
-            if count and count > 0 and e.level <= level
-                    and Apotheca.API.ItemUsable(e.id) ~= false then
-                return e.id, count, GetCachedTexture(e.id)
-            end
+-- Does this stone fit a weapon of this kind? Elemental ("any") fits any
+-- melee weapon; a damage stone only its own kind; fist weapons only
+-- Elemental (unmeasured).
+local STONE_ITEM_KIND = {}
+for kind, list in pairs(DATA.STONES or {}) do
+    for _, e in ipairs(list) do STONE_ITEM_KIND[e.id] = kind end
+end
+function Apotheca.StoneFits(itemID, weaponKind)
+    local kind = STONE_ITEM_KIND[itemID]
+    if not kind or not weaponKind then return false end
+    if kind == "any" then return true end
+    return kind == weaponKind
+end
+
+-- In combat a stone button can't change item, and a secure click can't be
+-- stopped either. So after a weapon swap that the stone no longer fits (a
+-- sharpening stone and now a mace), the button greys out until the
+-- update after combat restores it (/code-review of #33).
+function Apotheca.MarkStaleStones()
+    for _, cfg in ipairs(STONE_BUTTON_CONFIG) do
+        local btn = Apotheca.buttons[cfg.key]
+        if btn and btn.itemID and btn:IsShown()
+                and not Apotheca.StoneFits(btn.itemID, Apotheca.StoneKind(cfg.targetSlot)) then
+            btn.icon:SetDesaturated(true)
         end
     end
-    return nil, 0, nil
 end
 
 -- ============================================================
@@ -2931,12 +2956,6 @@ function UpdateAllButtonsBody()
         gemID, gemCnt, gemTex, Apotheca._recheckAt = Apotheca.FindBestReadyItem(DATA.MANA_GEMS, bagMap)
     end
 
-    -- ── Weapon oil ───────────────────────────────────────────────
-    local oilID, oilCnt, oilTex
-    if not db.weaponOil or db.weaponOil.enabled then
-        oilID, oilCnt, oilTex = Apotheca.FindBestWeaponOil(bagMap)
-    end
-
     -- ── Buff food ────────────────────────────────────────────────
     local buffFoodID, buffFoodCnt, buffFoodTex
     if db.buffFood and db.buffFood.enabled then
@@ -2944,44 +2963,51 @@ function UpdateAllButtonsBody()
             Apotheca.FindBestBuffFood(bagMap, xpOwned)
     end
 
-    -- ── Rogue poisons (experimental) ─────────────────────────────
-    -- One per hand: the chosen family's strongest usable poison, only for
-    -- a hand holding a weapon (no shield or held item). Class gating is
-    -- the buttons' classOnly = "ROGUE" (RefreshLayout).
-    -- One owner per hand (Codex review of #32): a rogue's chosen poison
-    -- (even out of stock), else the chosen stone, else, on the main hand,
-    -- the Weapon Oil button as before. Reserved by the player's choice, not
-    -- by stock or Show Empty Buttons.
+    -- ── Weapon coatings: poisons, stones (experimental), oil ───────
+    -- One owner per hand (Codex review of #32), each hand's choices read
+    -- once:
+    -- 1. a rogue's chosen poison, even out of stock: the choice reserves
+    --    the hand (poisons are for rogues only: checked here, and by the
+    --    buttons' classOnly in RefreshLayout);
+    -- 2. else a stone the player chose AND has one to offer for this
+    --    weapon: a choice with nothing to offer must not hide a usable oil
+    --    (/code-review of #33);
+    -- 3. else, on the main hand, the Weapon Oil button, as before.
     local _, playerClass = UnitClass("player")
     local poisonsOn = db.poisons and db.poisons.enabled and playerClass == "ROGUE"
-    local handOwner = {}
-    for _, slot in ipairs({ 16, 17 }) do
-        if poisonsOn and Apotheca.PoisonChoice(slot) ~= "none" then
+    local poisonRes, handOwner = {}, {}
+    for _, hand in ipairs({ { 16, "poisonmh", "stonemh" }, { 17, "poisonoh", "stoneoh" } }) do
+        local slot = hand[1]
+        local p, st = { show = false }, { show = false }
+        local family = poisonsOn and Apotheca.PoisonChoice(slot)
+        if family and family ~= "none" then
             handOwner[slot] = "poison"
-        elseif Apotheca.StoneChoice(slot) ~= "none" and Apotheca.StoneKind(slot) then
-            handOwner[slot] = "stone"
+            if Apotheca.CoatableHand(slot) then
+                p.id, p.count, p.tex = Apotheca.FindBestPoison(family, bagMap)
+                p.show = p.id ~= nil or showEmpty
+            end
+        else
+            local choice = Apotheca.StoneChoice(slot)
+            st.kind = choice ~= "none" and Apotheca.StoneKind(slot) or nil
+            if st.kind then
+                st.id, st.count, st.tex = Apotheca.FindBestStone(choice, st.kind, bagMap)
+                if st.id then handOwner[slot] = "stone" end
+            end
         end
+        poisonRes[hand[2]], poisonRes[hand[3]] = p, st
     end
-    local poisonRes = {}
-    for _, cfg in ipairs(POISON_BUTTON_CONFIG) do
-        local r = { show = false }
-        if handOwner[cfg.targetSlot] == "poison" and Apotheca.CoatableHand(cfg.targetSlot) then
-            r.id, r.count, r.tex = Apotheca.FindBestPoison(Apotheca.PoisonChoice(cfg.targetSlot), bagMap)
-            r.show = r.id ~= nil or showEmpty
-        end
-        poisonRes[cfg.key] = r
+    -- The oil only when nothing else owns the main hand.
+    local oilID, oilCnt, oilTex
+    if not handOwner[16] and (not db.weaponOil or db.weaponOil.enabled) then
+        oilID, oilCnt, oilTex = Apotheca.FindBestWeaponOil(bagMap)
     end
-    for _, cfg in ipairs(STONE_BUTTON_CONFIG) do
-        local r = { show = false }
-        if handOwner[cfg.targetSlot] == "stone" then
-            r.id, r.count, r.tex = Apotheca.FindBestStone(Apotheca.StoneChoice(cfg.targetSlot),
-                                                          Apotheca.StoneKind(cfg.targetSlot), bagMap)
-            r.show = r.id ~= nil or showEmpty
-        end
-        poisonRes[cfg.key] = r
+    -- A chosen stone with none to offer shows empty (Show Empty Buttons)
+    -- only where no oil stands in for it; then it keeps the hand.
+    for slot, key in pairs({ [16] = "stonemh", [17] = "stoneoh" }) do
+        local st = poisonRes[key]
+        st.show = st.id ~= nil or (st.kind ~= nil and showEmpty and not (slot == 16 and oilID))
     end
-    -- A stone on the main hand takes it from the Weapon Oil button.
-    local oilOwned = handOwner[16] ~= nil
+    local oilOwned = handOwner[16] ~= nil or poisonRes.stonemh.show
 
     -- ── Bandage ──────────────────────────────────────────────────
     local bandageID, bandageCnt, bandageTex
@@ -3492,8 +3518,13 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         for _, cfg in ipairs(COATING_BUTTON_CONFIG) do HideGlow(Apotheca.buttons[cfg.key]) end
 
     elseif event == "PLAYER_EQUIPMENT_CHANGED" then
-        -- A weapon swap changes which hands take a poison (#24).
-        if playerReady and (arg1 == 16 or arg1 == 17) then RequestUpdate() end
+        -- A weapon swap changes which hands take a poison or which stone
+        -- fits (#24, #32). In combat the buttons wait for the update after
+        -- combat; a stone that no longer fits greys out meanwhile.
+        if playerReady and (arg1 == 16 or arg1 == 17) then
+            RequestUpdate()
+            if InCombatLockdown() then Apotheca.MarkStaleStones() end
+        end
 
     elseif event == "WEAPON_ENCHANT_CHANGED" then
         -- A coating applied or run out (#24): the poison glows follow.

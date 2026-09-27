@@ -110,6 +110,24 @@ settle()
 H.check(on(mh) and not oil:IsShown(), "a stone chosen for the main hand: it replaces the Weapon Oil button")
 H.eq(oil:GetAttribute("item"), nil, "and the hidden oil button keeps no item")
 
+-- A stone choice with nothing to offer does not hide a usable oil
+-- (/code-review of #33): a level-47 paladin with a fist weapon (Elemental
+-- only, which needs level 50; the mana oil needs 45) keeps the Weapon Oil
+-- button.
+WoW.level = 47
+WoW.equipped[16] = FIST
+WoW.fire("PLAYER_EQUIPMENT_CHANGED", 16, false)
+settle()
+H.check(on(oil) and not mh:IsShown(), "a stone choice with no stone to offer: the Weapon Oil button stays")
+WoW.level = 60
+WoW.equipped[16] = SWORD
+WoW.fire("PLAYER_EQUIPMENT_CHANGED", 16, false)
+settle()
+H.check(on(mh) and not oil:IsShown(), "a stone to offer again: it takes the hand back")
+-- An invalid choice is not saved.
+Apotheca.SetStoneChoice(16, "sausage")
+H.eq(ApothecaCharDB.stoneMH, "damage", "an invalid stone choice is ignored")
+
 -- A rogue's chosen poison keeps its hand, even out of stock; warriors are
 -- not affected by the profile's poison setting.
 prof().poisons.enabled = true
@@ -123,6 +141,26 @@ Apotheca.SetPoisonChoice(17, "deadly")
 WoW.class, WoW.lfgRoles = "WARRIOR", { damage = true }
 settle()
 H.eq(mh.itemID, 12404, "a warrior on the same profile: stones, poisons don't apply")
+
+-- A weapon swap in combat: the button can't change, so a stone that no
+-- longer fits greys out until the update after combat.
+Apotheca.SetStoneChoice(16, "damage")
+settle()
+H.eq(mh.itemID, 12404, "a sword: the sharpening stone")
+WoW.enterCombat()
+WoW.equipped[16] = MACE
+WoW.fire("PLAYER_EQUIPMENT_CHANGED", 16, false)
+H.check(mh.icon:IsDesaturated(), "swapped to a mace in combat: the sharpening stone greys out")
+H.eq(mh.itemID, 12404, "(the button itself can't change in combat)")
+WoW.leaveCombat()
+settle()
+H.eq(mh.itemID, 12643, "after combat: the weightstone")
+H.check(not mh.icon:IsDesaturated(), "and no longer grey")
+WoW.equipped[16] = SWORD
+WoW.fire("PLAYER_EQUIPMENT_CHANGED", 16, false)
+settle()
+Apotheca.SetStoneChoice(17, "damage")
+settle()
 
 ------------------------------------------------------------
 -- Glows
