@@ -2943,6 +2943,8 @@ SlashCmdList["APOTHECA"] = function(msg)
         Apotheca.RunSpellScan()
     elseif cmd == "scan3" and Apotheca.RunWellFedScan then
         Apotheca.RunWellFedScan()
+    elseif cmd:match("^applytest") and Apotheca.RunApplyTest then
+        Apotheca.RunApplyTest(cmd:match("^applytest%s*(.*)$"))
     elseif cmd == "status" then
         -- Diagnostic for "I click a button and nothing happens".
         local db = DB()

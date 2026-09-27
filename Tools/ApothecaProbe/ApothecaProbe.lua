@@ -10,8 +10,8 @@
 --
 -- A separate, development-only addon (Tools/ApothecaProbe, loaded after
 -- Apotheca): it is never packaged, and `pwsh Tools/deploy.ps1 -Probe`
--- installs it. /apo probe, /apo scan, /apo scan2 and /apo scan3 do nothing
--- without it.
+-- installs it. /apo probe, /apo scan, /apo scan2, /apo scan3 and
+-- /apo applytest do nothing without it.
 -- ============================================================
 
 Apotheca = Apotheca or {}
@@ -419,6 +419,244 @@ function Apotheca.RunWellFedScan()
               .. ". /reload to write the file.")
         return true
     end)
+end
+
+-- ============================================================
+-- /apo applytest <itemID>: how a secure button applies a weapon coating
+-- (poison, oil, stone) to a chosen hand (#24). Two methods, each hand:
+--   A  type=item + "target-slot" 16/17 (Blizzard's SecureTemplates reads
+--      it after the item use, upstream; not proven on Forever)
+--   B  type=macro: "/use item:<id>" then "/use 16|17"
+-- Every click is one attempt. It records both hands' weapons and enchant
+-- state and the item count just before (PreClick), the targeting state
+-- right after (PostClick), the cast / error / enchant / equipment events
+-- in between, and both hands again once things settle. The verdict is
+-- "applied" only if the INTENDED hand changed and the other did not
+-- (Codex review of #24): a targeting cursor that went away proves nothing.
+-- Values that could be secret are kept as "<secret>", never compared.
+-- Out of combat only: the buttons are secure frames.
+-- ============================================================
+local APPLY_SETTLE  = 6      -- seconds after the click before the verdict
+local APPLY_TIMEOUT = 30     -- give up waiting for a cursor or a popup
+local SLOT_NAME = { [16] = "main hand", [17] = "off hand" }
+
+local applyFrame, applyAttempt, applyEvents
+
+-- A value safe to keep and compare: secrets become the string "<secret>".
+local function plain(v)
+    if issecretvalue and issecretvalue(v) then return "<secret>" end
+    return v
+end
+
+-- Both hands' temporary enchant: has, time left (ms), charges, enchant ID.
+local function EnchantState()
+    local ok, r = pcall(function()
+        local t = {}
+        local v = { GetWeaponEnchantInfo() }
+        t.raw = describe(GetWeaponEnchantInfo())
+        t[16] = { has = plain(v[1]), exp = plain(v[2]), charges = plain(v[3]), id = plain(v[4]) }
+        t[17] = { has = plain(v[5]), exp = plain(v[6]), charges = plain(v[7]), id = plain(v[8]) }
+        return t
+    end)
+    if ok then return r end
+    return { raw = "ERROR: " .. tostring(r), [16] = {}, [17] = {} }
+end
+
+local function Snapshot(itemID)
+    local s = { t = GetTime(), enchant = EnchantState() }
+    s.weapon = {}
+    for _, slot in ipairs({ 16, 17 }) do
+        local ok, id = pcall(GetInventoryItemID, "player", slot)
+        s.weapon[slot] = ok and plain(id) or "ERROR"
+    end
+    local okC, n = pcall(C_Item.GetItemCount, itemID)
+    s.count = okC and plain(n) or "ERROR"
+    return s
+end
+
+-- Did this hand's coating change between two snapshots? true / false, or
+-- nil when a value needed to tell was secret or missing.
+local function HandChanged(a, b, elapsedMs)
+    if a.has == "<secret>" or b.has == "<secret>" then return nil end
+    if (a.has and true or false) ~= (b.has and true or false) then return true end
+    if not b.has then return false end
+    if a.id ~= b.id and a.id ~= "<secret>" and b.id ~= "<secret>" then return true end
+    -- Same coating: a fresh application renews the charges, or the time
+    -- left beyond what the attempt's own duration took off it.
+    if type(a.charges) == "number" and type(b.charges) == "number" and b.charges > a.charges then
+        return true
+    end
+    if type(a.exp) == "number" and type(b.exp) == "number" then
+        return b.exp > a.exp - elapsedMs + 3000
+    end
+    return nil
+end
+
+local function Verdict(att)
+    local before, after = att.before.enchant, att.after.enchant
+    local other = att.slot == 16 and 17 or 16
+    local elapsedMs = 1000 * (att.after.t - att.before.t)
+    local mine   = HandChanged(before[att.slot], after[att.slot], elapsedMs)
+    local theirs = HandChanged(before[other], after[other], elapsedMs)
+    local failed, completed = false, false
+    for _, e in ipairs(att.events) do
+        if e[2] == "ENCHANT_SPELL_COMPLETED" and e[3] == "true" then completed = true end
+        if e[2]:find("FAILED") or e[2]:find("INTERRUPTED") or e[2] == "UI_ERROR_MESSAGE"
+                or e[2]:find("ADDON_ACTION") then
+            failed = true
+        end
+    end
+    if att.weaponChanged then return "inconclusive (the weapons changed during the attempt)" end
+    if theirs then return "WRONG HAND (the other hand changed)" end
+    if mine == true then return "applied" end
+    -- Refreshing a coating that was still full changes nothing visible:
+    -- the completion event is then the only evidence.
+    if mine == false and completed then return "inconclusive (completed, no visible change: was it still full?)" end
+    if mine == false then return failed and "failed" or "failed (nothing changed)" end
+    return "inconclusive (enchant state unreadable)"
+end
+
+local function FinishAttempt(reason)
+    local att = applyAttempt
+    if not att then return end
+    applyAttempt = nil
+    att.after = Snapshot(att.item)
+    att.targetingAtEnd = plain(SpellIsTargeting())
+    for _, slot in ipairs({ 16, 17 }) do
+        if att.after.weapon[slot] ~= att.before.weapon[slot] then att.weaponChanged = true end
+    end
+    att.ended = reason
+    att.verdict = Verdict(att)
+    local db = ProbeDB()
+    db.applyTests = db.applyTests or {}
+    db.applyTests[#db.applyTests + 1] = att
+    local evs = {}
+    for _, e in ipairs(att.events) do evs[#evs + 1] = e[2] end
+    print(PREFIX .. "#" .. att.n .. " " .. att.method .. " " .. SLOT_NAME[att.slot] .. ": "
+          .. att.verdict .. " [" .. (#evs > 0 and table.concat(evs, ", ") or "no events") .. "]"
+          .. (att.popup and " (replace popup)" or "")
+          .. (att.targetingAfterClick == true and " (cursor after click)" or ""))
+    print(PREFIX .. "    before " .. att.before.enchant.raw)
+    print(PREFIX .. "    after  " .. att.after.enchant.raw)
+end
+
+local APPLY_EVENTS = {
+    "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_FAILED",
+    "UNIT_SPELLCAST_INTERRUPTED", "UI_ERROR_MESSAGE", "ADDON_ACTION_BLOCKED",
+    "ADDON_ACTION_FORBIDDEN", "WEAPON_ENCHANT_CHANGED", "ENCHANT_SPELL_COMPLETED",
+    "UNIT_INVENTORY_CHANGED", "PLAYER_EQUIPMENT_CHANGED",
+}
+
+local attemptCount = 0
+
+local function MakeButton(parent, method, slot, itemID, x, y)
+    local b = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate")
+    b:SetSize(120, 26)
+    b:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    b:RegisterForClicks(Apotheca.API.ClickEdges())
+    local label = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    label:SetPoint("CENTER")
+    label:SetText(method .. ": " .. SLOT_NAME[slot])
+    local bg = b:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.25, 0.1, 0.4, 0.9)
+    b.method, b.slot = method, slot
+    if method == "A" then
+        b:SetAttribute("type", "item")
+        b:SetAttribute("item", "item:" .. itemID)
+        b:SetAttribute("target-slot", slot)
+    else
+        b:SetAttribute("type", "macro")
+        b:SetAttribute("macrotext", "/use item:" .. itemID .. "\n/use " .. slot)
+    end
+    -- Observation only: no protected call from these insecure scripts.
+    b:SetScript("PreClick", function(self, button, down)
+        if applyAttempt then FinishAttempt("superseded by a new click") end
+        attemptCount = attemptCount + 1
+        applyAttempt = {
+            n = attemptCount, method = self.method, slot = self.slot, item = itemID,
+            button = button, down = down and true or false,
+            combat = InCombatLockdown() and true or false,
+            keyDown = C_CVar and C_CVar.GetCVar("ActionButtonUseKeyDown"),
+            build = select(2, GetBuildInfo()),
+            t0 = GetTime(), events = {}, before = Snapshot(itemID),
+        }
+    end)
+    b:SetScript("PostClick", function()
+        local att = applyAttempt
+        if not att then return end
+        att.targetingAfterClick = plain(SpellIsTargeting())
+        local okP, popup = pcall(StaticPopup_Visible, "REPLACE_ENCHANT")
+        att.popup = okP and popup and true or nil
+    end)
+    return b
+end
+
+function Apotheca.RunApplyTest(arg)
+    arg = arg or ""
+    if arg == "close" then
+        if InCombatLockdown() then print(PREFIX .. "out of combat only") return end
+        if applyFrame then applyFrame:Hide() end
+        FinishAttempt("closed")
+        return
+    end
+    local itemID = tonumber(arg:match("^(%d+)"))
+    if not itemID then
+        print(PREFIX .. "usage: /apo applytest <itemID>  (a poison, oil or stone in your bags), /apo applytest close")
+        return
+    end
+    if InCombatLockdown() then print(PREFIX .. "out of combat only: the test buttons are secure frames") return end
+    if applyFrame then applyFrame:Hide() end
+
+    local f = CreateFrame("Frame", nil, UIParent)
+    applyFrame = f
+    f:SetSize(270, 110)
+    f:SetPoint("CENTER", UIParent, "CENTER", 0, 150)
+    f:SetFrameStrata("DIALOG")
+    local bg = f:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0, 0, 0, 0.8)
+    local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOP", f, "TOP", 0, -8)
+    title:SetText("Apotheca apply test: " .. (C_Item.GetItemInfo(itemID) or ("item " .. itemID)))
+    f.buttons = {
+        A16 = MakeButton(f, "A", 16, itemID, 10, -30),
+        A17 = MakeButton(f, "A", 17, itemID, 140, -30),
+        B16 = MakeButton(f, "B", 16, itemID, 10, -64),
+        B17 = MakeButton(f, "B", 17, itemID, 140, -64),
+    }
+    Apotheca._applyTestFrame = f
+
+    if not applyEvents then
+        applyEvents = CreateFrame("Frame")
+        for _, e in ipairs(APPLY_EVENTS) do pcall(applyEvents.RegisterEvent, applyEvents, e) end
+        applyEvents:SetScript("OnEvent", function(_, event, a1, a2, a3)
+            local att = applyAttempt
+            if not att then return end
+            if (event:find("^UNIT_") and a1 ~= "player") then return end
+            att.events[#att.events + 1] = { GetTime() - att.t0, event,
+                tostring(plain(a1)), tostring(plain(a2)), tostring(plain(a3)) }
+        end)
+        applyEvents:SetScript("OnUpdate", function()
+            local att = applyAttempt
+            if not att then return end
+            local age = GetTime() - att.t0
+            local okT, targeting = pcall(SpellIsTargeting)
+            local okP, popup = pcall(StaticPopup_Visible, "REPLACE_ENCHANT")
+            if okP and popup then att.popup = true end
+            -- Wait while the player still has to pick a weapon or answer
+            -- the replace popup.
+            local waiting = (okT and targeting == true) or (okP and popup and true)
+            if age >= APPLY_TIMEOUT then
+                FinishAttempt("timeout")
+            elseif age >= APPLY_SETTLE and not waiting then
+                FinishAttempt("settled")
+            end
+        end)
+    end
+    f:Show()
+    print(PREFIX .. "apply test: click A or B for a hand, one at a time; wait for the verdict line. "
+          .. "Results are kept for the SavedVariables file. /apo applytest close to hide.")
 end
 
 function Apotheca.RunProbe()
