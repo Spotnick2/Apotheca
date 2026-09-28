@@ -152,6 +152,13 @@ WoW.equipped[16] = MACE
 WoW.fire("PLAYER_EQUIPMENT_CHANGED", 16, false)
 H.check(mh.icon:IsDesaturated(), "swapped to a mace in combat: the sharpening stone greys out")
 H.eq(mh.itemID, 12404, "(the button itself can't change in combat)")
+WoW.equipped[16] = SWORD
+WoW.fire("PLAYER_EQUIPMENT_CHANGED", 16, false)
+WoW.tick(0.1)
+H.check(not mh.icon:IsDesaturated(), "swapped back to the sword, still in combat: no longer grey")
+WoW.equipped[16] = MACE
+WoW.fire("PLAYER_EQUIPMENT_CHANGED", 16, false)
+H.check(mh.icon:IsDesaturated(), "and grey again on the mace")
 WoW.leaveCombat()
 settle()
 H.eq(mh.itemID, 12643, "after combat: the weightstone")

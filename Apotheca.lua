@@ -1504,13 +1504,14 @@ end
 -- In combat a stone button can't change item, and a secure click can't be
 -- stopped either. So after a weapon swap that the stone no longer fits (a
 -- sharpening stone and now a mace), the button greys out until the
--- update after combat restores it (/code-review of #33).
+-- update after combat restores it (/code-review of #33). Recomputed both
+-- ways on every swap: swapping back to a weapon the stone fits clears it
+-- (Codex review of #33).
 function Apotheca.MarkStaleStones()
     for _, cfg in ipairs(STONE_BUTTON_CONFIG) do
         local btn = Apotheca.buttons[cfg.key]
-        if btn and btn.itemID and btn:IsShown()
-                and not Apotheca.StoneFits(btn.itemID, Apotheca.StoneKind(cfg.targetSlot)) then
-            btn.icon:SetDesaturated(true)
+        if btn and btn.itemID and btn:IsShown() then
+            btn.icon:SetDesaturated(not Apotheca.StoneFits(btn.itemID, Apotheca.StoneKind(cfg.targetSlot)))
         end
     end
 end
