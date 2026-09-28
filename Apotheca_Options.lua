@@ -620,6 +620,29 @@ function Apotheca.BuildOptionsPanelContent(panel)
     Checkbox("Remind me after combat  |cff888888(glows for a few seconds)|r",
         function() return DBGet("poisons", "remind") == true end,
         function(v) DBSet(v, "poisons", "remind") end)
+    Divider()
+    SmallLabel("|cffffd100Weapon stones|r  |cffff8800experimental|r")
+    SmallLabel("|cffff8800Experimental: not yet tried in game.|r |cff888888Pick a stone per hand for this\n"
+        .. "character: a sharpening stone for a sharp weapon, a weightstone for a blunt one,\n"
+        .. "and Elemental (crit) for any. A stone on the main hand replaces the Weapon Oil\n"
+        .. "button there. A rogue's chosen poison keeps its hand.|r")
+    local STONE_OPTIONS = {
+        { value = "none",      label = "None" },
+        { value = "damage",    label = "Damage stone first" },
+        { value = "elemental", label = "Elemental first" },
+    }
+    Dropdown("Main hand stone  |cff888888(this character)|r:", STONE_OPTIONS,
+        function() return Apotheca.StoneChoice(16) end,
+        function(v) Apotheca.SetStoneChoice(16, v) end)
+    Dropdown("Off hand stone  |cff888888(this character)|r:", STONE_OPTIONS,
+        function() return Apotheca.StoneChoice(17) end,
+        function(v) Apotheca.SetStoneChoice(17, v) end)
+    Checkbox("Glow when a weapon has no coating  |cff888888(ready check)|r",
+        function() return DBGet("stones", "glowOnMissingBuff") ~= false end,
+        function(v) DBSet(v, "stones", "glowOnMissingBuff") end)
+    Checkbox("Remind me after combat  |cff888888(glows for a few seconds)|r",
+        function() return DBGet("stones", "remind") == true end,
+        function(v) DBSet(v, "stones", "remind") end)
 
     SectionHeader("Bandage")
     SmallLabel("Shows the best available bandage from your bags.")
@@ -668,7 +691,8 @@ function Apotheca.BuildOptionsPanelContent(panel)
         protectionscroll = "Protection Scroll", intellectscroll = "Intellect Scroll",
         staminascroll = "Stamina Scroll", strengthscroll = "Strength Scroll",
         agilityscroll = "Agility Scroll", weaponoil = "Weapon Oil",
-        poisonmh = "Poison (main hand)", poisonoh = "Poison (off hand)", bandage = "Bandage",
+        poisonmh = "Poison (main hand)", poisonoh = "Poison (off hand)",
+        stonemh = "Stone (main hand)", stoneoh = "Stone (off hand)", bandage = "Bandage",
     }
     local ROW_HEIGHT, ROW_WIDTH = 22, CONTENT_W - PAD * 2
     local orderContainer = CreateFrame("Frame", nil, curContent)

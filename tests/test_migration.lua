@@ -80,8 +80,8 @@ Apotheca.SetProfile("Realm-Wizard")
 H.eq(ApothecaDB.profiles["Realm-Wizard"].weaponOil.kind, "MANA_FIRST", "switching to the ticked one: still Mana oil first")
 Apotheca.SetProfile("Global")
 local ord = ApothecaDB.profiles["Realm-Ordered"].buttonOrder
-H.eq(table.concat(ord, ","), "bandage,bufffood,xpfood,mana,weaponoil,poisonmh,poisonoh",
-    "a saved order gets XP Food next to Buff Food, and the poisons after Weapon Oil")
+H.eq(table.concat(ord, ","), "bandage,bufffood,xpfood,mana,weaponoil,poisonmh,poisonoh,stonemh,stoneoh",
+    "a saved order gets XP Food next to Buff Food, the poisons after Weapon Oil, then the stones")
 
 -- The flat (pre-profile) database route.
 local flat = { preventWaste = false, buffFoodPriority = { PRIEST = { "healing", "mp5", "crit", "stamina" } } }

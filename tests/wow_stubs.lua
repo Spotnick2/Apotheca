@@ -185,6 +185,8 @@ function Frame:GetID() return 1 end
 function Frame:Play() self._playing = true end
 function Frame:Stop() self._playing = false end
 function Frame:IsPlaying() return self._playing == true end
+function Frame:SetDesaturated(v) self._desaturated = v and true or false end
+function Frame:IsDesaturated() return self._desaturated == true end
 function Frame:GetNumPoints() return #self._points end
 function Frame:SetPoint(...) self._points[#self._points + 1] = { ... } end
 function Frame:ClearAllPoints() self._points = {} end
