@@ -2049,6 +2049,17 @@ local function CalcFrameWidth(n)
 end
 
 -- Resize and reposition all active buttons according to orientation and rows.
+-- UI-Quickslot2 has a wide transparent margin: Blizzard's ActionButtonTemplate
+-- draws it at 66x66 around a 36x36 button, one pixel low. Scale that with the
+-- icon size so the frame sits on the icon's edge at any size.
+local function SizeButtonBorder(btn, size)
+    local border = btn.btnBorder
+    if not border then return end
+    border:ClearAllPoints()
+    border:SetSize(size * 66 / 36, size * 66 / 36)
+    border:SetPoint("CENTER", btn, "CENTER", 0, -size / 36)
+end
+
 -- Horizontal: buttons flow left→right, wrap into rows.
 -- Vertical:   buttons flow top→bottom, wrap into columns.
 local function ApplyLayout(active)
@@ -2087,6 +2098,7 @@ local function ApplyLayout(active)
         local y    = -(FRAME_PADDING + row * (btnSize + btnGap))
         btn:SetWidth(btnSize)
         btn:SetHeight(btnSize)
+        SizeButtonBorder(btn, btnSize)
         btn:ClearAllPoints()
         btn:SetPoint("TOPLEFT", ApothecaFrame, "TOPLEFT", x, y)
         btn:Show()
@@ -2268,10 +2280,12 @@ local function CreateApothecaButton(cfg)
     icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     btn.icon = icon
 
+    -- The same bronze frame as the client's own action buttons. Not
+    -- UI-Quickslot-Depress: that is the gold pushed state, shown on press.
     local border = btn:CreateTexture(nil, "OVERLAY")
-    border:SetTexture("Interface\\Buttons\\UI-Quickslot-Depress")
-    border:SetAllPoints(btn)
+    border:SetTexture("Interface\\Buttons\\UI-Quickslot2")
     btn.btnBorder = border
+    SizeButtonBorder(btn, BUTTON_SIZE)
     btn:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
 
     local hl = btn:CreateTexture(nil, "HIGHLIGHT")
