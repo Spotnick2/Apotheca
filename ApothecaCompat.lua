@@ -397,8 +397,8 @@ end
 -- ------------------------------------------------------------
 
 -- The action bars by Edit Mode number: the bar frame and its first button.
--- Bar 1 is measured on 70291 (MainActionBar, ActionButton1); bars 2-8
--- carry Retail's names, checked by /apo bar (docs/FOREVER-PROBE.md).
+-- All eight are measured on 70291 under Retail's names (/apo bar,
+-- docs/FOREVER-PROBE.md).
 API.ACTION_BARS = {
     { bar = "MainActionBar",       button = "ActionButton1" },
     { bar = "MultiBarBottomLeft",  button = "MultiBarBottomLeftButton1" },

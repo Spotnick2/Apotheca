@@ -238,6 +238,7 @@ Geometry in UIParent units (`ActionButton1` stays 45 x 45; the icon size is its 
 - **Button size = 45 x icon size, and the gap = padding x icon size.**
 - **NumRows counts columns when vertical,** as Apotheca's Rows does.
 - **Horizontal rows stack upward** from button 1; Apotheca's wrap downward. Vertical: top to bottom, then columns to the right, as Apotheca does.
+- **All eight action bars carry Retail's names** (`/apo bar bars`, build 70291, every bar shown at 90%, padding 2): `MainActionBar`, `MultiBarBottomLeft`, `MultiBarBottomRight`, `MultiBarRight`, `MultiBarLeft`, `MultiBar5`, `MultiBar6`, `MultiBar7`, each with `<bar>Button1` 45 wide, and each `GetSettingValue` read plain values. `API.ActionBarLayout(n)` gave 40.5 / 1.8 for every one, the same as bar 1's measured geometry.
 - **The button frame** is the `UI-HUD-ActionBar-IconFrame` atlas (`-AddRow` with Hide Bar Art), on file 7948326, with an `IconMask`.
 
 ## Still to measure
