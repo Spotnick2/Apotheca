@@ -11,6 +11,9 @@ Run OpenAI's `codex` CLI non-interactively to get a second opinion (design revie
 critique, adversarial check) from a *different model family* than Claude — the point is
 decorrelated blind spots, not raw capability.
 
+> **Ask the owner before every run.** Each consult costs. Say what you would ask Codex and
+> why, and run it only once approved, even when a workflow or a PR seems to call for one.
+
 > Requires the `codex` CLI installed and OpenAI-authenticated on this machine. If `codex`
 > isn't found, say so and fall back to Fable for the adversarial pass (see `CLAUDE.md`).
 

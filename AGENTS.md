@@ -172,7 +172,7 @@ Work is tracked on GitHub and lands through pull requests.
 1. **Open an issue first** describing the change.
 2. **Branch** off `main` (`fix/<n>-...`, `forever/<n>-...`). Never commit to `main` directly.
 3. **Open a PR** with `Closes #N`. The `package-check` workflow runs `luac`, the tests, the item-data drift and skipped-report checks, a dry-run package, and the zip-contents check.
-4. **Run a Codex adversarial review** (`.claude/skills/codex-consult`) with the diff, `AGENTS.md`, `docs/FOREVER-PROBE.md` and the porting guide. Codex's sandbox has no network, so give it the PR discussion as a local file. Post the verdict on the PR, and address or rebut every finding there.
+4. **Code review is manual.** The owner reviews the PR. Do not run a Codex consult (`.claude/skills/codex-consult`) on your own initiative: each run costs, so ask the owner first, saying what you would ask Codex and why, and run it only once approved. When one is approved, give it the diff, `AGENTS.md`, `docs/FOREVER-PROBE.md` and the porting guide. Codex's sandbox has no network, so give it the PR discussion as a local file. Post the verdict on the PR, and address or rebut every finding there.
 5. **Before merging, check the PR's reviews** (`gh api repos/Spotnick2/Apotheca/pulls/<N>/reviews`), not only its comments. The owner's own Codex posts follow-up reviews there, sometimes minutes after the last push.
 6. Squash-merge, then delete the branch.
 
