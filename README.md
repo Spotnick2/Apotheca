@@ -36,7 +36,7 @@ Buffs are recognised on every client language.
 
 - Ready check: missing buffs glow (buff food, XP food, flask and elixirs, scrolls, weapon oil).
 - Global or per-character profiles.
-- Horizontal or vertical layout, rows, icon size and padding.
+- Horizontal or vertical layout, rows, icon size and padding, or the icon size and padding of one of your action bars (Edit Mode), followed as you change it.
 - Visibility: always, in combat only, out of combat only, or hidden.
 - Hold **Alt** to drag the bar (unless locked).
 - Debug mode: clicks don't consume anything.

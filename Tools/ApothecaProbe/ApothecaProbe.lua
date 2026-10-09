@@ -10,8 +10,8 @@
 --
 -- A separate, development-only addon (Tools/ApothecaProbe, loaded after
 -- Apotheca): it is never packaged, and `pwsh Tools/deploy.ps1 -Probe`
--- installs it. /apo probe, /apo scan, /apo scan2, /apo scan3 and
--- /apo applytest do nothing without it.
+-- installs it. /apo probe, /apo scan, /apo scan2, /apo scan3,
+-- /apo applytest and /apo bar do nothing without it.
 -- ============================================================
 
 Apotheca = Apotheca or {}
@@ -948,4 +948,169 @@ function Apotheca.RunProbe()
     db.lastProbe = db.lastProbe or {}
     db.lastProbe[InCombatLockdown() and "combat" or "idle"] = log
     print(PREFIX .. "done. Results are also stored for the SavedVariables file on logout.")
+end
+
+-- ============================================================
+-- /apo bar [label]: Action Bar 1's layout (#40)
+--
+-- "Match Action Bar 1" needs the bar's icon size, padding, rows and
+-- orientation. Two sources: the Edit Mode layout (C_EditMode and the bar
+-- system frame's GetSettingValue), whose encoding on Forever is unmeasured,
+-- and the live buttons (ActionButton1 / ActionButton2 geometry). Run it
+-- with a few settings changed in Edit Mode (icon size, padding, rows,
+-- orientation, a preset layout and a custom one), giving each run a label;
+-- every run is kept under ApothecaProbeDB.barProbe[label].
+-- ============================================================
+
+local function EnumDump(name)
+    local e = Enum and Enum[name]
+    if type(e) ~= "table" then return "absent" end
+    local keys = {}
+    for k, v in pairs(e) do keys[#keys + 1] = tostring(k) .. "=" .. tostring(v) end
+    table.sort(keys)
+    return table.concat(keys, ", ")
+end
+
+local function Geometry(f)
+    if not f then return "absent" end
+    local l, b, w, h = f:GetRect()
+    return string.format("shown=%s size=%.2fx%.2f scale=%.3f eff=%.3f rect=%s,%s",
+        tostring(f:IsShown()), f:GetWidth(), f:GetHeight(), f:GetScale(), f:GetEffectiveScale(),
+        tostring(l and math.floor(l * 100 + 0.5) / 100), tostring(b and math.floor(b * 100 + 0.5) / 100))
+end
+
+-- The pixel gap between two buttons in UIParent units, horizontal and vertical.
+local function Gap(a, b)
+    if not (a and b) then return "absent" end
+    local al, ab, aw, ah = a:GetRect()
+    local bl, bb = b:GetRect()
+    if not (al and bl) then return "no rect" end
+    local s = a:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    return string.format("dx=%.2f dy=%.2f (button %.2f, in UIParent units: scale %.3f)",
+        (bl - al - aw) * s, (ab - bb - ah) * s, aw * s, s)
+end
+
+function Apotheca.RunBarProbe(label)
+    label = (label and label ~= "") and label or "default"
+    log = {}
+    print(PREFIX .. "Action Bar 1 layout, run '" .. label .. "'")
+
+    try("build", function() return select(4, GetBuildInfo()), (select(2, GetBuildInfo())) end)
+    try("UIParent", function() return Geometry(UIParent) end)
+    try("Enum.EditModeSystem", function() return EnumDump("EditModeSystem") end)
+    try("Enum.EditModeActionBarSystemIndices", function() return EnumDump("EditModeActionBarSystemIndices") end)
+    try("Enum.EditModeActionBarSetting", function() return EnumDump("EditModeActionBarSetting") end)
+    try("Enum.ActionBarOrientation", function() return EnumDump("ActionBarOrientation") end)
+
+    -- The layouts as stored. Presets (Modern, Classic) are not in .layouts
+    -- on Retail: activeLayout counts the presets first.
+    try("C_EditMode.GetLayouts", function()
+        local info = C_EditMode.GetLayouts()
+        return "activeLayout=" .. tostring(info and info.activeLayout)
+            .. " custom=" .. tostring(info and info.layouts and #info.layouts)
+    end)
+    try("activeLayoutSettings", function()
+        local info = C_EditMode.GetLayouts()
+        local presets = EditModePresetLayoutManager and EditModePresetLayoutManager.GetCopyOfPresetLayouts
+            and EditModePresetLayoutManager:GetCopyOfPresetLayouts() or {}
+        local all = {}
+        for _, l in ipairs(presets) do all[#all + 1] = l end
+        for _, l in ipairs(info.layouts or {}) do all[#all + 1] = l end
+        local layout = all[info.activeLayout]
+        if not layout then return "no layout at index " .. tostring(info.activeLayout) .. " of " .. #all end
+        local sysEnum = Enum.EditModeSystem and Enum.EditModeSystem.ActionBar
+        local mainIdx = Enum.EditModeActionBarSystemIndices and Enum.EditModeActionBarSystemIndices.MainBar
+        for _, sys in ipairs(layout.systems or {}) do
+            if sys.system == sysEnum and sys.systemIndex == mainIdx then
+                local parts = { "name=" .. tostring(layout.layoutName), "type=" .. tostring(layout.layoutType) }
+                for _, s in ipairs(sys.settings or {}) do
+                    parts[#parts + 1] = tostring(s.setting) .. ":" .. tostring(s.value)
+                end
+                local a = sys.anchorInfo
+                if a then
+                    parts[#parts + 1] = "anchor=" .. tostring(a.point) .. "/" .. tostring(a.relativeTo)
+                        .. "/" .. tostring(a.relativePoint) .. " " .. tostring(a.offsetX) .. "," .. tostring(a.offsetY)
+                end
+                return table.concat(parts, " ")
+            end
+        end
+        return "MainBar system not found in layout " .. tostring(layout.layoutName)
+    end)
+
+    -- The live bar frame. Retail renamed MainMenuBar to MainActionBar (11.1).
+    for _, name in ipairs({ "MainActionBar", "MainMenuBar" }) do
+        local bar = _G[name]
+        try(name, function() return Geometry(bar) end)
+        if bar then
+            try(name .. ".fields", function()
+                return "isHorizontal=" .. tostring(bar.isHorizontal) .. " numRows=" .. tostring(bar.numRows)
+                    .. " numButtonsShowable=" .. tostring(bar.numButtonsShowable)
+                    .. " buttonPadding=" .. tostring(bar.buttonPadding)
+                    .. " system=" .. tostring(bar.system) .. " systemIndex=" .. tostring(bar.systemIndex)
+            end)
+            if bar.GetSettingValue and Enum.EditModeActionBarSetting then
+                for sName, sID in pairs(Enum.EditModeActionBarSetting) do
+                    try(name .. ":GetSettingValue(" .. sName .. ")", function()
+                        return bar:GetSettingValue(sID)
+                    end)
+                end
+            end
+        end
+    end
+    try("EditModeManagerFrame:GetActiveLayoutInfo", function()
+        local l = EditModeManagerFrame:GetActiveLayoutInfo()
+        return tostring(l and l.layoutName) .. " type=" .. tostring(l and l.layoutType)
+    end)
+
+    for i = 1, 3 do
+        try("ActionButton" .. i, function() return Geometry(_G["ActionButton" .. i]) end)
+    end
+    try("ActionButton1.icon", function() return Geometry(ActionButton1 and ActionButton1.icon) end)
+    try("ActionButton1.NormalTexture", function()
+        local t = ActionButton1:GetNormalTexture()
+        return t and (tostring(t:GetTexture()) .. " atlas=" .. tostring(t:GetAtlas()) .. " " .. Geometry(t)) or "none"
+    end)
+    try("ActionButton1.IconMask", function() return tostring(ActionButton1.IconMask ~= nil) end)
+    try("gap 1->2", function() return Gap(ActionButton1, ActionButton2) end)
+    -- Second row, if the bar has one: the first button below button 1.
+    try("gap 1->7 (row 2 at 6 per row)", function() return Gap(ActionButton1, ActionButton7) end)
+    try("gap 1->5 (row 2 at 4 per row)", function() return Gap(ActionButton1, ActionButton5) end)
+
+    -- Every action bar Apotheca can match: the frame and first button
+    -- names in Apotheca.API.ACTION_BARS are Retail's, unmeasured past bar 1.
+    for i, names in ipairs(Apotheca.API and Apotheca.API.ACTION_BARS or {}) do
+        try("bar " .. i, function()
+            local bar, button = _G[names.bar], _G[names.button]
+            if not bar then return names.bar .. " absent" end
+            local s = Enum.EditModeActionBarSetting
+            local size, pad
+            if bar.GetSettingValue then
+                size, pad = bar:GetSettingValue(s.IconSize), bar:GetSettingValue(s.IconPadding)
+            end
+            local w = button and button:GetWidth() * button:GetEffectiveScale() / UIParent:GetEffectiveScale()
+            return string.format("%s shown=%s size=%s pad=%s %s=%s width=%s layout=%s",
+                names.bar, tostring(bar:IsShown()), tostring(size), tostring(pad), names.button,
+                tostring(button and button:GetWidth()), w and string.format("%.2f", w) or "absent",
+                (function()
+                    local l = Apotheca.API.ActionBarLayout(i)
+                    return l and string.format("%.2f/%.2f", l.size, l.padding) or "nil"
+                end)())
+        end)
+    end
+
+    -- One line to read off the chat, and when: the saved file can't tell a
+    -- rerun from a run that never happened.
+    try("summary", function()
+        local bar, s = MainActionBar, Enum.EditModeActionBarSetting
+        local w = ActionButton1:GetWidth() * ActionButton1:GetEffectiveScale() / UIParent:GetEffectiveScale()
+        return string.format("%s size=%s pad=%s rows=%s orient=%s editMode=%s button=%.2f",
+            date("%H:%M:%S"), tostring(bar:GetSettingValue(s.IconSize)), tostring(bar:GetSettingValue(s.IconPadding)),
+            tostring(bar:GetSettingValue(s.NumRows)), tostring(bar:GetSettingValue(s.Orientation)),
+            tostring(EditModeManagerFrame and EditModeManagerFrame:IsShown()), w)
+    end)
+
+    local db = ProbeDB()
+    db.barProbe = db.barProbe or {}
+    db.barProbe[label] = log
+    print(PREFIX .. "done. Kept as barProbe['" .. label .. "'] for the SavedVariables file on logout.")
 end
