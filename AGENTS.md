@@ -16,7 +16,7 @@ ApothecaCompat.lua     — Apotheca.API: every moved or removed API; loads first
 ApothecaItems.lua      — GENERATED item data (Apotheca.DATA); see Item Data
 Apotheca.lua           — Main addon: all logic, item data, frame creation, events
 Apotheca_Options.lua   — In-game options panel: tabbed UI, DB read/write helpers
-Tools/ApothecaProbe/   — DEV-ONLY addon (never packaged): /apo probe, /apo scan, /apo scan2, /apo scan3, /apo applytest; `deploy.ps1 -Probe`
+Tools/ApothecaProbe/   — DEV-ONLY addon (never packaged): /apo probe, /apo scan, /apo scan2, /apo scan3, /apo applytest, /apo bar; `deploy.ps1 -Probe`
 .pkgmeta               — BigWigs packager config (release packaging only, not used locally)
 tests/                 — Lua 5.1 unit tests against a strict-globals stub; tests/run.ps1
 Tools/deploy.ps1       — deploy to the local Forever AddOns folder
@@ -124,6 +124,9 @@ Registered in the `EVENTS` section near the bottom of `Apotheca.lua`. Key events
 Secure button attributes (`type`, `item`) must **never** be set while `InCombatLockdown()` is true. Use `Apotheca.pendingUpdate = true` to defer updates and apply them in `PLAYER_REGEN_ENABLED`.
 
 `Apotheca.UpdateAllButtons()` returns immediately during combat lockdown. Anything that must stay correct *during* a fight therefore cannot live inside it — either put it in a combat-safe path like `RefreshButtonVisuals`, or re-check the live state at the point of use. The waste-prevention ask overlay does the latter: `IsStillWasteful(btn)` re-reads health and mana on click, because the overlay it belongs to may have been armed before combat started.
+
+### Layout and the action bars (#40)
+`ApplyLayout` takes orientation, rows, icon size and padding from `Apotheca.LayoutSettings()`: the profile's own settings, with `matchBar` (0 = off, 1-8 = an Edit Mode action bar) replacing the icon size and padding (only: rows and orientation stay the profile's, since the bar often sits beside several stacked action bars) by that bar's, through `API.ActionBarLayout(n)` (`API.ACTION_BARS` names each bar's frame and first button; `GetSettingValue`, plain values; button 45 x icon size, gap padding x icon size; measured in docs/FOREVER-PROBE.md). A read that fails falls back to the profile's settings, which are kept while matching. Edit Mode fires nothing while a slider moves, so the 3-second out-of-combat poll compares the layout with the one last applied (`Apotheca._layoutSig`, shown bar only); `EDIT_MODE_LAYOUTS_UPDATED` covers a saved or switched layout.
 
 ### Drag Anchor
 `ApothecaAnchor` is the purple "Drag to move" overlay shown while Alt is held over the bar. Its visibility is derived from live state in `UpdateAnchorState()` (`IsAltKeyDown()`, combat, `lockPosition`, visibility, mouse-over), driven by both `MODIFIER_STATE_CHANGED` and a throttled `OnUpdate`. Do not go back to showing or hiding it purely on key-event edges — a missed key-up leaves the bar stuck in the unlocked state. All drag teardown goes through `StopAnchorDrag()`.

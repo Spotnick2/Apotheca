@@ -393,6 +393,54 @@ function API.ClickEdges()
 end
 
 -- ------------------------------------------------------------
+-- Action bars (#40)
+-- ------------------------------------------------------------
+
+-- The action bars by Edit Mode number: the bar frame and its first button.
+-- Bar 1 is measured on 70291 (MainActionBar, ActionButton1); bars 2-8
+-- carry Retail's names, checked by /apo bar (docs/FOREVER-PROBE.md).
+API.ACTION_BARS = {
+    { bar = "MainActionBar",       button = "ActionButton1" },
+    { bar = "MultiBarBottomLeft",  button = "MultiBarBottomLeftButton1" },
+    { bar = "MultiBarBottomRight", button = "MultiBarBottomRightButton1" },
+    { bar = "MultiBarRight",       button = "MultiBarRightButton1" },
+    { bar = "MultiBarLeft",        button = "MultiBarLeftButton1" },
+    { bar = "MultiBar5",           button = "MultiBar5Button1" },
+    { bar = "MultiBar6",           button = "MultiBar6Button1" },
+    { bar = "MultiBar7",           button = "MultiBar7Button1" },
+}
+
+-- Action bar n's icon size and padding, in UIParent units: { size,
+-- padding }, or nil if the client doesn't say. Measured on 70291 for bar 1
+-- (docs/FOREVER-PROBE.md, /apo bar): its GetSettingValue returns plain
+-- values (icon size in percent, padding in pixels) for presets and custom
+-- layouts alike, including a change not yet saved while Edit Mode is open.
+-- The stored layout encodes icon size as a step instead, so it is not read.
+-- The first button stays 45 wide and the icon size scales it, padding
+-- included: at 90% a button is 40.5 and the gap 1.8. Rows and orientation
+-- are not read: Apotheca keeps its own.
+local BAR_BUTTON = 45
+
+function API.ActionBarLayout(n)
+    local names = API.ACTION_BARS[n]
+    if not names then return nil end
+    local bar = _G[names.bar]
+    local s = Enum.EditModeActionBarSetting
+    if not (bar and bar.GetSettingValue and s) then return nil end
+    local ok, size, pad = pcall(function()
+        return bar:GetSettingValue(s.IconSize), bar:GetSettingValue(s.IconPadding)
+    end)
+    if not ok or type(size) ~= "number" or type(pad) ~= "number" or size <= 0 then
+        return nil
+    end
+    local button = _G[names.button]
+    local base = (button and button:GetWidth()) or BAR_BUTTON
+    -- The bar's own scale, should it ever differ from UIParent's.
+    local factor = size / 100 * bar:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    return { size = base * factor, padding = pad * factor }
+end
+
+-- ------------------------------------------------------------
 -- Client
 -- ------------------------------------------------------------
 

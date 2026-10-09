@@ -37,6 +37,12 @@ local PROFILE_DEFAULTS = {
     rows                = 1,
     iconSize            = 36,
     iconPadding         = 3,
+    -- Take the icon size and padding from one of the client's action bars
+    -- (1-8, 0 = off) in the current Edit Mode layout (#40), over the two
+    -- above, which are kept for when it is switched off. Rows and
+    -- orientation stay the bar's own: one Apotheca bar often sits beside
+    -- several stacked action bars.
+    matchBar            = 0,
     buffFood = {
         enabled            = true,
         glowOnMissingBuff  = true,
@@ -2062,12 +2068,38 @@ end
 
 -- Horizontal: buttons flow left→right, wrap into rows.
 -- Vertical:   buttons flow top→bottom, wrap into columns.
+-- The layout the bar uses: its own settings, with the chosen action bar's
+-- icon size and padding while matchBar names one and the client reports
+-- them. The second return says whether they did, for the options panel.
+function Apotheca.LayoutSettings()
+    local db = DB()
+    local layout = {
+        orientation = db.orientation, rows = db.rows,
+        iconSize = db.iconSize, iconPadding = db.iconPadding,
+    }
+    if (tonumber(db.matchBar) or 0) > 0 then
+        local bar = Apotheca.API.ActionBarLayout(tonumber(db.matchBar))
+        if bar then
+            layout.iconSize, layout.iconPadding = bar.size, bar.padding
+            return layout, true
+        end
+    end
+    return layout, false
+end
+
+-- What the layout was built from, to notice the matched action bar changing.
+local function LayoutSignature(l)
+    return string.format("%s/%s/%.2f/%.2f", tostring(l.orientation), tostring(l.rows),
+        l.iconSize or 0, l.iconPadding or 0)
+end
+
 local function ApplyLayout(active)
-    local db          = DB()
-    local orientation = db.orientation or "HORIZONTAL"
-    local rows        = math.max(1, db.rows or 1)
-    local btnSize     = math.max(16, db.iconSize    or BUTTON_SIZE)
-    local btnGap      = math.max(0,  db.iconPadding or BUTTON_GAP)
+    local layout      = Apotheca.LayoutSettings()
+    Apotheca._layoutSig = LayoutSignature(layout)
+    local orientation = layout.orientation or "HORIZONTAL"
+    local rows        = math.max(1, layout.rows or 1)
+    local btnSize     = math.max(16, layout.iconSize    or BUTTON_SIZE)
+    local btnGap      = math.max(0,  layout.iconPadding or BUTTON_GAP)
     local n           = #active
 
     if n == 0 then
@@ -3265,6 +3297,8 @@ SlashCmdList["APOTHECA"] = function(msg)
         Apotheca.RunSpellScan()
     elseif cmd == "scan3" and Apotheca.RunWellFedScan then
         Apotheca.RunWellFedScan()
+    elseif cmd:match("^bar") and Apotheca.RunBarProbe then
+        Apotheca.RunBarProbe(cmd:match("^bar%s*(.*)$"))
     elseif cmd:match("^applytest") and Apotheca.RunApplyTest then
         Apotheca.RunApplyTest(cmd:match("^applytest%s*(.*)$"))
     elseif cmd == "status" then
@@ -3326,7 +3360,8 @@ Apotheca.API.RegisterEvents(eventFrame,
     "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED",
     "GET_ITEM_INFO_RECEIVED", "PLAYER_LOGOUT", "PLAYER_TALENT_UPDATE",
     "READY_CHECK", "READY_CHECK_FINISHED", "ZONE_CHANGED_NEW_AREA", "PLAYER_LEVEL_UP",
-    "DISABLE_XP_GAIN", "ENABLE_XP_GAIN", "PLAYER_EQUIPMENT_CHANGED", "WEAPON_ENCHANT_CHANGED")
+    "DISABLE_XP_GAIN", "ENABLE_XP_GAIN", "PLAYER_EQUIPMENT_CHANGED", "WEAPON_ENCHANT_CHANGED",
+    "EDIT_MODE_LAYOUTS_UPDATED")
 
 -- UNIT_MAXHEALTH / UNIT_MAXPOWER: percentage potions are ranked against the
 -- maximum (FindBestPotion), so a Fortitude buff, a level-up or gear can
@@ -3370,6 +3405,13 @@ eventFrame:SetScript("OnUpdate", function(self, elapsed)
         if rolePollElapsed >= ROLE_POLL then
             rolePollElapsed = 0
             Apotheca.RefreshRole()
+            -- The matched action bar changed (#40): Edit Mode fires nothing while a
+            -- slider moves, and the bar follows it live, so poll it. A
+            -- hidden bar lays nothing out: showing it runs a full update.
+            if (tonumber(DB().matchBar) or 0) > 0 and ApothecaFrame:IsShown()
+                and LayoutSignature((Apotheca.LayoutSettings())) ~= Apotheca._layoutSig then
+                RequestUpdate()
+            end
             -- A stronger item skipped for its cooldown (mana gem) is ready:
             -- re-pick it. Only out of combat, where the button may change.
             if Apotheca._recheckAt and GetTime() >= Apotheca._recheckAt then
@@ -3544,6 +3586,14 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
     elseif event == "WEAPON_ENCHANT_CHANGED" then
         -- A coating applied or run out (#24): the poison glows follow.
         if playerReady and not InCombatLockdown() then UpdateCoatingGlow() end
+
+    elseif event == "EDIT_MODE_LAYOUTS_UPDATED" then
+        -- A layout saved or switched (#40). Changes still being made in
+        -- Edit Mode fire nothing: the out-of-combat poll catches those.
+        if playerReady and (tonumber(DB().matchBar) or 0) > 0 then
+            RequestUpdate()
+            if Apotheca.RefreshOptions then Apotheca.RefreshOptions() end
+        end
 
     elseif event == "PLAYER_LEVEL_UP" or event == "DISABLE_XP_GAIN" or event == "ENABLE_XP_GAIN" then
         -- A new level opens better XP food; the cap, or XP turned off,

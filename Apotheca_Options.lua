@@ -254,6 +254,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
         curH = curH + 18
         local name = "ApothecaSlider" .. sliderN
         local sl = CreateFrame("Slider", name, curContent, "OptionsSliderTemplate")
+        sl.label = lbl
         sl:SetPoint("TOPLEFT", curContent, "TOPLEFT", PAD + 4, Y())
         sl:SetWidth(200)
         sl:SetMinMaxValues(minV, maxV)
@@ -285,6 +286,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
         box:SetPoint("TOPRIGHT", curContent, "TOPRIGHT", -(PAD - 4), boxTop - 2)
         box:SetHeight(boxH)
         Gap(8)
+        return sl
     end
 
     local ddN = 0
@@ -296,6 +298,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
         lbl:SetText(labelText)
         curH = curH + 16
         local dd = CreateFrame("Frame", "ApothecaDD" .. ddN, curContent, "UIDropDownMenuTemplate")
+        dd.label = lbl
         dd:SetPoint("TOPLEFT", curContent, "TOPLEFT", PAD - 16, Y())
         UIDropDownMenu_SetWidth(dd, 160)
         local function Init()
@@ -322,6 +325,22 @@ function Apotheca.BuildOptionsPanelContent(panel)
         refreshCallbacks[#refreshCallbacks + 1] = Init
         curH = curH + 32
         Gap(4)
+        return dd
+    end
+
+    -- Greys widgets out while another setting decides them. A dropdown has
+    -- no Enable/Disable of its own: the FrameXML helpers do it, if present.
+    local function SetWidgetEnabled(w, on)
+        if w.GetObjectType and w:GetObjectType() == "Slider" then
+            if on then w:Enable() else w:Disable() end
+        else
+            local fn = rawget(_G, on and "UIDropDownMenu_EnableDropDown" or "UIDropDownMenu_DisableDropDown")
+            if fn then fn(w) end
+        end
+        w:SetAlpha(on and 1 or 0.5)
+        if w.label then
+            if on then w.label:SetTextColor(1, 1, 1) else w.label:SetTextColor(0.5, 0.5, 0.5) end
+        end
     end
 
     local function Divider()
@@ -447,6 +466,18 @@ function Apotheca.BuildOptionsPanelContent(panel)
         function(v) DBSet(v, "visibility") end)
 
     SectionHeader("Layout")
+    local BAR_OPTIONS = { { value = 0, label = "Off" } }
+    for i = 1, #Apotheca.API.ACTION_BARS do
+        BAR_OPTIONS[#BAR_OPTIONS + 1] = { value = i, label = "Action Bar " .. i }
+    end
+    Dropdown("Match an action bar's icon size and padding:", BAR_OPTIONS,
+        function() return tonumber(DBGet("matchBar")) or 0 end,
+        function(v)
+            DBSet(v, "matchBar")
+            Apotheca.RefreshOptions()
+        end)
+    -- One line reserved: the text is set after the widgets below exist.
+    local matchNote = SmallLabel(" ")
     Dropdown("Orientation:",
         { { value = "HORIZONTAL", label = "Horizontal" },
           { value = "VERTICAL",   label = "Vertical"   } },
@@ -455,13 +486,32 @@ function Apotheca.BuildOptionsPanelContent(panel)
     Slider("Rows", 1, 4, 1,
         function() return DBGet("rows") or 1 end,
         function(v) DBSet(v, "rows") end)
-    Slider("Icon Size", 20, 60, 2,
-        function() return DBGet("iconSize") or 36 end,
-        function(v) DBSet(v, "iconSize") end,
-        function(v) return v .. "px" end)
-    Slider("Icon Padding", 0, 10, 1,
-        function() return DBGet("iconPadding") or 3 end,
-        function(v) DBSet(v, "iconPadding") end)
+    local layoutWidgets = {
+        Slider("Icon Size", 20, 60, 2,
+            function() return DBGet("iconSize") or 36 end,
+            function(v) DBSet(v, "iconSize") end,
+            function(v) return v .. "px" end),
+        Slider("Icon Padding", 0, 10, 1,
+            function() return DBGet("iconPadding") or 3 end,
+            function(v) DBSet(v, "iconPadding") end),
+    }
+    -- While matching, the size and padding follow the action bar and keep their
+    -- values for when it is switched off. Asked again at every open.
+    local function SyncLayoutWidgets()
+        local layout, matched = Apotheca.LayoutSettings()
+        for _, w in ipairs(layoutWidgets) do SetWidgetEnabled(w, not matched) end
+        if matched then
+            matchNote:SetText(string.format("|cff888888Following Action Bar %d: %.1f px icons, %.1f px apart.|r",
+                DBGet("matchBar"), layout.iconSize, layout.iconPadding))
+        elseif (tonumber(DBGet("matchBar")) or 0) > 0 then
+            matchNote:SetText(string.format("|cffff6666Action Bar %d can't be read here: using the settings below.|r",
+                DBGet("matchBar")))
+        else
+            matchNote:SetText(" ")
+        end
+    end
+    SyncLayoutWidgets()
+    refreshCallbacks[#refreshCallbacks + 1] = SyncLayoutWidgets
     FinalizeTarget()
 
     -- ════════════════════════════════════════════════════════════

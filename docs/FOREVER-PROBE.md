@@ -214,6 +214,32 @@ Measured with `/apo applytest 20744` (Minor Wizard Oil) on a warlock with a two-
   - The poison buttons use method A on both clicks. Poisons and the off hand are not measured yet.
 - **Confirmed on the Weapon Oil button (owner, same day):** left-click applied the oil straight to the main hand, and right-click gave the targeting cursor to pick the weapon. So the left-button variant `target-slot1` works on Forever.
 
+## Action Bar 1's layout (#40), 2026-10-09, build 70291
+
+`/apo bar <label>`, with Action Bar 1's settings changed in Edit Mode between runs. UIParent scale 0.640.
+
+- **The bar is `MainActionBar`.** `MainMenuBar` is absent. Its fields: `isHorizontal`, `numRows`, `numButtonsShowable`, `buttonPadding`, `system = 0` (ActionBar), `systemIndex = 1` (MainBar).
+- **`MainActionBar:GetSettingValue(Enum.EditModeActionBarSetting.X)` returns plain values:** IconSize in percent (90, 100, 120), IconPadding in pixels (2, 6), NumRows (1, 2), Orientation 0 or 1 (`Enum.ActionBarOrientation`: Horizontal 0, Vertical 1). This holds for a preset (Modern) and a custom layout ("My UI").
+- **It reports a change straight away, while Edit Mode is still open and before Save.** A change reverted on leaving Edit Mode is gone by the next read, and no event fires while a slider moves.
+- **The stored layout encodes differently:** `C_EditMode.GetLayouts()` keeps IconSize as a step (4 = 90%, 5 = 100%), and the presets are not in its `.layouts`: `activeLayout` counts them first. Apotheca reads the bar, not the layout.
+- **`Enum.EditModeActionBarSetting`:** Orientation 0, NumRows 1, NumIcons 2, IconSize 3, IconPadding 4, VisibleSetting 5, HideBarArt 6, DeprecatedSnapToSide 7, HideBarScrolling 8, AlwaysShowButtons 9.
+
+Geometry in UIParent units (`ActionButton1` stays 45 x 45; the icon size is its effective scale):
+
+| Run | Icon size | Padding | Rows | Orientation | Button | Gap 1 to 2 | Row or column 2 |
+|---|---|---|---|---|---|---|---|
+| Modern preset | 100% | 2 | 1 | horizontal | 45 | 2.0 | |
+| My UI | 90% | 2 | 1 | horizontal | 40.5 | 1.8 | |
+| size120 | 120% | 2 | 1 | horizontal | 54 | 2.4 | |
+| pad6 | 120% | 6 | 1 | horizontal | 54 | 7.2 | |
+| rows2 | 120% | 6 | 2 | horizontal | 54 | 7.2 | button 7 is **above** button 1, 7.2 apart |
+| vertical | 120% | 6 | 2 | vertical | 54 | 7.2, downward | button 7 is to the **right**, 7.2 apart |
+
+- **Button size = 45 x icon size, and the gap = padding x icon size.**
+- **NumRows counts columns when vertical,** as Apotheca's Rows does.
+- **Horizontal rows stack upward** from button 1; Apotheca's wrap downward. Vertical: top to bottom, then columns to the right, as Apotheca does.
+- **The button frame** is the `UI-HUD-ActionBar-IconFrame` atlas (`-AddRow` with Hide Bar Art), on file 7948326, with an `IconMask`.
+
 ## Still to measure
 
 - **Poisons and the off hand (#24).** The main hand is measured with an oil (above). `/apo applytest <itemID>` shows four buttons:

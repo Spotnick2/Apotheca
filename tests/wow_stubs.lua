@@ -180,6 +180,11 @@ function Frame:GetStringHeight() return 12 end
 function Frame:GetText() return self._text end
 function Frame:SetText(t) self._text = t end
 function Frame:GetID() return 1 end
+function Frame:GetObjectType() return self._kind end
+function Frame:Enable() self._enabled = true end
+function Frame:Disable() self._enabled = false end
+function Frame:IsEnabled() return self._enabled ~= false end
+function Frame:SetAlpha(a) self._alpha = a end
 -- Animation groups record play/stop (they never finish on their own), so a
 -- test can tell a glow being faded out from one still shown.
 function Frame:Play() self._playing = true end
@@ -233,6 +238,34 @@ function CreateFrame(kind, name, parent, template)
 end
 
 UIParent = NewRegion("Frame", nil, "UIParent")
+
+-- The action bars (#40): frames, so not in the API dump. Bar 1 is measured
+-- on 70291 (/apo bar): MainActionBar's GetSettingValue returns plain values
+-- (icon size in percent, padding), and ActionButton1 stays 45 wide at every
+-- size. Bars 2-8 carry Retail's names (Apotheca.API.ACTION_BARS), checked
+-- by /apo bar. WoW.actionBar sets bar 1, WoW.actionBars[n] any bar;
+-- WoW.actionBarThrow refuses every read.
+WoW.actionBar = { [0] = 0, [1] = 1, [2] = 12, [3] = 100, [4] = 2 }
+WoW.actionBars = {}
+WoW.actionBarThrow = false
+local BARS = {
+    { "MainActionBar", "ActionButton1" }, { "MultiBarBottomLeft", "MultiBarBottomLeftButton1" },
+    { "MultiBarBottomRight", "MultiBarBottomRightButton1" }, { "MultiBarRight", "MultiBarRightButton1" },
+    { "MultiBarLeft", "MultiBarLeftButton1" }, { "MultiBar5", "MultiBar5Button1" },
+    { "MultiBar6", "MultiBar6Button1" }, { "MultiBar7", "MultiBar7Button1" },
+}
+for i, names in ipairs(BARS) do
+    local bar = NewRegion("Frame", UIParent, names[1])
+    function bar:GetSettingValue(setting)
+        if WoW.actionBarThrow then error("GetSettingValue refused") end
+        local t = (i == 1 and WoW.actionBar) or WoW.actionBars[i] or WoW.actionBar
+        return t[setting]
+    end
+    _G[names[1]] = bar
+    local button = NewRegion("CheckButton", bar, names[2])
+    button._w, button._h = 45, 45
+    _G[names[2]] = button
+end
 GameTooltip = NewRegion("GameTooltip", UIParent, "GameTooltip")
 GameFontNormal, GameFontHighlight = {}, {}
 
@@ -314,7 +347,13 @@ function UnitPowerMax()  return WoW.powerMax end
 function issecretvalue(v) return WoW.IsSecret(v) end
 
 NUM_BAG_SLOTS = 4
-Enum = { BagIndex = { Backpack = 0, ReagentBag = 5 }, PowerType = { Mana = 0 } }
+Enum = { BagIndex = { Backpack = 0, ReagentBag = 5 }, PowerType = { Mana = 0 },
+    -- Measured on 70291 (/apo bar, docs/FOREVER-PROBE.md).
+    EditModeActionBarSetting = { Orientation = 0, NumRows = 1, NumIcons = 2, IconSize = 3,
+        IconPadding = 4, VisibleSetting = 5, HideBarArt = 6, DeprecatedSnapToSide = 7,
+        HideBarScrolling = 8, AlwaysShowButtons = 9 },
+    ActionBarOrientation = { Horizontal = 0, Vertical = 1 },
+}
 
 C_Container = {}
 function C_Container.GetContainerNumSlots(bag)
