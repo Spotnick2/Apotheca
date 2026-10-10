@@ -43,6 +43,22 @@ local PROFILE_DEFAULTS = {
     -- orientation stay the bar's own: one Apotheca bar often sits beside
     -- several stacked action bars.
     matchBar            = 0,
+    -- The profession bar (#42, ApothecaUtility.lua): off by default. Its
+    -- own layout, with the same keys as the main bar's. show[key] = false
+    -- hides an action (nil is shown); order lists action keys, and any
+    -- action missing from it follows in catalog order. Kept flat: defaults
+    -- fill only two levels (ApplyDefaults). Position is per character.
+    utility = {
+        enabled      = false,
+        lockPosition = false,
+        orientation  = "VERTICAL",
+        rows         = 2,
+        iconSize     = 36,
+        iconPadding  = 3,
+        matchBar     = 0,
+        show         = {},
+        order        = {},
+    },
     buffFood = {
         enabled            = true,
         glowOnMissingBuff  = true,
@@ -168,6 +184,8 @@ local function DB()
     return ApothecaDB.profiles[key] or PROFILE_DEFAULTS
 end
 
+Apotheca.GetDB = DB
+
 -- Switch to a named profile, creating it from defaults if it doesn't exist.
 function Apotheca.SetProfile(key)
     if not ApothecaDB then return end
@@ -182,6 +200,7 @@ function Apotheca.SetProfile(key)
     end
     ApothecaDB.activeProfile = key
     Apotheca.UpdateAllButtons()
+    if Apotheca.Utility then Apotheca.Utility.Refresh() end
     if Apotheca.RefreshOptions then Apotheca.RefreshOptions() end
 end
 
@@ -367,8 +386,9 @@ local function SafeGetItemCooldown(itemID) return Apotheca.API.ItemCooldown(item
 -- pcall only guards a client that refuses the call outright.
 local function ApplyItemCooldown(cooldown, itemID)
     pcall(function()
+        -- Unchanged: `st or 0` is a truth test, which throws on a secret.
         local st, dur = SafeGetItemCooldown(itemID)
-        cooldown:SetCooldown(st or 0, dur or 0)
+        cooldown:SetCooldown(st, dur)
     end)
 end
 local function GetItemInfo(itemID)         return Apotheca.API.ItemInfo(itemID) end
@@ -2066,11 +2086,12 @@ local function SizeButtonBorder(btn, size)
     border:SetPoint("CENTER", btn, "CENTER", 0, -size / 36)
 end
 
--- The layout the bar uses: its own settings, with the chosen action bar's
--- icon size and padding while matchBar names one and the client reports
--- them. The second return says whether they did, for the options panel.
-function Apotheca.LayoutSettings()
-    local db = DB()
+-- The layout a bar uses: its own settings (the profile's, or the table
+-- given: the profession bar's), with the chosen action bar's icon size and
+-- padding while matchBar names one and the client reports them. The second
+-- return says whether they did, for the options panel.
+function Apotheca.LayoutSettings(src)
+    local db = src or DB()
     local layout = {
         orientation = db.orientation, rows = db.rows,
         iconSize = db.iconSize, iconPadding = db.iconPadding,
@@ -2090,27 +2111,23 @@ local function LayoutSignature(l)
     return string.format("%s/%s/%.2f/%.2f", tostring(l.orientation), tostring(l.rows),
         l.iconSize or 0, l.iconPadding or 0)
 end
+Apotheca.LayoutSignature = LayoutSignature
 
 -- Horizontal: buttons flow left→right, wrap into rows.
 -- Vertical:   buttons flow top→bottom, wrap into columns.
-local function ApplyLayout(active)
-    local layout      = Apotheca.LayoutSettings()
-    local sig = LayoutSignature(layout)
-    if sig ~= Apotheca._layoutSig then
-        Apotheca._layoutSig = sig
-        -- Whichever update applies a new layout (poll, bags, a setting), the
-        -- options note follows it.
-        if Apotheca.SyncLayoutOptions then Apotheca.SyncLayoutOptions() end
-    end
+-- Lays out `buttons` (a list) in `frame` by `layout` (LayoutSettings): the
+-- frame takes the grid's size. Shared by the main bar and the profession
+-- bar (#42). Out of combat only: the buttons are secure.
+function Apotheca.GridLayout(frame, buttons, layout)
     local orientation = layout.orientation or "HORIZONTAL"
     local rows        = math.max(1, layout.rows or 1)
     local btnSize     = math.max(16, layout.iconSize    or BUTTON_SIZE)
     local btnGap      = math.max(0,  layout.iconPadding or BUTTON_GAP)
-    local n           = #active
+    local n           = #buttons
 
     if n == 0 then
-        ApothecaFrame:SetWidth(FRAME_PADDING * 2 + btnSize)
-        ApothecaFrame:SetHeight(FRAME_PADDING * 2 + btnSize)
+        frame:SetWidth(FRAME_PADDING * 2 + btnSize)
+        frame:SetHeight(FRAME_PADDING * 2 + btnSize)
         return
     end
 
@@ -2124,11 +2141,10 @@ local function ApplyLayout(active)
 
     local frameW = FRAME_PADDING * 2 + cols * btnSize + (cols - 1) * btnGap
     local frameH = FRAME_PADDING * 2 + rows * btnSize + (rows - 1) * btnGap
-    ApothecaFrame:SetWidth(frameW)
-    ApothecaFrame:SetHeight(frameH)
+    frame:SetWidth(frameW)
+    frame:SetHeight(frameH)
 
-    for i, key in ipairs(active) do
-        local btn  = Apotheca.buttons[key]
+    for i, btn in ipairs(buttons) do
         local idx  = i - 1
         local col  = idx % cols
         local row  = math.floor(idx / cols)
@@ -2138,9 +2154,23 @@ local function ApplyLayout(active)
         btn:SetHeight(btnSize)
         SizeButtonBorder(btn, btnSize)
         btn:ClearAllPoints()
-        btn:SetPoint("TOPLEFT", ApothecaFrame, "TOPLEFT", x, y)
+        btn:SetPoint("TOPLEFT", frame, "TOPLEFT", x, y)
         btn:Show()
     end
+end
+
+local function ApplyLayout(active)
+    local layout = Apotheca.LayoutSettings()
+    local sig = LayoutSignature(layout)
+    if sig ~= Apotheca._layoutSig then
+        Apotheca._layoutSig = sig
+        -- Whichever update applies a new layout (poll, bags, a setting), the
+        -- options note follows it.
+        if Apotheca.SyncLayoutOptions then Apotheca.SyncLayoutOptions() end
+    end
+    local buttons = {}
+    for i, key in ipairs(active) do buttons[i] = Apotheca.buttons[key] end
+    Apotheca.GridLayout(ApothecaFrame, buttons, layout)
 end
 
 local ApothecaFrame = CreateFrame("Frame", "ApothecaFrame", UIParent)
@@ -2290,22 +2320,10 @@ local function ApplyDebugAttributes(btn)
     Apotheca.ApplySecureItemAttributes(btn, btn.itemID)
 end
 
-local function CreateApothecaButton(cfg)
-    local btn = CreateFrame("Button", "ApothecaButton_" .. cfg.key, ApothecaFrame, "SecureActionButtonTemplate")
-    btn:SetWidth(BUTTON_SIZE)
-    btn:SetHeight(BUTTON_SIZE)
-    -- Register BOTH mouse edges. The client's SecureActionButton_OnClick
-    -- acts only on the edge where down == useOnKeyDown (the attribute, else
-    -- the ActionButtonUseKeyDown CVar), so one click uses the item once
-    -- (measured on Forever). A single edge is a dead button for anyone on
-    -- the other CVar setting. Never set "typerelease": the press-and-hold
-    -- release path reads it and would use the item a second time.
-    btn:RegisterForClicks(Apotheca.API.ClickEdges())
-    -- Do NOT RegisterForDrag on secure buttons — that taints them.
-    -- Do NOT SetScript("OnDragStart/Stop") on secure buttons — that taints them.
-    -- Do NOT HookScript("OnClick") on secure buttons — that taints them.
-    -- Dragging is handled on ApothecaFrame itself (see below).
-
+-- The look every Apotheca button shares: empty slot, icon, the bronze
+-- action-button frame, pushed and highlight textures, count text and a
+-- cooldown swipe. Also used by the profession bar (#42).
+function Apotheca.StyleButton(btn, cooldownName)
     local emptyBg = btn:CreateTexture(nil, "BACKGROUND")
     emptyBg:SetAllPoints(btn)
     emptyBg:SetTexture("Interface\\Buttons\\UI-Quickslot2")
@@ -2336,11 +2354,30 @@ local function CreateApothecaButton(cfg)
     ct:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 2)
     btn.countText = ct
 
-    local cd = CreateFrame("Cooldown", "ApothecaCD_" .. cfg.key, btn, "CooldownFrameTemplate")
+    local cd = CreateFrame("Cooldown", cooldownName, btn, "CooldownFrameTemplate")
     cd:SetAllPoints(btn)
     cd:SetDrawEdge(true)
     cd:SetReverse(false)
     btn.cooldown = cd
+end
+
+local function CreateApothecaButton(cfg)
+    local btn = CreateFrame("Button", "ApothecaButton_" .. cfg.key, ApothecaFrame, "SecureActionButtonTemplate")
+    btn:SetWidth(BUTTON_SIZE)
+    btn:SetHeight(BUTTON_SIZE)
+    -- Register BOTH mouse edges. The client's SecureActionButton_OnClick
+    -- acts only on the edge where down == useOnKeyDown (the attribute, else
+    -- the ActionButtonUseKeyDown CVar), so one click uses the item once
+    -- (measured on Forever). A single edge is a dead button for anyone on
+    -- the other CVar setting. Never set "typerelease": the press-and-hold
+    -- release path reads it and would use the item a second time.
+    btn:RegisterForClicks(Apotheca.API.ClickEdges())
+    -- Do NOT RegisterForDrag on secure buttons — that taints them.
+    -- Do NOT SetScript("OnDragStart/Stop") on secure buttons — that taints them.
+    -- Do NOT HookScript("OnClick") on secure buttons — that taints them.
+    -- Dragging is handled on ApothecaFrame itself (see below).
+
+    Apotheca.StyleButton(btn, "ApothecaCD_" .. cfg.key)
 
     -- OnEnter/OnLeave are safe on secure buttons (they are not restricted).
     btn:SetScript("OnEnter", function(self)
@@ -3303,6 +3340,12 @@ SlashCmdList["APOTHECA"] = function(msg)
         Apotheca.RunSpellScan()
     elseif cmd == "scan3" and Apotheca.RunWellFedScan then
         Apotheca.RunWellFedScan()
+    elseif cmd == "utility" then
+        Apotheca.Utility.Toggle()
+    elseif cmd:match("^proftest") and Apotheca.RunProfTest then
+        Apotheca.RunProfTest(cmd:match("^proftest%s*(.*)$"))
+    elseif cmd:match("^prof") and Apotheca.RunProfProbe then
+        Apotheca.RunProfProbe(cmd:match("^prof%s*(.*)$"))
     elseif cmd:match("^bar") and Apotheca.RunBarProbe then
         Apotheca.RunBarProbe(cmd:match("^bar%s*(.*)$"))
     elseif cmd:match("^applytest") and Apotheca.RunApplyTest then

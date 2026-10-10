@@ -7,7 +7,8 @@
     copy is never modified.
 
     The file list comes from the TOC, so a new file is deployed the day it
-    is added there.
+    is added there, plus Bindings.xml, which the client loads without a TOC
+    line (#42).
 
     Local edits have been made directly in the AddOns folder before and
     existed nowhere in git. So every deploy records a hash of each file it
@@ -74,7 +75,10 @@ if (Test-Path $manifest) {
 }
 
 $tocText = (Get-Content $TocPath -Raw) -replace '@project-version@', 'dev'
-$shipped = @("Apotheca.toc") + $luaFiles
+# Bindings.xml loads from the addon folder by name, never from the TOC.
+$extraFiles = @("Bindings.xml")
+$copied  = $luaFiles + $extraFiles
+$shipped = @("Apotheca.toc") + $copied
 
 # Refuse to clobber anything edited in place since the last deploy.
 $changed = @()
@@ -108,14 +112,14 @@ Get-ChildItem $dest -File | Where-Object {
     }
 }
 
-foreach ($f in $luaFiles) {
+foreach ($f in $copied) {
     Copy-Item (Join-Path $RepoRoot $f) (Join-Path $dest $f) -Force
 }
 Set-Content -Path (Join-Path $dest "Apotheca.toc") -Value $tocText -NoNewline
 
 $shipped | ForEach-Object { "$_ $(Get-Hash (Join-Path $dest $_))" } | Set-Content $manifest
 
-Write-Host "Deployed Apotheca ($($luaFiles.Count) Lua files) to $dest"
+Write-Host "Deployed Apotheca ($($luaFiles.Count) Lua files and Bindings.xml) to $dest"
 
 if ($Probe) {
     $probeSrc  = Join-Path $RepoRoot "Tools\ApothecaProbe"

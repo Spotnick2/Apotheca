@@ -22,4 +22,5 @@
 ApothecaCompat.lua
 ApothecaItems.lua
 Apotheca.lua
+ApothecaUtility.lua
 Apotheca_Options.lua

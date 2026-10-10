@@ -88,6 +88,7 @@ function WoW.reset()
     WoW.popups       = {}
     WoW.itemsUsed    = {}        -- names passed to C_Item.UseItemByName
     WoW.curvesRefused = false    -- simulate a client that refuses colour curves
+    WoW.strictLockdown = false   -- protected frames changed in combat fail the test
 end
 
 function WoW.AddItem(bag, slot, itemID, count, name)
@@ -161,14 +162,16 @@ function Frame:SetSize(w, h) self._w, self._h = w, h end
 function Frame:GetWidth() return self._w end
 function Frame:GetHeight() return self._h end
 function Frame:GetSize() return self._w, self._h end
-function Frame:GetLeft() return 600 end
-function Frame:GetBottom() return 200 end
+function Frame:GetLeft() return self._left or 600 end
+function Frame:GetBottom() return self._bottom or 200 end
 function Frame:GetCenter() return 960, 540 end
 function Frame:GetEffectiveScale() return 1 end
 function Frame:GetScale() return 1 end
 function Frame:SetFrameLevel(l) self._level = l end
 function Frame:GetFrameLevel() return self._level end
-function Frame:IsMouseOver() return false end
+function Frame:IsMouseOver() return self._mouseOver == true end
+function Frame:StartMoving() self._moving = true end
+function Frame:StopMovingOrSizing() self._moving = false end
 function Frame:IsProtected() return false end
 function Frame:GetChecked() return self._checked end
 function Frame:SetChecked(v) self._checked = v end
@@ -239,9 +242,30 @@ function CreateFrame(kind, name, parent, template)
         end
     end
     if kind == "Button" or kind == "CheckButton" then f._fs = NewRegion("FontString", f) end
+    -- A secure button and the frame that parents it are protected: in
+    -- combat the client refuses to change them (WoW.strictLockdown).
+    if tostring(template or ""):find("SecureActionButtonTemplate") then
+        f._protected = true
+        if parent then parent._protected = true end
+    end
     if name then _G[name] = f end
     WoW.frames[#WoW.frames + 1] = f
     return f
+end
+
+-- With WoW.strictLockdown, a protected frame changed in combat fails the
+-- test: the client would refuse the call (attributes silently, the rest
+-- with ADDON_ACTION_BLOCKED). Opt-in per test file.
+local PROTECTED_METHODS = { "Show", "Hide", "SetShown", "SetAttribute", "SetPoint", "ClearAllPoints",
+    "SetWidth", "SetHeight", "SetSize", "StartMoving", "StopMovingOrSizing", "SetClampedToScreen" }
+for _, m in ipairs(PROTECTED_METHODS) do
+    local plain = Frame[m] or function() end
+    Frame[m] = function(self, ...)
+        if WoW.strictLockdown and WoW.inCombat and self._protected then
+            error("protected " .. m .. " on " .. tostring(self._name) .. " in combat", 2)
+        end
+        return plain(self, ...)
+    end
 end
 
 UIParent = NewRegion("Frame", nil, "UIParent")
@@ -326,6 +350,8 @@ function time() return math.floor(WoW.time) end
 function GetTime() return WoW.time end
 function InCombatLockdown() return WoW.inCombat end
 function IsAltKeyDown() return WoW.altDown end
+function IsControlKeyDown() return WoW.ctrlDown == true end
+function IsShiftKeyDown() return WoW.shiftDown == true end
 function GetBuildInfo() return "1.60.1", WoW.build, "Sep 22 2026", 16001 end
 function GetRealmName() return "ClassicBetaPvE" end
 function UnitName() return "Testcase Surname", nil end
@@ -364,6 +390,8 @@ Enum = { BagIndex = { Backpack = 0, ReagentBag = 5 }, PowerType = { Mana = 0 },
         IconPadding = 4, VisibleSetting = 5, HideBarArt = 6, DeprecatedSnapToSide = 7,
         HideBarScrolling = 8, AlwaysShowButtons = 9 },
     ActionBarOrientation = { Horizontal = 0, Vertical = 1 },
+    -- The client UI source's values (Player and Pet only); not measured.
+    SpellBookSpellBank = { Player = 0, Pet = 1 },
 }
 
 C_Container = {}
@@ -399,7 +427,16 @@ function C_Item.GetItemInfo(itemID)
     return name, "item:" .. itemID, 1, 1, 1, "Consumable", "Potion", 20, "", 134400
 end
 function C_Item.GetItemIconByID(itemID) return WoW.items[itemID] and 134400 or nil end
-function C_Item.GetItemCount(itemID) return 0 end
+-- The bags' count (C_Item.GetItemCount leaves the bank out by default).
+function C_Item.GetItemCount(itemID)
+    local n = 0
+    for _, bag in pairs(WoW.bags) do
+        for _, it in pairs(bag) do
+            if it.itemID == itemID then n = n + (it.stackCount or 1) end
+        end
+    end
+    return n
+end
 function C_Item.UseItemByName(name) WoW.itemsUsed[#WoW.itemsUsed + 1] = name end
 -- Reads the client's item DB: answers for any known ID, cache or not.
 -- Item class by ID ({ classID, subClassID, subType }); consumables by
@@ -443,6 +480,61 @@ function C_Spell.GetSpellDescription(spellID)
     if spellID == 433 then return "Restores 61 health over 18 sec." end
     return WoW.spellDescriptions[spellID] or ""
 end
+
+-- Professions (#42). GetProfessions returns nil x7 on Forever (porting
+-- guide), so professions are read from known spells. WoW.knownSpells:
+-- [spellID] = true for the player's spellbook.
+WoW.knownSpells = {}
+-- On 70334 it answers skill line indices for a character with
+-- professions: WoW.professions = { 7, 8, 5, 9, 6 }.
+WoW.professions = {}
+function GetProfessions()
+    local p = WoW.professions
+    return p[1], p[2], p[3], p[4], p[5], p[6], p[7]
+end
+function GetProfessionInfo() return nil end
+function C_Spell.GetSpellSubtext() return nil end
+function C_Spell.GetSpellTexture(id) return WoW.knownSpells[id] and 136243 or nil end
+-- Key bindings: WoW.bindings[action] = key.
+WoW.bindings = {}
+function GetBindingKey(action) return WoW.bindings[action] end
+function C_Spell.GetSpellCooldown()
+    return { startTime = 0, duration = 0, isEnabled = true, modRate = 1 }
+end
+function IsSpellKnown(id) return WoW.knownSpells[id] == true end
+function IsPlayerSpell(id) return WoW.knownSpells[id] == true end
+C_SpellBook = {}
+function C_SpellBook.IsSpellKnown(id) return WoW.knownSpells[id] == true end
+function C_SpellBook.IsSpellInSpellBook(id) return WoW.knownSpells[id] == true end
+-- The spellbook: known spells in ID order, one "Professions" line.
+local function SpellBookSlots()
+    local ids = {}
+    for id in pairs(WoW.knownSpells) do ids[#ids + 1] = id end
+    table.sort(ids)
+    return ids
+end
+function C_SpellBook.FindSpellBookSlotForSpell(id)
+    for slot, known in ipairs(SpellBookSlots()) do
+        if known == id then return slot, Enum.SpellBookSpellBank.Player end
+    end
+end
+function C_SpellBook.GetSpellBookItemInfo(slot)
+    local id = SpellBookSlots()[slot]
+    if id then return { spellID = id, actionID = id, name = WoW.spellNames[id], isPassive = false } end
+end
+function C_SpellBook.GetNumSpellBookSkillLines() return 1 end
+function C_SpellBook.GetSpellBookSkillLineInfo(i)
+    if i == 1 then return { name = "Professions", itemIndexOffset = 0, numSpellBookItems = #SpellBookSlots() } end
+end
+C_SkillInfo = {}
+function C_SkillInfo.GetNumSkillLines() return 0 end
+function C_SkillInfo.GetSkillLineInfo() return nil end
+WoW.overrideBindings = {}     -- [key] = "buttonName:mouseButton"
+function SetOverrideBindingClick(owner, priority, key, name, button)
+    WoW.overrideBindings[key] = name .. ":" .. (button or "LeftButton")
+end
+function ClearOverrideBindings() WoW.overrideBindings = {} end
+function date(fmt) return os.date(fmt) end
 
 -- A profiling clock that advances with every read, so a per-frame time
 -- budget really ends a frame's work in tests.

@@ -57,12 +57,13 @@ jobs:
         with:
           args: -d
 
-      # The zip must hold the TOC and the Lua it lists, and nothing else.
+      # The zip must hold the TOC, the Lua it lists and Bindings.xml (loaded
+      # by name, never from the TOC), and nothing else.
       - name: The package ships only the addon files
         run: |
           zip=$(ls .release/*.zip | head -1)
           rm -rf unpacked && mkdir unpacked && unzip -q "$zip" -d unpacked
-          { echo Apotheca.toc; grep -v '^#' Apotheca.toc | tr -d '\r' | sed '/^$/d'; } | sort > expected.txt
+          { echo Apotheca.toc; echo Bindings.xml; grep -v '^#' Apotheca.toc | tr -d '\r' | sed '/^$/d'; } | sort > expected.txt
           (cd unpacked/Apotheca && find . -type f | sed 's|^\./||' | sort) > actual.txt
           diff -u expected.txt actual.txt
           # ...and nothing outside Apotheca/ (no ApothecaProbe, no Tools).

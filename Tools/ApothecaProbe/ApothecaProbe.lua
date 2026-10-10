@@ -11,7 +11,8 @@
 -- A separate, development-only addon (Tools/ApothecaProbe, loaded after
 -- Apotheca): it is never packaged, and `pwsh Tools/deploy.ps1 -Probe`
 -- installs it. /apo probe, /apo scan, /apo scan2, /apo scan3,
--- /apo applytest and /apo bar do nothing without it.
+-- /apo applytest, /apo bar, /apo prof and /apo proftest do nothing
+-- without it.
 -- ============================================================
 
 Apotheca = Apotheca or {}
@@ -1113,4 +1114,418 @@ function Apotheca.RunBarProbe(label)
     db.barProbe = db.barProbe or {}
     db.barProbe[label] = log
     print(PREFIX .. "done. Kept as barProbe['" .. label .. "'] for the SavedVariables file on logout.")
+end
+
+-- ============================================================
+-- /apo prof, /apo proftest: professions (#42)
+--
+-- GetProfessions() returns nil x7 on Forever and the Professions
+-- subsystem is inert (porting guide), so the profession bar will detect
+-- professions from spell IDs. This measures, for a draft catalog of
+-- Vanilla spell IDs, which ones the client knows and by which API, every
+-- entry of the spellbook and the skill list (to find spells the catalog
+-- misses), and, with /apo proftest, what each spell does from a secure
+-- button by mouse and by key: window, cast, cursor, tracking, refusal.
+-- ============================================================
+
+-- The draft catalog, highest rank first. Only what /apo prof confirms
+-- goes into ApothecaUtility.lua. noButton: measured for context only.
+local PROF_CATALOG = {
+    { key = "alchemy",        ids = { 11611, 3464, 3101, 2259 } },
+    { key = "blacksmithing",  ids = { 9785, 3538, 3100, 2018 } },
+    { key = "enchanting",     ids = { 13920, 7413, 7412, 7411 } },
+    { key = "engineering",    ids = { 12656, 4038, 4037, 4036 } },
+    { key = "leatherworking", ids = { 10662, 3811, 3104, 2108 } },
+    { key = "tailoring",      ids = { 12180, 3910, 3909, 3908 } },
+    { key = "cooking",        ids = { 18260, 3413, 3102, 2550 } },
+    { key = "firstaid",       ids = { 10846, 7924, 3274, 3273 } },
+    { key = "smelting",       ids = { 2656 } },
+    { key = "poisons",        ids = { 2842 } },
+    { key = "fishing",        ids = { 18248, 7732, 7731, 7620 } },
+    { key = "disenchant",     ids = { 13262 } },
+    { key = "findherbs",      ids = { 2383 } },
+    { key = "findminerals",   ids = { 2580 } },
+    { key = "picklock",       ids = { 1804 } },
+    { key = "mining",         ids = { 10248, 3564, 2576, 2575 }, noButton = true },
+    { key = "herbalism",      ids = { 11993, 3570, 2368, 2366 }, noButton = true },
+    { key = "skinning",       ids = { 10768, 8618, 8617, 8613 }, noButton = true },
+}
+Apotheca._PROF_CATALOG = PROF_CATALOG
+local HEARTHSTONE = 6948
+
+-- A table's fields, sorted, secrets kept unread.
+local function fields(t)
+    if type(t) ~= "table" then return describe(t) end
+    local keys = {}
+    for k in pairs(t) do keys[#keys + 1] = k end
+    table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+    local parts = {}
+    for _, k in ipairs(keys) do parts[#parts + 1] = tostring(k) .. "=" .. tostring(plain(t[k])) end
+    return "{" .. table.concat(parts, " ") .. "}"
+end
+
+local function PlayerBank()
+    return Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player
+end
+
+-- The first candidate the client says is known, by C_SpellBook.IsSpellKnown.
+local function KnownRank(entry)
+    for _, id in ipairs(entry.ids) do
+        local ok, known = pcall(C_SpellBook.IsSpellKnown, id)
+        if ok and known == true then return id end
+    end
+end
+
+function Apotheca.RunProfProbe(label)
+    label = (label and label ~= "") and label or "default"
+    log = {}
+    print(PREFIX .. "professions, run '" .. label .. "'")
+    try("build", function() return select(4, GetBuildInfo()), (select(2, GetBuildInfo())) end)
+    try("class, level, combat", function()
+        return select(2, UnitClass("player")), UnitLevel("player"), InCombatLockdown()
+    end)
+    -- Measured nil x7 before; recorded again so a change shows.
+    try("GetProfessions", function() return GetProfessions() end)
+
+    -- Every candidate, by every API that could answer.
+    local bank = PlayerBank()
+    for _, entry in ipairs(PROF_CATALOG) do
+        for _, id in ipairs(entry.ids) do
+            local k = entry.key .. " " .. id
+            try(k .. " name", function()
+                return C_Spell.GetSpellName(id), C_Spell.GetSpellSubtext(id)
+            end)
+            try(k .. " known", function()
+                return "C_SpellBook.IsSpellKnown=" .. describe(C_SpellBook.IsSpellKnown(id))
+                    .. " IsSpellKnown=" .. describe(IsSpellKnown(id))
+                    .. " IsPlayerSpell=" .. describe(IsPlayerSpell(id))
+                    .. " InSpellBook=" .. describe(C_SpellBook.IsSpellInSpellBook(id))
+            end)
+            try(k .. " slot", function()
+                local slot, b = C_SpellBook.FindSpellBookSlotForSpell(id)
+                if not slot then return "no slot" end
+                return "slot=" .. tostring(slot) .. " bank=" .. tostring(b) .. " "
+                    .. fields(C_SpellBook.GetSpellBookItemInfo(slot, b or bank))
+            end)
+        end
+        try(entry.key .. " rank in use", function() return KnownRank(entry) or "none known" end)
+    end
+
+    -- GetProfessions answers on 70334 (nil x7 on 70009): skill line
+    -- indices past the visible ones. GetProfessionInfo for each.
+    local okP, profs = pcall(function() return { GetProfessions() } end)
+    for i = 1, 7 do
+        local idx = okP and profs[i]
+        if idx then
+            try("GetProfessionInfo(" .. tostring(plain(idx)) .. ")", function() return GetProfessionInfo(idx) end)
+        end
+    end
+
+    -- The whole player spellbook, line by line: spells the catalog misses.
+    -- Profession lines sit past GetNumSpellBookSkillLines (lines 5-9 on
+    -- 70334), so walk on until a line answers nothing.
+    try("spellbook lines", function() return C_SpellBook.GetNumSpellBookSkillLines() end)
+    for line = 1, 20 do
+        local okL, info = pcall(C_SpellBook.GetSpellBookSkillLineInfo, line)
+        if not (okL and type(info) == "table") then
+            try("line " .. line, function() return okL and describe(info) or ("ERROR: " .. tostring(info)) end)
+            break
+        end
+        try("line " .. line, function() return fields(info) end)
+        local first = (info.itemIndexOffset or 0) + 1
+        for slot = first, first + (info.numSpellBookItems or 0) - 1 do
+            try("line " .. line .. " slot " .. slot, function()
+                return fields(C_SpellBook.GetSpellBookItemInfo(slot, bank))
+            end)
+        end
+    end
+
+    -- The skill list, collapsed headers included: a collapsed header must
+    -- not read as "no profession". Nothing is expanded.
+    try("skill lines", function() return C_SkillInfo.GetNumSkillLines() end)
+    local okS, nSkills = pcall(C_SkillInfo.GetNumSkillLines)
+    for i = 1, (okS and tonumber(nSkills) or 0) do
+        try("skill " .. i, function() return fields(C_SkillInfo.GetSkillLineInfo(i)) end)
+    end
+
+    -- Cooldowns: is a spell's or the Hearthstone's cooldown secret (run
+    -- this in combat too)?
+    for _, entry in ipairs(PROF_CATALOG) do
+        if entry.key == "disenchant" or entry.key == "smelting" or entry.key == "fishing" then
+            local id = KnownRank(entry)
+            if id then
+                try(entry.key .. " cooldown", function() return fields(C_Spell.GetSpellCooldown(id)) end)
+            end
+        end
+    end
+    try("hearthstone count", function() return C_Item.GetItemCount(HEARTHSTONE) end)
+    try("hearthstone cooldown", function() return C_Container.GetItemCooldown(HEARTHSTONE) end)
+    try("hearthstone spell", function() return C_Item.GetItemSpell(HEARTHSTONE) end)
+
+    local db = ProbeDB()
+    db.profProbe = db.profProbe or {}
+    db.profProbe[label] = log
+    print(PREFIX .. "done. Kept as profProbe['" .. label .. "'] for the SavedVariables file on logout.")
+end
+
+-- Always on: what fires when a profession or a rank is learned or
+-- unlearned, and whether the catalog is known yet at login and at
+-- entering the world (when the bar can first be built). Capped.
+local PROF_EVENT_CAP = 300
+
+local function KnownList()
+    local now = {}
+    for _, entry in ipairs(PROF_CATALOG) do
+        local ok, id = pcall(KnownRank, entry)
+        if ok and id then now[#now + 1] = entry.key .. ":" .. id end
+    end
+    return now
+end
+
+local learnFrame = CreateFrame("Frame")
+for _, e in ipairs({ "SKILL_LINES_CHANGED", "LEARNED_SPELL_IN_SKILL_LINE", "SPELLS_CHANGED",
+                     "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD" }) do
+    pcall(learnFrame.RegisterEvent, learnFrame, e)
+end
+learnFrame:SetScript("OnEvent", function(_, event, a1, a2)
+    local db = ProbeDB()
+    if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
+        db.profLoad = db.profLoad or {}
+        db.profLoad[event] = date("%H:%M:%S") .. " " .. table.concat(KnownList(), ",")
+        return
+    end
+    db.profEvents = db.profEvents or {}
+    local list = db.profEvents
+    if #list >= PROF_EVENT_CAP then table.remove(list, 1) end
+    -- The known catalog after each event: which event a learned rank shows on.
+    list[#list + 1] = string.format("%s %s %s %s | %s", date("%H:%M:%S"), event,
+        tostring(plain(a1)), tostring(plain(a2)), table.concat(KnownList(), ","))
+end)
+
+-- /apo proftest: one secure button per known family (its rank in use)
+-- and the Hearthstone, each bound to CTRL-SHIFT-<n> by an override CLICK
+-- binding. A press with the cursor off the frame is recorded as "key",
+-- a click as "mouse". Each attempt ends once things settle, and records
+-- what happened: casts, a profession window, a targeting cursor, a
+-- tracking change, an error or a blocked action.
+local PROF_KEYS = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "F1", "F2", "F3", "F4", "F5", "F6" }
+local PROF_SETTLE, PROF_QUIET, PROF_TIMEOUT = 2, 1.5, 30
+local PROF_TEST_EVENTS = {
+    "UNIT_SPELLCAST_SENT", "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_SUCCEEDED",
+    "UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_INTERRUPTED", "UNIT_SPELLCAST_CHANNEL_START",
+    "UNIT_SPELLCAST_CHANNEL_STOP", "UI_ERROR_MESSAGE", "ADDON_ACTION_BLOCKED",
+    "ADDON_ACTION_FORBIDDEN", "TRADE_SKILL_SHOW", "TRADE_SKILL_CLOSE", "CRAFT_SHOW",
+    "CRAFT_CLOSE", "MINIMAP_UPDATE_TRACKING",
+}
+local profFrame, profAttempt, profEvents
+local profCount = 0
+-- The key watcher (WatchKeys, below); FinishProfAttempt reads it.
+local keyWatch
+
+local function FinishProfAttempt(reason)
+    local att = profAttempt
+    if not att then return end
+    profAttempt = nil
+    att.ended = reason
+    local seen, sent = {}, 0
+    for _, e in ipairs(att.events) do
+        seen[e[2]] = true
+        if e[2] == "UNIT_SPELLCAST_SENT" then sent = sent + 1 end
+    end
+    local what = {}
+    if seen.ADDON_ACTION_BLOCKED or seen.ADDON_ACTION_FORBIDDEN then what[#what + 1] = "BLOCKED" end
+    if seen.TRADE_SKILL_SHOW or seen.CRAFT_SHOW then what[#what + 1] = "window" end
+    if att.cursor then what[#what + 1] = "cursor" end
+    if seen.UNIT_SPELLCAST_CHANNEL_START then what[#what + 1] = "channel" end
+    if seen.MINIMAP_UPDATE_TRACKING then what[#what + 1] = "tracking" end
+    if seen.UNIT_SPELLCAST_SUCCEEDED then what[#what + 1] = "succeeded" end
+    if seen.UI_ERROR_MESSAGE then what[#what + 1] = "error" end
+    if #what == 0 then what[1] = "nothing" end
+    att.casts = sent
+    att.verdict = table.concat(what, "+") .. " (" .. sent .. " cast" .. (sent == 1 and "" or "s") .. ")"
+    local db = ProbeDB()
+    db.profTests = db.profTests or {}
+    db.profTests[#db.profTests + 1] = att
+    local evs = {}
+    for _, e in ipairs(att.events) do
+        evs[#evs + 1] = e[2] .. (e[2] == "UI_ERROR_MESSAGE" and (":" .. e[4]) or "")
+    end
+    if att.via == "mouse" and not (keyWatch and keyWatch.pressed) then
+        print(PREFIX .. "reminder: press the CTRL-SHIFT keys too, with the cursor off the panel")
+    end
+    print(PREFIX .. "#" .. att.n .. " " .. att.key .. " by " .. att.via
+          .. (att.combat and " in combat" or "") .. (att.hidden and " (hidden)" or "")
+          .. " (keydown " .. tostring(att.keyDown) .. "): "
+          .. att.verdict .. " [" .. (#evs > 0 and table.concat(evs, ", ") or "no events") .. "]")
+end
+
+-- A CTRL-SHIFT key press, seen by a frame that passes every key on. If
+-- its button's PreClick doesn't follow within a second, the binding never
+-- reached the button: recorded as SILENT.
+local function WatchKeys(byKey)
+    if not keyWatch then
+        keyWatch = CreateFrame("Frame", nil, UIParent)
+        keyWatch:EnableKeyboard(true)
+        keyWatch:SetPropagateKeyboardInput(true)
+        keyWatch:SetScript("OnKeyDown", function(self, key)
+            if not (IsControlKeyDown() and IsShiftKeyDown()) then return end
+            local target = self.byKey and self.byKey[key]
+            if not target then return end
+            self.pressed = true
+            self.pending = { key = target, bind = "CTRL-SHIFT-" .. key, t = GetTime(),
+                             combat = InCombatLockdown() and true or false, n = profCount }
+        end)
+        keyWatch:SetScript("OnUpdate", function(self)
+            local p = self.pending
+            if not p or GetTime() - p.t < 1 then return end
+            self.pending = nil
+            -- A press that reached its button started an attempt.
+            if profCount ~= p.n then return end
+            local db = ProbeDB()
+            db.profTests = db.profTests or {}
+            db.profTests[#db.profTests + 1] = { key = p.key, via = "key", combat = p.combat,
+                keyDown = C_CVar and C_CVar.GetCVar("ActionButtonUseKeyDown"),
+                hidden = not (profFrame and profFrame:IsShown()), events = {},
+                verdict = "SILENT: " .. p.bind .. " never reached the button",
+                build = select(2, GetBuildInfo()) }
+            print(PREFIX .. p.key .. " by key (" .. p.bind .. "): SILENT, the button never got the press")
+        end)
+    end
+    keyWatch.byKey = byKey
+    keyWatch:Show()
+end
+
+local function ProfButton(parent, i, key, kind, value)
+    local b = CreateFrame("Button", "ApothecaProbeProf_" .. key, parent, "SecureActionButtonTemplate")
+    b:SetSize(170, 22)
+    b:SetPoint("TOPLEFT", parent, "TOPLEFT", 10 + ((i - 1) % 2) * 180, -30 - math.floor((i - 1) / 2) * 26)
+    b:RegisterForClicks(Apotheca.API.ClickEdges())
+    local bg = b:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.25, 0.1, 0.4, 0.9)
+    local label = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    label:SetPoint("CENTER")
+    local bind = PROF_KEYS[i] and ("CTRL-SHIFT-" .. PROF_KEYS[i])
+    label:SetText(key .. " " .. value .. (bind and ("  [" .. bind .. "]") or ""))
+    b:SetAttribute("type", kind)
+    b:SetAttribute(kind, kind == "item" and ("item:" .. value) or value)
+    if bind then SetOverrideBindingClick(parent, true, bind, b:GetName(), "LeftButton") end
+    b.key, b.bind, b.keyName = key, bind, PROF_KEYS[i]
+    -- Observation only. Both edges are registered; the secure handler acts
+    -- on one (down when ActionButtonUseKeyDown is 1), so only that edge
+    -- starts an attempt. A second acting edge from one press shows as a
+    -- superseded attempt.
+    b:SetScript("PreClick", function(self, button, down)
+        local keyDown = C_CVar and C_CVar.GetCVar("ActionButtonUseKeyDown") == "1"
+        if (down and true or false) ~= (keyDown and true or false) then return end
+        if profAttempt then FinishProfAttempt("superseded by a new press") end
+        profCount = profCount + 1
+        profAttempt = {
+            n = profCount, key = self.key, value = value, button = button,
+            via = self:IsMouseOver() and "mouse" or "key",
+            down = down and true or false, combat = InCombatLockdown() and true or false,
+            keyDown = C_CVar and C_CVar.GetCVar("ActionButtonUseKeyDown"),
+            hidden = not parent:IsShown(),
+            build = select(2, GetBuildInfo()), t0 = GetTime(), events = {},
+        }
+    end)
+    b:SetScript("PostClick", function(self, button, down)
+        local att = profAttempt
+        if att and att.key == self.key and (down and true or false) == att.down
+                and plain(SpellIsTargeting()) == true then
+            att.cursor = true
+        end
+    end)
+    return b
+end
+
+function Apotheca.RunProfTest(arg)
+    arg = arg or ""
+    if InCombatLockdown() then
+        print(PREFIX .. "out of combat only: the test buttons and their bindings are secure")
+        return
+    end
+    if arg == "close" then
+        if profFrame then ClearOverrideBindings(profFrame) ; profFrame:Hide() end
+        if keyWatch then keyWatch:Hide() end
+        FinishProfAttempt("closed")
+        return
+    end
+    -- Hidden, the bindings stay: does a CLICK binding act on a hidden button?
+    if arg == "hide" then if profFrame then profFrame:Hide() end return end
+    if arg == "show" then
+        if profFrame then
+            profFrame:Show()
+            if keyWatch then keyWatch:Show() end
+            -- Close cleared the bindings: show binds them again.
+            for _, b in pairs(profFrame.buttons) do
+                if b.bind then SetOverrideBindingClick(profFrame, true, b.bind, b:GetName(), "LeftButton") end
+            end
+        end
+        return
+    end
+    -- Button names are global: built once, then shown again.
+    if profFrame then
+        print(PREFIX .. "already built this session: /apo proftest show (after a /reload for newly learned spells)")
+        return
+    end
+
+    local f = CreateFrame("Frame", nil, UIParent)
+    profFrame = f
+    f:SetPoint("CENTER", UIParent, "CENTER", 0, 150)
+    f:SetFrameStrata("DIALOG")
+    local bg = f:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0, 0, 0, 0.8)
+    local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOP", f, "TOP", 0, -8)
+    title:SetText("Apotheca profession test")
+    f.buttons = {}
+    local i = 0
+    for _, entry in ipairs(PROF_CATALOG) do
+        local id = not entry.noButton and KnownRank(entry)
+        if id then
+            i = i + 1
+            f.buttons[entry.key] = ProfButton(f, i, entry.key, "spell", id)
+        end
+    end
+    i = i + 1
+    f.buttons.hearthstone = ProfButton(f, i, "hearthstone", "item", HEARTHSTONE)
+    f:SetSize(370, 40 + math.ceil(i / 2) * 26)
+    Apotheca._profTestFrame = f
+    local byKey = {}
+    for k, b in pairs(f.buttons) do
+        if b.keyName then byKey[b.keyName] = k end
+    end
+    WatchKeys(byKey)
+
+    if not profEvents then
+        profEvents = CreateFrame("Frame")
+        for _, e in ipairs(PROF_TEST_EVENTS) do pcall(profEvents.RegisterEvent, profEvents, e) end
+        profEvents:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
+            local att = profAttempt
+            if not att then return end
+            if event:find("^UNIT_") and a1 ~= "player" then return end
+            att.events[#att.events + 1] = { GetTime() - att.t0, event,
+                tostring(plain(a1)), tostring(plain(a2)), tostring(plain(a3)), tostring(plain(a4)) }
+            att.lastActivity = GetTime()
+        end)
+        profEvents:SetScript("OnUpdate", function()
+            local att = profAttempt
+            if not att then return end
+            local okT, targeting = pcall(SpellIsTargeting)
+            if okT and plain(targeting) == true then att.cursor = true ; att.lastActivity = GetTime() end
+            local age = GetTime() - att.t0
+            local quiet = GetTime() - (att.lastActivity or att.t0)
+            if age >= PROF_TIMEOUT then
+                FinishProfAttempt("timeout")
+            elseif age >= PROF_SETTLE and quiet >= PROF_QUIET then
+                FinishProfAttempt("settled")
+            end
+        end)
+    end
+    f:Show()
+    print(PREFIX .. "profession test: click a button, or press its CTRL-SHIFT key with the cursor "
+          .. "OFF this frame, one at a time; wait for the verdict line. Try both ActionButtonUseKeyDown "
+          .. "settings, and in combat. /apo proftest hide|show (bindings stay while hidden), /apo proftest close.")
 end

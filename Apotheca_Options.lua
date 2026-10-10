@@ -66,6 +66,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
     local TAB_DEFS = {
         { key = "general",     label = "General"      },
         { key = "consumables", label = "Consumables"  },
+        { key = "utility",     label = "Profession Bar" },
         { key = "buttonorder", label = "Button Order" },
         { key = "profile",     label = "Profile"      },
     }
@@ -187,7 +188,9 @@ function Apotheca.BuildOptionsPanelContent(panel)
         refreshCallbacks[#refreshCallbacks + 1] = Sync
     end
 
-    local function Checkbox(labelText, getter, setter, indent)
+    -- Every widget updates the main bar after a change, unless given its
+    -- own `update` (the profession bar's tab: it rebuilds that bar only).
+    local function Checkbox(labelText, getter, setter, indent, update)
         local cb = CreateFrame("CheckButton", nil, curContent, "InterfaceOptionsCheckButtonTemplate")
         cb:SetPoint("TOPLEFT", curContent, "TOPLEFT", PAD + (indent or 0), Y())
         -- A missing template does not throw on this client; it returns a bare
@@ -204,7 +207,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
         cb:SetScript("OnClick", function(self)
             local v = self:GetChecked()
             setter(v == true or v == 1)
-            Apotheca.UpdateAllButtons()
+            ;(update or Apotheca.UpdateAllButtons)()
         end)
         refreshCallbacks[#refreshCallbacks + 1] = Sync
         curH = curH + 24
@@ -241,7 +244,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
     end
 
     local sliderN = 0
-    local function Slider(labelText, minV, maxV, step, getter, setter, fmtFn)
+    local function Slider(labelText, minV, maxV, step, getter, setter, fmtFn, update)
         sliderN = sliderN + 1
         local fmt = fmtFn or tostring
         Gap(4)
@@ -274,7 +277,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
             v = math.floor(v / step + 0.5) * step
             setter(v)
             valText:SetText(fmt(v))
-            Apotheca.UpdateAllButtons()
+            ;(update or Apotheca.UpdateAllButtons)()
         end)
         refreshCallbacks[#refreshCallbacks + 1] = function()
             local v = getter() or minV
@@ -291,7 +294,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
     end
 
     local ddN = 0
-    local function Dropdown(labelText, options, getter, setter)
+    local function Dropdown(labelText, options, getter, setter, update)
         ddN = ddN + 1
         Gap(4)
         local lbl = curContent:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
@@ -312,7 +315,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
                     info.func    = function()
                         setter(opt.value)
                         UIDropDownMenu_SetText(dd, opt.label)
-                        Apotheca.UpdateAllButtons()
+                        ;(update or Apotheca.UpdateAllButtons)()
                     end
                     UIDropDownMenu_AddButton(info)
                 end
@@ -716,6 +719,166 @@ function Apotheca.BuildOptionsPanelContent(panel)
         function() return DBGet("health", "preferHealthstone") ~= false end,
         function(v) DBSet(v, "health", "preferHealthstone") end)
     SmallLabel("|cff888888Only applies while the Healthstone button above is disabled.|r")
+    FinalizeTarget()
+
+    -- ════════════════════════════════════════════════════════════
+    -- TAB: PROFESSION BAR (#42, ApothecaUtility.lua)
+    -- ════════════════════════════════════════════════════════════
+    SetTarget(tabFrames["utility"])
+    local U = Apotheca.Utility
+    local function USet(v, ...)
+        DBSet(v, "utility", ...)
+        U.Refresh()
+    end
+    local function NoMainUpdate() end
+
+    SectionHeader("Profession Bar")
+    SmallLabel("A second bar that builds itself from this character's professions: "
+        .. "Cooking, First Aid, Fishing, your professions' windows, Disenchant, Smelting, "
+        .. "Find Herbs, Find Minerals, Pick Lock and your Hearthstone. Hold Alt to drag it.")
+    Gap(4)
+    Checkbox("Show the profession bar  |cff888888(/apo utility)|r",
+        function() return DBGet("utility", "enabled") == true end,
+        function(v) USet(v, "enabled") end, nil, NoMainUpdate)
+    Checkbox("Lock its position  |cff888888(disables Alt+Drag)|r",
+        function() return DBGet("utility", "lockPosition") == true end,
+        function(v) USet(v, "lockPosition") end, nil, NoMainUpdate)
+    SmallLabel("Key bindings: Options > Keybindings > Apotheca. A key follows its action "
+        .. "(Disenchant stays Disenchant on every character) and does nothing while the action is off.")
+
+    SectionHeader("Actions")
+    SmallLabel("Tick what the bar may show; it shows only what this character has. "
+        .. "The arrows set the order.")
+    Gap(4)
+    local U_ROW_H, U_ROW_W = 24, CONTENT_W - PAD * 2
+    local uContainer = CreateFrame("Frame", nil, curContent)
+    uContainer:SetPoint("TOPLEFT", curContent, "TOPLEFT", PAD, Y())
+    uContainer:SetWidth(U_ROW_W)
+    local uRows = {}
+
+    local function URelayout()
+        for i, row in ipairs(uRows) do
+            row.frame:ClearAllPoints()
+            row.frame:SetPoint("TOPLEFT", uContainer, "TOPLEFT", 0, -(i - 1) * (U_ROW_H + 2))
+        end
+        uContainer:SetHeight(#uRows * (U_ROW_H + 2))
+    end
+    local function USaveOrder()
+        local order = {}
+        for _, row in ipairs(uRows) do order[#order + 1] = row.key end
+        USet(order, "order")
+    end
+    local function UMove(key, delta)
+        for j, row in ipairs(uRows) do
+            if row.key == key then
+                local k = j + delta
+                if k < 1 or k > #uRows then return end
+                uRows[j], uRows[k] = uRows[k], uRows[j]
+                URelayout()
+                USaveOrder()
+                return
+            end
+        end
+    end
+    local function UMakeRow(key)
+        local f = CreateFrame("Frame", nil, uContainer)
+        f:SetWidth(U_ROW_W); f:SetHeight(U_ROW_H)
+        local bg = f:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        local cb = CreateFrame("CheckButton", nil, f, "InterfaceOptionsCheckButtonTemplate")
+        cb:SetPoint("LEFT", f, "LEFT", 2, 0)
+        if not cb.Text then
+            cb.Text = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            cb.Text:SetPoint("LEFT", cb, "RIGHT", 2, 0)
+        end
+        cb.Text:SetText(U.BY_KEY[key].label)
+        cb:SetScript("OnClick", function(self)
+            local v = self:GetChecked()
+            -- nil is shown: only "off" is stored.
+            local off = nil
+            if not (v == true or v == 1) then off = false end
+            USet(off, "show", key)
+        end)
+        local up = CreateFrame("Button", nil, f)
+        up:SetSize(16, 16); up:SetPoint("RIGHT", f, "RIGHT", -22, 0)
+        up:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollUp-Up")
+        up:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollUp-Highlight")
+        up:SetScript("OnClick", function() UMove(key, -1) end)
+        local down = CreateFrame("Button", nil, f)
+        down:SetSize(16, 16); down:SetPoint("RIGHT", f, "RIGHT", -4, 0)
+        down:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+        down:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Highlight")
+        down:SetScript("OnClick", function() UMove(key, 1) end)
+        return { frame = f, key = key, bg = bg, cb = cb }
+    end
+    -- One row per action, made once: a refresh only reorders and re-ticks
+    -- them (frames are never freed).
+    local uRowByKey = {}
+    for _, a in ipairs(U.ACTIONS) do uRowByKey[a.key] = UMakeRow(a.key) end
+    local function UBuildRows()
+        uRows = {}
+        for i, key in ipairs(U.Order()) do
+            local row = uRowByKey[key]
+            row.bg:SetColorTexture(0.10, 0.10, 0.18, (i % 2 == 0) and 0.5 or 0.8)
+            row.cb:SetChecked(U.IsShown(key))
+            uRows[#uRows + 1] = row
+        end
+        URelayout()
+    end
+    UBuildRows()
+    Gap(#uRows * (U_ROW_H + 2) + 4)
+    local uReset = CreateFrame("Button", nil, curContent, "UIPanelButtonTemplate")
+    uReset:SetPoint("TOPLEFT", curContent, "TOPLEFT", PAD, Y())
+    uReset:SetSize(130, 22); uReset:SetText("Reset to Default")
+    uReset:SetScript("OnClick", function()
+        USet({}, "order")
+        USet({}, "show")
+        UBuildRows()
+    end)
+    curH = curH + 26
+    refreshCallbacks[#refreshCallbacks + 1] = UBuildRows
+
+    SectionHeader("Layout")
+    Dropdown("Match an action bar's icon size and padding:", BAR_OPTIONS,
+        function() return tonumber(DBGet("utility", "matchBar")) or 0 end,
+        function(v)
+            USet(v, "matchBar")
+            Apotheca.RefreshOptions()
+        end, NoMainUpdate)
+    local uMatchNote = SmallLabel(" ")
+    Dropdown("Orientation:",
+        { { value = "HORIZONTAL", label = "Horizontal" },
+          { value = "VERTICAL",   label = "Vertical"   } },
+        function() return DBGet("utility", "orientation") or "VERTICAL" end,
+        function(v) USet(v, "orientation") end, NoMainUpdate)
+    Slider("Rows", 1, 4, 1,
+        function() return DBGet("utility", "rows") or 2 end,
+        function(v) USet(v, "rows") end, nil, NoMainUpdate)
+    local uLayoutWidgets = {
+        Slider("Icon Size", 20, 60, 2,
+            function() return DBGet("utility", "iconSize") or 36 end,
+            function(v) USet(v, "iconSize") end,
+            function(v) return v .. "px" end, NoMainUpdate),
+        Slider("Icon Padding", 0, 10, 1,
+            function() return DBGet("utility", "iconPadding") or 3 end,
+            function(v) USet(v, "iconPadding") end, nil, NoMainUpdate),
+    }
+    local function USyncLayout()
+        local layout, matched = Apotheca.LayoutSettings(U.Settings())
+        for _, w in ipairs(uLayoutWidgets) do SetSliderEnabled(w, not matched) end
+        local n = tonumber(DBGet("utility", "matchBar")) or 0
+        if matched then
+            uMatchNote:SetText(string.format("|cff888888Following Action Bar %d: %.1f px icons, %.1f px apart.|r",
+                n, layout.iconSize, layout.iconPadding))
+        elseif n > 0 then
+            uMatchNote:SetText(string.format("|cffff6666Action Bar %d can't be read here: using the settings below.|r", n))
+        else
+            uMatchNote:SetText(" ")
+        end
+    end
+    USyncLayout()
+    refreshCallbacks[#refreshCallbacks + 1] = USyncLayout
+    U.SyncLayoutOptions = USyncLayout   -- called when the bar applies a new layout
     FinalizeTarget()
 
     -- ════════════════════════════════════════════════════════════

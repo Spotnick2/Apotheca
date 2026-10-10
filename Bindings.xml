@@ -1,0 +1,23 @@
+<Bindings>
+	<!-- The profession bar (#42): one binding per action, clicking its button
+	     (ApothecaUtility.lua). category, not header: a header without a category
+	     lands in Other as a raw HEADER_ row (measured, PORTING-TBC-TO-FOREVER.md).
+	     The labels are BINDING_NAME_* globals set in ApothecaUtility.lua. -->
+	<Binding name="CLICK ApothecaUtil_hearthstone:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_cooking:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_firstaid:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_fishing:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_baittackle:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_alchemy:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_blacksmithing:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_enchanting:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_engineering:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_leatherworking:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_tailoring:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_smelting:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_poisons:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_disenchant:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_findherbs:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_findminerals:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_picklock:LeftButton" category="Apotheca"/>
+</Bindings>
