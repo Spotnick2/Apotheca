@@ -326,6 +326,8 @@ function time() return math.floor(WoW.time) end
 function GetTime() return WoW.time end
 function InCombatLockdown() return WoW.inCombat end
 function IsAltKeyDown() return WoW.altDown end
+function IsControlKeyDown() return WoW.ctrlDown == true end
+function IsShiftKeyDown() return WoW.shiftDown == true end
 function GetBuildInfo() return "1.60.1", WoW.build, "Sep 22 2026", 16001 end
 function GetRealmName() return "ClassicBetaPvE" end
 function UnitName() return "Testcase Surname", nil end
@@ -450,7 +452,14 @@ end
 -- guide), so professions are read from known spells. WoW.knownSpells:
 -- [spellID] = true for the player's spellbook.
 WoW.knownSpells = {}
-function GetProfessions() return nil, nil, nil, nil, nil, nil, nil end
+-- On 70334 it answers skill line indices for a character with
+-- professions: WoW.professions = { 7, 8, 5, 9, 6 }.
+WoW.professions = {}
+function GetProfessions()
+    local p = WoW.professions
+    return p[1], p[2], p[3], p[4], p[5], p[6], p[7]
+end
+function GetProfessionInfo() return nil end
 function C_Spell.GetSpellSubtext() return nil end
 function C_Spell.GetSpellCooldown()
     return { startTime = 0, duration = 0, isEnabled = true, modRate = 1 }

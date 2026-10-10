@@ -1211,19 +1211,32 @@ function Apotheca.RunProfProbe(label)
         try(entry.key .. " rank in use", function() return KnownRank(entry) or "none known" end)
     end
 
+    -- GetProfessions answers on 70334 (nil x7 on 70009): skill line
+    -- indices past the visible ones. GetProfessionInfo for each.
+    local okP, profs = pcall(function() return { GetProfessions() } end)
+    for i = 1, 7 do
+        local idx = okP and profs[i]
+        if idx then
+            try("GetProfessionInfo(" .. tostring(plain(idx)) .. ")", function() return GetProfessionInfo(idx) end)
+        end
+    end
+
     -- The whole player spellbook, line by line: spells the catalog misses.
+    -- Profession lines sit past GetNumSpellBookSkillLines (lines 5-9 on
+    -- 70334), so walk on until a line answers nothing.
     try("spellbook lines", function() return C_SpellBook.GetNumSpellBookSkillLines() end)
-    local okN, nLines = pcall(C_SpellBook.GetNumSpellBookSkillLines)
-    for line = 1, (okN and tonumber(nLines) or 0) do
+    for line = 1, 20 do
         local okL, info = pcall(C_SpellBook.GetSpellBookSkillLineInfo, line)
+        if not (okL and type(info) == "table") then
+            try("line " .. line, function() return okL and describe(info) or ("ERROR: " .. tostring(info)) end)
+            break
+        end
         try("line " .. line, function() return fields(info) end)
-        if okL and type(info) == "table" then
-            local first = (info.itemIndexOffset or 0) + 1
-            for slot = first, first + (info.numSpellBookItems or 0) - 1 do
-                try("line " .. line .. " slot " .. slot, function()
-                    return fields(C_SpellBook.GetSpellBookItemInfo(slot, bank))
-                end)
-            end
+        local first = (info.itemIndexOffset or 0) + 1
+        for slot = first, first + (info.numSpellBookItems or 0) - 1 do
+            try("line " .. line .. " slot " .. slot, function()
+                return fields(C_SpellBook.GetSpellBookItemInfo(slot, bank))
+            end)
         end
     end
 
@@ -1335,10 +1348,50 @@ local function FinishProfAttempt(reason)
     for _, e in ipairs(att.events) do
         evs[#evs + 1] = e[2] .. (e[2] == "UI_ERROR_MESSAGE" and (":" .. e[4]) or "")
     end
+    if att.via == "mouse" and not (keyWatch and keyWatch.pressed) then
+        print(PREFIX .. "reminder: press the CTRL-SHIFT keys too, with the cursor off the panel")
+    end
     print(PREFIX .. "#" .. att.n .. " " .. att.key .. " by " .. att.via
           .. (att.combat and " in combat" or "") .. (att.hidden and " (hidden)" or "")
           .. " (keydown " .. tostring(att.keyDown) .. "): "
           .. att.verdict .. " [" .. (#evs > 0 and table.concat(evs, ", ") or "no events") .. "]")
+end
+
+-- A CTRL-SHIFT key press, seen by a frame that passes every key on. If
+-- its button's PreClick doesn't follow within a second, the binding never
+-- reached the button: recorded as SILENT.
+local keyWatch
+local function WatchKeys(byKey)
+    if not keyWatch then
+        keyWatch = CreateFrame("Frame", nil, UIParent)
+        keyWatch:EnableKeyboard(true)
+        keyWatch:SetPropagateKeyboardInput(true)
+        keyWatch:SetScript("OnKeyDown", function(self, key)
+            if not (IsControlKeyDown() and IsShiftKeyDown()) then return end
+            local target = self.byKey and self.byKey[key]
+            if not target then return end
+            self.pressed = true
+            self.pending = { key = target, bind = "CTRL-SHIFT-" .. key, t = GetTime(),
+                             combat = InCombatLockdown() and true or false, n = profCount }
+        end)
+        keyWatch:SetScript("OnUpdate", function(self)
+            local p = self.pending
+            if not p or GetTime() - p.t < 1 then return end
+            self.pending = nil
+            -- A press that reached its button started an attempt.
+            if profCount ~= p.n then return end
+            local db = ProbeDB()
+            db.profTests = db.profTests or {}
+            db.profTests[#db.profTests + 1] = { key = p.key, via = "key", combat = p.combat,
+                keyDown = C_CVar and C_CVar.GetCVar("ActionButtonUseKeyDown"),
+                hidden = not (profFrame and profFrame:IsShown()), events = {},
+                verdict = "SILENT: " .. p.bind .. " never reached the button",
+                build = select(2, GetBuildInfo()) }
+            print(PREFIX .. p.key .. " by key (" .. p.bind .. "): SILENT, the button never got the press")
+        end)
+    end
+    keyWatch.byKey = byKey
+    keyWatch:Show()
 end
 
 local function ProfButton(parent, i, key, kind, value)
@@ -1356,7 +1409,7 @@ local function ProfButton(parent, i, key, kind, value)
     b:SetAttribute("type", kind)
     b:SetAttribute(kind, kind == "item" and ("item:" .. value) or value)
     if bind then SetOverrideBindingClick(parent, true, bind, b:GetName(), "LeftButton") end
-    b.key, b.bind = key, bind
+    b.key, b.bind, b.keyName = key, bind, PROF_KEYS[i]
     -- Observation only. Both edges are registered; the secure handler acts
     -- on one (down when ActionButtonUseKeyDown is 1), so only that edge
     -- starts an attempt. A second acting edge from one press shows as a
@@ -1393,6 +1446,7 @@ function Apotheca.RunProfTest(arg)
     end
     if arg == "close" then
         if profFrame then ClearOverrideBindings(profFrame) ; profFrame:Hide() end
+        if keyWatch then keyWatch:Hide() end
         FinishProfAttempt("closed")
         return
     end
@@ -1401,6 +1455,7 @@ function Apotheca.RunProfTest(arg)
     if arg == "show" then
         if profFrame then
             profFrame:Show()
+            if keyWatch then keyWatch:Show() end
             -- Close cleared the bindings: show binds them again.
             for _, b in pairs(profFrame.buttons) do
                 if b.bind then SetOverrideBindingClick(profFrame, true, b.bind, b:GetName(), "LeftButton") end
@@ -1437,6 +1492,11 @@ function Apotheca.RunProfTest(arg)
     f.buttons.hearthstone = ProfButton(f, i, "hearthstone", "item", HEARTHSTONE)
     f:SetSize(370, 40 + math.ceil(i / 2) * 26)
     Apotheca._profTestFrame = f
+    local byKey = {}
+    for k, b in pairs(f.buttons) do
+        if b.keyName then byKey[b.keyName] = k end
+    end
+    WatchKeys(byKey)
 
     if not profEvents then
         profEvents = CreateFrame("Frame")

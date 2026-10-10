@@ -26,6 +26,8 @@ H.eq(has(log, "firstaid rank in use"), "firstaid rank in use = 3274", "two ranks
 H.eq(has(log, "alchemy rank in use"), "alchemy rank in use = none known", "an unknown profession: none")
 H.check(has(log, "firstaid 3274 known = C_SpellBook.IsSpellKnown=true"), "each API's answer per candidate")
 H.check(has(log, "line 1 slot 1"), "the spellbook is walked")
+H.eq(has(log, "line 2"), "line 2 = nil", "walked until a line answers nothing")
+H.eq(has(log, "GetProfessionInfo"), nil, "no professions listed: no GetProfessionInfo")
 H.check(ApothecaProbeDB.profLoad and ApothecaProbeDB.profLoad.PLAYER_LOGIN, "the catalog known at login is recorded")
 H.check(ApothecaProbeDB.profLoad.PLAYER_LOGIN:find("enchanting:7411"), "with each known family's rank")
 
@@ -88,6 +90,31 @@ H.eq(r.verdict, "cursor (1 cast)", "Disenchant: a targeting cursor")
 
 r = press(f.buttons.cooking, { { "ADDON_ACTION_BLOCKED", "Apotheca", "CastSpellByID" } })
 H.eq(r.verdict, "BLOCKED (0 casts)", "a blocked action is called out")
+
+-- A CTRL-SHIFT press the button never receives is recorded as SILENT.
+local watcher
+for _, fr in ipairs(WoW.frames) do
+    if fr:GetScript("OnKeyDown") then watcher = fr end
+end
+if watcher then
+    WoW.ctrlDown, WoW.shiftDown = true, true
+    local before = #ApothecaProbeDB.profTests
+    watcher:GetScript("OnKeyDown")(watcher, "1")
+    WoW.messages = {}
+    WoW.tick(2)
+    local s = ApothecaProbeDB.profTests[#ApothecaProbeDB.profTests]
+    H.eq(#ApothecaProbeDB.profTests, before + 1, "a key that reached nothing is recorded")
+    H.check(s.verdict:find("^SILENT: CTRL%-SHIFT%-1"), "as SILENT, with its key")
+    -- A press that reaches its button is an attempt, not SILENT.
+    before = #ApothecaProbeDB.profTests
+    watcher:GetScript("OnKeyDown")(watcher, "1")
+    r = press(f.buttons.firstaid)
+    H.eq(#ApothecaProbeDB.profTests, before + 1, "a key that reached its button: one attempt only")
+    H.check(not r.verdict:find("SILENT"), "and not SILENT")
+    WoW.ctrlDown, WoW.shiftDown = false, false
+else
+    H.check(false, "the key watcher frame exists")
+end
 
 -- Hidden, the bindings stay and the attempt says it was hidden.
 slash("proftest hide")
