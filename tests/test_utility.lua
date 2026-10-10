@@ -300,6 +300,22 @@ WoW.tick(0.1)
 H.check(noteSaying("can't be read here"), "an unreadable bar: the note says so")
 H.check(utilitySlider("Icon Size"):IsEnabled(), "and the slider is enabled again")
 WoW.actionBarThrow = false
+-- The matched bar as big as the bar's own settings (Codex on #45): losing
+-- and regaining it still refreshes the tab.
+local pct = g.iconSize / 45 * 100
+WoW.actionBar = { [0] = 0, [1] = 1, [2] = 12, [3] = pct, [4] = g.iconPadding / (pct / 100) }
+WoW.fire("SPELLS_CHANGED")
+WoW.tick(0.1)
+H.check(not utilitySlider("Icon Size"):IsEnabled(), "matching at the own size: greyed")
+WoW.actionBarThrow = true
+WoW.fire("SPELLS_CHANGED")
+WoW.tick(0.1)
+H.check(noteSaying("can't be read here"), "losing it at the same size: the note says so")
+H.check(utilitySlider("Icon Size"):IsEnabled(), "and the slider is enabled")
+WoW.actionBarThrow = false
+WoW.fire("SPELLS_CHANGED")
+WoW.tick(0.1)
+H.check(not utilitySlider("Icon Size"):IsEnabled(), "regained at the same size: greyed again")
 g.matchBar = 0
 U.Reconcile()
 

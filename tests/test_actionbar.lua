@@ -139,6 +139,22 @@ H.check(noteSaying("Following Action Bar 1: 45.0 px"), "and the note follows it"
 WoW.tick(3)
 H.check(noteSaying("Following Action Bar 1: 45.0 px"), "still right after the poll")
 H.check(sliderLabelled("Rows"):IsEnabled(), "rows stay the bar's own setting")
+-- The matched bar the same size as the bar's own settings (Codex on #45):
+-- losing it, and getting it back, still refreshes the note and sliders.
+local pct = db.iconSize / 45 * 100
+WoW.actionBar = { [0] = 0, [1] = 1, [2] = 12, [3] = pct, [4] = db.iconPadding / (pct / 100) }
+WoW.fire("BAG_UPDATE_DELAYED")
+WoW.tick(0.5)
+H.check(not size:IsEnabled(), "matching a bar as big as the own settings: greyed")
+WoW.actionBarThrow = true
+WoW.fire("BAG_UPDATE_DELAYED")
+WoW.tick(0.5)
+H.check(noteSaying("can't be read here"), "losing it at the same size: the note says so")
+H.check(size:IsEnabled(), "and the sliders are enabled")
+WoW.actionBarThrow = false
+WoW.fire("BAG_UPDATE_DELAYED")
+WoW.tick(0.5)
+H.check(not size:IsEnabled(), "getting it back at the same size: greyed again")
 WoW.actionBarThrow = true
 Apotheca.RefreshOptions()
 H.check(size:IsEnabled(), "enabled again when Action Bar 1 can't be read")

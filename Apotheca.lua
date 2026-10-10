@@ -2106,10 +2106,13 @@ function Apotheca.LayoutSettings(src)
     return layout, false
 end
 
--- What the layout was built from, to notice the matched action bar changing.
-local function LayoutSignature(l)
-    return string.format("%s/%s/%.2f/%.2f", tostring(l.orientation), tostring(l.rows),
-        l.iconSize or 0, l.iconPadding or 0)
+-- What the layout was built from, to notice the matched action bar changing:
+-- LayoutSettings' two returns. Whether matching worked is part of it, so
+-- losing or regaining the bar refreshes the options even when its size
+-- equals the bar's own settings (Codex on #45).
+local function LayoutSignature(l, matched)
+    return string.format("%s/%s/%.2f/%.2f/%s", tostring(l.orientation), tostring(l.rows),
+        l.iconSize or 0, l.iconPadding or 0, matched and "m" or "-")
 end
 Apotheca.LayoutSignature = LayoutSignature
 
@@ -2160,8 +2163,8 @@ function Apotheca.GridLayout(frame, buttons, layout)
 end
 
 local function ApplyLayout(active)
-    local layout = Apotheca.LayoutSettings()
-    local sig = LayoutSignature(layout)
+    local layout, matched = Apotheca.LayoutSettings()
+    local sig = LayoutSignature(layout, matched)
     if sig ~= Apotheca._layoutSig then
         Apotheca._layoutSig = sig
         -- Whichever update applies a new layout (poll, bags, a setting), the
@@ -3458,7 +3461,7 @@ eventFrame:SetScript("OnUpdate", function(self, elapsed)
             -- slider moves, and the bar follows it live, so poll it. A
             -- hidden bar lays nothing out: showing it runs a full update.
             if (tonumber(DB().matchBar) or 0) > 0 and ApothecaFrame:IsShown()
-                and LayoutSignature((Apotheca.LayoutSettings())) ~= Apotheca._layoutSig then
+                and LayoutSignature(Apotheca.LayoutSettings()) ~= Apotheca._layoutSig then
                 RequestUpdate()
             end
             -- A stronger item skipped for its cooldown (mana gem) is ready:
