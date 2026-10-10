@@ -179,6 +179,8 @@ function Frame:GetStringWidth() return 50 end
 function Frame:GetStringHeight() return 12 end
 function Frame:GetText() return self._text end
 function Frame:SetText(t) self._text = t end
+function Frame:SetTextColor(r, g, b) self._color = { r, g, b } end
+function Frame:GetTextColor() local c = self._color or { 1, 1, 1 } return c[1], c[2], c[3] end
 function Frame:GetID() return 1 end
 function Frame:GetObjectType() return self._kind end
 function Frame:Enable() self._enabled = true end
@@ -208,7 +210,12 @@ local function childRegion(self, kind)
     return NewRegion(kind, self)
 end
 function Frame:CreateTexture() return childRegion(self, "Texture") end
-function Frame:CreateFontString() return childRegion(self, "FontString") end
+WoW.fontStrings = {}
+function Frame:CreateFontString()
+    local fs = childRegion(self, "FontString")
+    WoW.fontStrings[#WoW.fontStrings + 1] = fs
+    return fs
+end
 function Frame:CreateAnimationGroup() return childRegion(self, "AnimationGroup") end
 function Frame:CreateAnimation(t) return childRegion(self, t or "Animation") end
 
@@ -264,6 +271,10 @@ for i, names in ipairs(BARS) do
     _G[names[1]] = bar
     local button = NewRegion("CheckButton", bar, names[2])
     button._w, button._h = 45, 45
+    function button:GetEffectiveScale()   -- the icon size scales the button (measured)
+        local t = (i == 1 and WoW.actionBar) or WoW.actionBars[i] or WoW.actionBar
+        return (t[3] or 100) / 100
+    end
     _G[names[2]] = button
 end
 GameTooltip = NewRegion("GameTooltip", UIParent, "GameTooltip")
