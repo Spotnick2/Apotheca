@@ -241,14 +241,26 @@ Geometry in UIParent units (`ActionButton1` stays 45 x 45; the icon size is its 
 - **All eight action bars carry Retail's names** (`/apo bar bars`, build 70291, every bar shown at 90%, padding 2): `MainActionBar`, `MultiBarBottomLeft`, `MultiBarBottomRight`, `MultiBarRight`, `MultiBarLeft`, `MultiBar5`, `MultiBar6`, `MultiBar7`, each with `<bar>Button1` 45 wide, and each `GetSettingValue` read plain values. `API.ActionBarLayout(n)` gave 40.5 / 1.8 for every one, the same as bar 1's measured geometry.
 - **The button frame** is the `UI-HUD-ActionBar-IconFrame` atlas (`-AddRow` with Hide Bar Art), on file 7948326, with an `IconMask`.
 
+## Professions (#42), 2026-10-10, build 70334
+
+`/apo prof <label>` and `/apo proftest` (dev probe) on a level-18 Gnome warlock (Tailoring, Enchanting, First Aid, Cooking, Fishing), a level-16 hunter (Leatherworking, Skinning, First Aid, Cooking, Fishing) and a level-1 rogue with no profession.
+
+- **`GetProfessions()` answers on 70334:** `7, 8, 5, 9, 6, nil, nil` for the warlock (Tailoring, Enchanting, First Aid, Fishing, Cooking), nil x7 for the rogue. On 70009 it returned nil x7 for everyone (porting guide). Each index is a spellbook skill line; `GetProfessionInfo(i)` returns Retail's tuple, e.g. `Enchanting, 136244, 75, 75, 2, 38, 333, 0, -1, 0, Enchanting` (name, icon, rank, max rank, number of spells, spell offset, skill line ID, ...).
+- **The profession lines sit past `GetNumSpellBookSkillLines()`** (4 for the warlock: General and the three trees): lines 5 to 9 are First Aid, Cooking, Tailoring, Enchanting, Fishing, each a `GetSpellBookSkillLineInfo` like any other, with its spells in the Player bank.
+- **What the lines hold:** each profession's opener (`Enchanting` 7411 "Apprentice", `Tailoring` 3909 "Journeyman"); Enchanting also has `Disenchant` 13262; Fishing has `Fishing` 7620 and **`Bait and Tackle` 1278067** (new in Forever). Skinning's line holds `Skinning` 8617 (a passive-style rank spell, not passive by the API).
+- **Only the current rank is known:** Tailoring Journeyman 3909 is known and Apprentice 3908 is not; Skinning 8617 and not 8613. `C_SpellBook.IsSpellKnown`, `IsSpellKnown`, `IsPlayerSpell` and `C_SpellBook.IsSpellInSpellBook` agree on every candidate. So a family's spell is "the one candidate known".
+- **Known at login:** the whole catalog answers at `PLAYER_LOGIN` and again at `PLAYER_ENTERING_WORLD`. `SKILL_LINES_CHANGED` fires on login and on skill changes (no learn or unlearn was measured).
+- **Spell cooldowns:** out of combat `C_Spell.GetSpellCooldown` returns plain values; in combat `startTime`, `duration` and `modRate` are secret (`isActive`, `isEnabled` stay plain). Hearthstone: `C_Container.GetItemCooldown(6948)` reads `0, 0, 1`; its item spell is 8690.
+- **Secure buttons (`/apo proftest`):** `type=spell`, `spell=<ID>`, both edges registered; the Hearthstone `type=item`, `item=item:6948`. By left click and by `CTRL-SHIFT-n` override CLICK binding (`SetOverrideBindingClick`), `ActionButtonUseKeyDown` 1:
+  - Enchanting, Tailoring, Cooking, First Aid, Leatherworking: `TRADE_SKILL_SHOW` and `UNIT_SPELLCAST_SUCCEEDED` (no `SENT`). A second press closes the window (`TRADE_SKILL_CLOSE`). One press, one action.
+  - Disenchant: the item cursor. Using another item while it is up targets that item ("That item is not a valid target."): normal client behaviour.
+  - Fishing: "Must have a Fishing Pole equipped" without a pole.
+  - Hearthstone: casts (8690), by key **in combat** too, from a **hidden** button.
+  - **Every key press reached its button** (none SILENT), **a binding acts on a hidden button**, and nothing was blocked.
+
 ## Still to measure
 
-- **Professions (#42), the gate for the profession bar.** `GetProfessions()` returns nil x7, so the bar will detect professions from spell IDs. The draft catalog (`PROF_CATALOG` in the probe) holds the Vanilla IDs, highest rank first. Run, out of combat unless noted:
-  1. `/apo prof <label>` on characters with each profession (an enchanter, a miner/herbalist, a rogue, one with no primary profession), and once **in combat** (spell and Hearthstone cooldowns: secret?). It records, per candidate: name and rank text, `C_SpellBook.IsSpellKnown` / `IsSpellKnown` / `IsPlayerSpell` / `IsSpellInSpellBook`, the spellbook slot and its item info. Then every spellbook line and slot (spells the catalog misses) and every skill row as returned (collapsed headers kept), kept as `profProbe[<label>]`.
-  2. **Train a rank** (First Aid, Fishing or Mining Apprentice to Journeyman), then `/apo prof <label>` again: does the old rank stay known, and which ID is in use? Learning and unlearning are logged all the time in `profEvents` (event, arguments, the catalog known after it), and the catalog known at `PLAYER_LOGIN` and `PLAYER_ENTERING_WORLD` in `profLoad`.
-  3. `/apo proftest`: one secure button per known family (its rank in use) plus the Hearthstone, each bound to `CTRL-SHIFT-1`, `-2`, ... For each, click it, and press its key **with the cursor off the frame**. Do this on both `ActionButtonUseKeyDown` settings, and in combat. The verdict line says what happened: `window`, `cursor`, `channel`, `tracking`, `succeeded`, `error`, `BLOCKED`, and the number of casts. A press should be one cast. `/apo proftest hide`, then a key: does a CLICK binding act on a hidden button? `/apo proftest close` clears the bindings.
-
-  Exit the game to write `SavedVariables/ApothecaProbe.lua` (`profProbe`, `profEvents`, `profLoad`, `profTests`).
+- **Professions (#42), still open:** the profession keys with `ActionButtonUseKeyDown` 0 (only 1 was measured; mouse clicks are measured on both). Characters with Mining, Herbalism, Alchemy, Blacksmithing, Engineering, Leatherworking at a higher rank, and a level-16 rogue (Pick Lock): `/apo prof <label>` and `/apo proftest`.
 
 - **Poisons and the off hand (#24).** The main hand is measured with an oil (above). `/apo applytest <itemID>` shows four buttons:
   - method A (`type=item` + `target-slot`) for each hand;
