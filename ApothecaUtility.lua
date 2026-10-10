@@ -31,7 +31,9 @@ local HEARTHSTONE = 6948
 -- The actions, in their default order. `spells`: candidate IDs, highest
 -- rank first (only one is known at a time). Measured on 70334: hearthstone,
 -- cooking, firstaid, fishing, baittackle (seen), enchanting, tailoring,
--- leatherworking, disenchant. The rest are Vanilla's IDs, not measured yet.
+-- leatherworking, skinning, disenchant. The rest are Vanilla's IDs, not
+-- measured yet. On Forever every gathering profession opens a window too
+-- (Camping equipment recipes, #52): Skinning, Mining and Herbalism.
 local ACTIONS = {
     { key = "hearthstone",    label = "Hearthstone",     item = HEARTHSTONE },
     { key = "cooking",        label = "Cooking",         spells = { 18260, 3413, 3102, 2550 } },
@@ -44,6 +46,9 @@ local ACTIONS = {
     { key = "engineering",    label = "Engineering",     spells = { 12656, 4038, 4037, 4036 } },
     { key = "leatherworking", label = "Leatherworking",  spells = { 10662, 3811, 3104, 2108 } },
     { key = "tailoring",      label = "Tailoring",       spells = { 12180, 3910, 3909, 3908 } },
+    { key = "skinning",       label = "Skinning",        spells = { 10768, 8618, 8617, 8613 } },
+    { key = "mining",         label = "Mining",          spells = { 10248, 3564, 2576, 2575 } },
+    { key = "herbalism",      label = "Herbalism",       spells = { 11993, 3570, 2368, 2366 } },
     { key = "smelting",       label = "Smelting",        spells = { 2656 } },
     { key = "poisons",        label = "Poisons",         spells = { 2842 } },
     { key = "disenchant",     label = "Disenchant",      spells = { 13262 } },

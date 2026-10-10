@@ -36,13 +36,13 @@ Buffs are recognised on every client language.
 
 An optional second bar (off by default: `/apo utility`, or the Profession Bar tab) that builds itself from the character's professions, so you don't set up the same action bar on every character:
 
-- Cooking, First Aid and Fishing, and your professions' windows (Alchemy, Blacksmithing, Enchanting, Engineering, Leatherworking, Tailoring, Smelting, Poisons).
+- Cooking, First Aid and Fishing, and your professions' windows (Alchemy, Blacksmithing, Enchanting, Engineering, Leatherworking, Tailoring, Skinning, Mining, Herbalism, Smelting, Poisons). On Forever the gathering professions have windows too (Camping equipment).
 - Their actions: Disenchant, Find Herbs, Find Minerals, Pick Lock, Bait and Tackle.
 - Your Hearthstone.
 
 Each action has its own key binding (Options > Keybindings > Apotheca). The key follows the action, so Disenchant on F9 is Disenchant on every character, wherever its button is. Tick what the bar may show and set the order in the options; it has its own position, layout and lock, and can match one of your action bars like the main bar.
 
-Measured in game so far: Cooking, First Aid, Fishing, Enchanting, Tailoring, Leatherworking, Disenchant and the Hearthstone. The others use the spell IDs from Vanilla and haven't been tried on Forever yet; please report one that doesn't show or doesn't work.
+Measured in game so far: Cooking, First Aid, Fishing, Enchanting, Tailoring, Leatherworking, Skinning, Disenchant and the Hearthstone. The others use the spell IDs from Vanilla and haven't been tried on Forever yet; please report one that doesn't show or doesn't work.
 
 ## Also
 
