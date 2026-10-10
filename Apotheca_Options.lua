@@ -342,33 +342,50 @@ function Apotheca.BuildOptionsPanelContent(panel)
 
     -- Drag and drop for a reorderable list (#54). A row lifted with the left
     -- button follows the cursor, a gold line marks where it will land, and
-    -- dropping it calls onMove(from, to); relayout puts it back otherwise.
+    -- dropping it moves the row in getRows(), then calls relayout and save.
+    -- Dropped away from the list, or the panel closed, it goes back.
     -- Options rows are plain frames (no combat rules). A click without
-    -- movement (a tick box, an arrow) is not a drag, so they keep working.
-    local function EnableRowDrag(container, row, getRows, rowStep, onMove, relayout)
+    -- movement (a tick box, an arrow) is not a drag, so they keep working;
+    -- `handles` are child buttons covering the row (a tick box's label) that
+    -- start the row's drag too.
+    local function EnableRowDrag(container, row, getRows, rowStep, relayout, save, handles)
         local f = row.frame
         f:EnableMouse(true)
         f:RegisterForDrag("LeftButton")
+        -- The line is its own frame, raised over the rows and the lifted
+        -- row: a texture on the container would draw under its children.
         local line = container._dropLine
         if not line then
-            line = container:CreateTexture(nil, "OVERLAY")
-            line:SetColorTexture(1, 0.82, 0, 0.9)
+            line = CreateFrame("Frame", nil, container)
             line:SetHeight(2)
+            local tex = line:CreateTexture(nil, "OVERLAY")
+            tex:SetAllPoints()
+            tex:SetColorTexture(1, 0.82, 0, 0.9)
             line:Hide()
             container._dropLine = line
         end
-        -- The cursor below the container's top, in its own units: the
-        -- cursor position is in screen pixels, so divide by its scale.
-        local function CursorDown()
-            local _, y = GetCursorPosition()
-            local top = container:GetTop()
-            if not (y and top) then return nil end
-            return top - y / container:GetEffectiveScale()
+        local function IndexOf()
+            for i, r in ipairs(getRows()) do
+                if r == row then return i end
+            end
         end
-        local function Target()
-            local dy = CursorDown()
-            if not dy then return nil end
-            return math.max(1, math.min(#getRows(), math.floor(dy / rowStep) + 1))
+        -- The cursor in the container's units (the cursor position is in
+        -- screen pixels, so divide by its scale): how far below its top,
+        -- and whether it is level with the list.
+        local function Cursor()
+            local x, y = GetCursorPosition()
+            local top, left, width = container:GetTop(), container:GetLeft(), container:GetWidth()
+            if not (x and y and top and left and width) then return nil end
+            local scale = container:GetEffectiveScale()
+            x, y = x / scale, y / scale
+            return top - y, x >= left and x <= left + width
+        end
+        -- The slot under the cursor, or nil away from the list (a row's
+        -- height of slack above and below it).
+        local function Target(dy, inside)
+            local n = #getRows()
+            if not (dy and inside) or dy < -rowStep or dy > (n + 1) * rowStep then return nil end
+            return math.max(1, math.min(n, math.floor(dy / rowStep) + 1))
         end
         -- Near the scroll frame's top or bottom edge, scroll the list.
         local function AutoScroll(elapsed)
@@ -392,44 +409,69 @@ function Apotheca.BuildOptionsPanelContent(panel)
             f:SetAlpha(1)
             if f._level then f:SetFrameLevel(f._level) end
             line:Hide()
-            local from, to = f._dragFrom, drop and Target()
-            f._dragFrom = nil
-            if from and to and to ~= from then onMove(from, to) else relayout() end
-        end
-        f:SetScript("OnDragStart", function(self)
-            for i, r in ipairs(getRows()) do
-                if r == row then self._dragFrom = i end
+            f._dragging = nil
+            -- Found again now: a refresh during the drag may have rebuilt
+            -- the list, so an index taken at the start could be another row.
+            local from, to = IndexOf(), nil
+            if drop then to = Target(Cursor()) end
+            if from and to and to ~= from then
+                local rows = getRows()
+                table.insert(rows, to, table.remove(rows, from))
+                relayout()
+                save()
+            else
+                relayout()
             end
-            if not self._dragFrom then return end
-            self:SetAlpha(0.6)
-            self._level = self:GetFrameLevel()
-            self:SetFrameLevel(self._level + 20)
+        end
+        local function StartDrag()
+            local from = IndexOf()
+            if not from then return end
+            f._dragging = true
+            f:SetAlpha(0.6)
+            f._level = f:GetFrameLevel()
+            f:SetFrameLevel((f._level or 0) + 20)
+            line:SetFrameLevel((f._level or 0) + 30)
             line:SetWidth(container:GetWidth())
-            self:SetScript("OnUpdate", function(_, elapsed)
-                AutoScroll(elapsed)
-                local dy = CursorDown()
+            local startDy, armed, shownAt = Cursor(), false, nil
+            f:SetScript("OnUpdate", function(_, elapsed)
+                local dy, inside = Cursor()
+                -- Scroll only once the cursor has left where it was
+                -- pressed: a row lifted next to an edge mustn't run away.
+                if not armed and dy and startDy and math.abs(dy - startDy) >= rowStep / 2 then armed = true end
+                if armed then AutoScroll(elapsed) end
                 if dy then
-                    self:ClearAllPoints()
-                    self:SetPoint("TOPLEFT", container, "TOPLEFT", 0, -(dy - rowStep / 2))
+                    f:ClearAllPoints()
+                    f:SetPoint("TOPLEFT", container, "TOPLEFT", 0, -(dy - rowStep / 2))
                 end
-                local to = Target()
-                if to and to ~= self._dragFrom then
-                    -- Below the target row when moving down, above it when up.
-                    local y = (to > self._dragFrom) and to * rowStep or (to - 1) * rowStep
-                    line:ClearAllPoints()
-                    line:SetPoint("TOPLEFT", container, "TOPLEFT", 0, -y + 1)
-                    line:Show()
-                else
-                    line:Hide()
+                local cur, to = IndexOf(), Target(dy, inside)
+                if not (cur and to and to ~= cur) then to = nil end
+                if to ~= shownAt then
+                    shownAt = to
+                    if to then
+                        -- Below the target row when moving down, above it when up.
+                        local y = (to > cur) and to * rowStep or (to - 1) * rowStep
+                        line:ClearAllPoints()
+                        line:SetPoint("TOPLEFT", container, "TOPLEFT", 0, -y + 1)
+                        line:Show()
+                    else
+                        line:Hide()
+                    end
                 end
             end)
-        end)
-        f:SetScript("OnDragStop", function(self)
-            if self._dragFrom then Finish(true) end
-        end)
+        end
+        local function StopDrag()
+            if f._dragging then Finish(true) end
+        end
+        f:SetScript("OnDragStart", StartDrag)
+        f:SetScript("OnDragStop", StopDrag)
+        for _, h in ipairs(handles or {}) do
+            h:RegisterForDrag("LeftButton")
+            h:SetScript("OnDragStart", StartDrag)
+            h:SetScript("OnDragStop", StopDrag)
+        end
         -- The panel closed mid-drag: put the row back.
-        f:SetScript("OnHide", function(self)
-            if self._dragFrom then Finish(false) end
+        f:SetScript("OnHide", function()
+            if f._dragging then Finish(false) end
         end)
     end
 
@@ -904,12 +946,10 @@ function Apotheca.BuildOptionsPanelContent(panel)
         down:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Highlight")
         down:SetScript("OnClick", function() UMove(key, 1) end)
         local row = { frame = f, key = key, bg = bg, cb = cb }
+        -- The tick box's label is part of the box (its hit area covers the
+        -- text), so a press there must drag the row too.
         EnableRowDrag(uContainer, row, function() return uRows end, U_ROW_H + 2,
-            function(from, to)
-                table.insert(uRows, to, table.remove(uRows, from))
-                URelayout()
-                USaveOrder()
-            end, URelayout)
+            URelayout, USaveOrder, { cb })
         return row
     end
     -- One row per action, made once: a refresh only reorders and re-ticks
@@ -1054,11 +1094,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
         end)
         local row = { frame = f, key = key, indexText = idx, label = lbl, bg = bg }
         EnableRowDrag(orderContainer, row, function() return orderRows end, ROW_HEIGHT + 2,
-            function(from, to)
-                table.insert(orderRows, to, table.remove(orderRows, from))
-                RepositionOrderRows()
-                SaveOrder()
-            end, RepositionOrderRows)
+            RepositionOrderRows, SaveOrder)
         return row
     end
 
@@ -1066,13 +1102,19 @@ function Apotheca.BuildOptionsPanelContent(panel)
     -- freed): a refresh only reorders them and hides those not listed.
     local orderRowByKey = {}
     local function BuildOrderRows()
-        for _, row in ipairs(orderRows) do row.frame:Hide() end
         orderRows = {}
+        local listed = {}
         for _, key in ipairs(Apotheca.GetButtonOrder()) do
             local row = orderRowByKey[key] or MakeOrderRow(key)
             orderRowByKey[key] = row
             row.frame:Show()
             orderRows[#orderRows + 1] = row
+            listed[row] = true
+        end
+        -- Hide only rows no longer listed: hiding a listed row would end a
+        -- drag in progress (OnHide) when a refresh comes in.
+        for _, row in pairs(orderRowByKey) do
+            if not listed[row] then row.frame:Hide() end
         end
         RepositionOrderRows()
     end

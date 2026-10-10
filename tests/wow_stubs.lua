@@ -165,7 +165,7 @@ function Frame:GetSize() return self._w, self._h end
 -- _left = false: the frame has no position yet (GetLeft answers nil).
 function Frame:GetLeft() if self._left == false then return nil end return self._left or 600 end
 function Frame:GetBottom() if self._bottom == false then return nil end return self._bottom or 200 end
-function Frame:GetTop() return self._top or 500 end
+function Frame:GetTop() if self._top == false then return nil end return self._top or 500 end
 -- Scroll frames (the options tabs).
 function Frame:GetVerticalScroll() return self._vscroll or 0 end
 function Frame:GetVerticalScrollRange() return self._vrange or 0 end
