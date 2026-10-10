@@ -340,6 +340,99 @@ function Apotheca.BuildOptionsPanelContent(panel)
         if on then sl.valText:SetTextColor(1, 0.82, 0) else sl.valText:SetTextColor(0.5, 0.5, 0.5) end
     end
 
+    -- Drag and drop for a reorderable list (#54). A row lifted with the left
+    -- button follows the cursor, a gold line marks where it will land, and
+    -- dropping it calls onMove(from, to); relayout puts it back otherwise.
+    -- Options rows are plain frames (no combat rules). A click without
+    -- movement (a tick box, an arrow) is not a drag, so they keep working.
+    local function EnableRowDrag(container, row, getRows, rowStep, onMove, relayout)
+        local f = row.frame
+        f:EnableMouse(true)
+        f:RegisterForDrag("LeftButton")
+        local line = container._dropLine
+        if not line then
+            line = container:CreateTexture(nil, "OVERLAY")
+            line:SetColorTexture(1, 0.82, 0, 0.9)
+            line:SetHeight(2)
+            line:Hide()
+            container._dropLine = line
+        end
+        -- The cursor below the container's top, in its own units: the
+        -- cursor position is in screen pixels, so divide by its scale.
+        local function CursorDown()
+            local _, y = GetCursorPosition()
+            local top = container:GetTop()
+            if not (y and top) then return nil end
+            return top - y / container:GetEffectiveScale()
+        end
+        local function Target()
+            local dy = CursorDown()
+            if not dy then return nil end
+            return math.max(1, math.min(#getRows(), math.floor(dy / rowStep) + 1))
+        end
+        -- Near the scroll frame's top or bottom edge, scroll the list.
+        local function AutoScroll(elapsed)
+            local content = container:GetParent()
+            local sf = content and content:GetParent()
+            if not (sf and sf.GetVerticalScrollRange) then return end
+            local _, y = GetCursorPosition()
+            local top, bottom = sf:GetTop(), sf:GetBottom()
+            if not (y and top and bottom) then return end
+            y = y / sf:GetEffectiveScale()
+            local cur, range = sf:GetVerticalScroll() or 0, sf:GetVerticalScrollRange() or 0
+            local step = 300 * (elapsed or 0)
+            if y > top - 24 then
+                sf:SetVerticalScroll(math.max(0, cur - step))
+            elseif y < bottom + 24 then
+                sf:SetVerticalScroll(math.min(range, cur + step))
+            end
+        end
+        local function Finish(drop)
+            f:SetScript("OnUpdate", nil)
+            f:SetAlpha(1)
+            if f._level then f:SetFrameLevel(f._level) end
+            line:Hide()
+            local from, to = f._dragFrom, drop and Target()
+            f._dragFrom = nil
+            if from and to and to ~= from then onMove(from, to) else relayout() end
+        end
+        f:SetScript("OnDragStart", function(self)
+            for i, r in ipairs(getRows()) do
+                if r == row then self._dragFrom = i end
+            end
+            if not self._dragFrom then return end
+            self:SetAlpha(0.6)
+            self._level = self:GetFrameLevel()
+            self:SetFrameLevel(self._level + 20)
+            line:SetWidth(container:GetWidth())
+            self:SetScript("OnUpdate", function(_, elapsed)
+                AutoScroll(elapsed)
+                local dy = CursorDown()
+                if dy then
+                    self:ClearAllPoints()
+                    self:SetPoint("TOPLEFT", container, "TOPLEFT", 0, -(dy - rowStep / 2))
+                end
+                local to = Target()
+                if to and to ~= self._dragFrom then
+                    -- Below the target row when moving down, above it when up.
+                    local y = (to > self._dragFrom) and to * rowStep or (to - 1) * rowStep
+                    line:ClearAllPoints()
+                    line:SetPoint("TOPLEFT", container, "TOPLEFT", 0, -y + 1)
+                    line:Show()
+                else
+                    line:Hide()
+                end
+            end)
+        end)
+        f:SetScript("OnDragStop", function(self)
+            if self._dragFrom then Finish(true) end
+        end)
+        -- The panel closed mid-drag: put the row back.
+        f:SetScript("OnHide", function(self)
+            if self._dragFrom then Finish(false) end
+        end)
+    end
+
     local function Divider()
         Gap(6)
         local t = curContent:CreateTexture(nil, "BACKGROUND")
@@ -748,7 +841,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
 
     SectionHeader("Actions")
     SmallLabel("Tick what the bar may show; it shows only what this character has. "
-        .. "The arrows set the order.")
+        .. "Drag a row, or use the arrows, to set the order.")
     Gap(4)
     local U_ROW_H, U_ROW_W = 24, CONTENT_W - PAD * 2
     local uContainer = CreateFrame("Frame", nil, curContent)
@@ -760,6 +853,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
         for i, row in ipairs(uRows) do
             row.frame:ClearAllPoints()
             row.frame:SetPoint("TOPLEFT", uContainer, "TOPLEFT", 0, -(i - 1) * (U_ROW_H + 2))
+            row.bg:SetColorTexture(0.10, 0.10, 0.18, (i % 2 == 0) and 0.5 or 0.8)
         end
         uContainer:SetHeight(#uRows * (U_ROW_H + 2))
     end
@@ -809,7 +903,14 @@ function Apotheca.BuildOptionsPanelContent(panel)
         down:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
         down:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Highlight")
         down:SetScript("OnClick", function() UMove(key, 1) end)
-        return { frame = f, key = key, bg = bg, cb = cb }
+        local row = { frame = f, key = key, bg = bg, cb = cb }
+        EnableRowDrag(uContainer, row, function() return uRows end, U_ROW_H + 2,
+            function(from, to)
+                table.insert(uRows, to, table.remove(uRows, from))
+                URelayout()
+                USaveOrder()
+            end, URelayout)
+        return row
     end
     -- One row per action, made once: a refresh only reorders and re-ticks
     -- them (frames are never freed).
@@ -817,9 +918,8 @@ function Apotheca.BuildOptionsPanelContent(panel)
     for _, a in ipairs(U.ACTIONS) do uRowByKey[a.key] = UMakeRow(a.key) end
     local function UBuildRows()
         uRows = {}
-        for i, key in ipairs(U.Order()) do
+        for _, key in ipairs(U.Order()) do
             local row = uRowByKey[key]
-            row.bg:SetColorTexture(0.10, 0.10, 0.18, (i % 2 == 0) and 0.5 or 0.8)
             row.cb:SetChecked(U.IsShown(key))
             uRows[#uRows + 1] = row
         end
@@ -887,7 +987,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
     SetTarget(tabFrames["buttonorder"])
 
     SectionHeader("Button Order")
-    SmallLabel("Use the arrows to set the visual order of buttons on the bar.")
+    SmallLabel("Drag a row, or use the arrows, to set the order of the buttons on the bar.")
     Gap(6)
 
     local BUTTON_LABELS = {
@@ -913,6 +1013,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
             row.frame:ClearAllPoints()
             row.frame:SetPoint("TOPLEFT", orderContainer, "TOPLEFT", 0, -(i-1)*(ROW_HEIGHT+2))
             row.indexText:SetText(i .. ".")
+            row.bg:SetColorTexture(0.10, 0.10, 0.18, (i%2==0) and 0.5 or 0.8)
         end
         orderContainer:SetHeight(#orderRows * (ROW_HEIGHT + 2))
     end
@@ -928,14 +1029,13 @@ function Apotheca.BuildOptionsPanelContent(panel)
         RepositionOrderRows()
         SaveOrder()
     end
-    local function MakeOrderRow(i, key)
+    local function MakeOrderRow(key)
         local f = CreateFrame("Frame", nil, orderContainer)
         f:SetWidth(ROW_WIDTH); f:SetHeight(ROW_HEIGHT)
         local bg = f:CreateTexture(nil, "BACKGROUND")
-        bg:SetAllPoints(); bg:SetColorTexture(0.10, 0.10, 0.18, (i%2==0) and 0.5 or 0.8)
+        bg:SetAllPoints()
         local idx = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         idx:SetPoint("LEFT", f, "LEFT", 6, 0); idx:SetWidth(20); idx:SetJustifyH("RIGHT")
-        idx:SetText(i .. ".")
         local lbl = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         lbl:SetPoint("LEFT", f, "LEFT", 30, 0); lbl:SetText(BUTTON_LABELS[key] or key)
         local up = CreateFrame("Button", nil, f)
@@ -952,33 +1052,44 @@ function Apotheca.BuildOptionsPanelContent(panel)
         down:SetScript("OnClick", function()
             for j, row in ipairs(orderRows) do if row.key == key then SwapRows(j, j+1); return end end
         end)
-        return { frame = f, key = key, indexText = idx, label = lbl }
+        local row = { frame = f, key = key, indexText = idx, label = lbl, bg = bg }
+        EnableRowDrag(orderContainer, row, function() return orderRows end, ROW_HEIGHT + 2,
+            function(from, to)
+                table.insert(orderRows, to, table.remove(orderRows, from))
+                RepositionOrderRows()
+                SaveOrder()
+            end, RepositionOrderRows)
+        return row
     end
 
-    local initOrder = Apotheca.GetButtonOrder()
-    for i, key in ipairs(initOrder) do orderRows[#orderRows+1] = MakeOrderRow(i, key) end
-    RepositionOrderRows()
-    Gap(#initOrder * (ROW_HEIGHT + 2) + 4)
+    -- One row per button key, made once and reused (frames are never
+    -- freed): a refresh only reorders them and hides those not listed.
+    local orderRowByKey = {}
+    local function BuildOrderRows()
+        for _, row in ipairs(orderRows) do row.frame:Hide() end
+        orderRows = {}
+        for _, key in ipairs(Apotheca.GetButtonOrder()) do
+            local row = orderRowByKey[key] or MakeOrderRow(key)
+            orderRowByKey[key] = row
+            row.frame:Show()
+            orderRows[#orderRows + 1] = row
+        end
+        RepositionOrderRows()
+    end
+    BuildOrderRows()
+    Gap(#orderRows * (ROW_HEIGHT + 2) + 4)
 
     local resetBtn = CreateFrame("Button", nil, curContent, "UIPanelButtonTemplate")
     resetBtn:SetPoint("TOPLEFT", curContent, "TOPLEFT", PAD, Y())
     resetBtn:SetSize(130, 22); resetBtn:SetText("Reset to Default")
     resetBtn:SetScript("OnClick", function()
         DBSet(nil, "buttonOrder")
-        for _, row in ipairs(orderRows) do row.frame:Hide() end
-        orderRows = {}
-        for i, key in ipairs(Apotheca.GetButtonOrder()) do orderRows[#orderRows+1] = MakeOrderRow(i, key) end
-        RepositionOrderRows()
+        BuildOrderRows()
         Apotheca.UpdateAllButtons()
     end)
     curH = curH + 26
 
-    refreshCallbacks[#refreshCallbacks + 1] = function()
-        for _, row in ipairs(orderRows) do row.frame:Hide() end
-        orderRows = {}
-        for i, key in ipairs(Apotheca.GetButtonOrder()) do orderRows[#orderRows+1] = MakeOrderRow(i, key) end
-        RepositionOrderRows()
-    end
+    refreshCallbacks[#refreshCallbacks + 1] = BuildOrderRows
     FinalizeTarget()
 
     -- ════════════════════════════════════════════════════════════
