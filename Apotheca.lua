@@ -386,8 +386,9 @@ local function SafeGetItemCooldown(itemID) return Apotheca.API.ItemCooldown(item
 -- pcall only guards a client that refuses the call outright.
 local function ApplyItemCooldown(cooldown, itemID)
     pcall(function()
+        -- Unchanged: `st or 0` is a truth test, which throws on a secret.
         local st, dur = SafeGetItemCooldown(itemID)
-        cooldown:SetCooldown(st or 0, dur or 0)
+        cooldown:SetCooldown(st, dur)
     end)
 end
 local function GetItemInfo(itemID)         return Apotheca.API.ItemInfo(itemID) end

@@ -188,7 +188,9 @@ function Apotheca.BuildOptionsPanelContent(panel)
         refreshCallbacks[#refreshCallbacks + 1] = Sync
     end
 
-    local function Checkbox(labelText, getter, setter, indent)
+    -- Every widget updates the main bar after a change, unless given its
+    -- own `update` (the profession bar's tab: it rebuilds that bar only).
+    local function Checkbox(labelText, getter, setter, indent, update)
         local cb = CreateFrame("CheckButton", nil, curContent, "InterfaceOptionsCheckButtonTemplate")
         cb:SetPoint("TOPLEFT", curContent, "TOPLEFT", PAD + (indent or 0), Y())
         -- A missing template does not throw on this client; it returns a bare
@@ -205,7 +207,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
         cb:SetScript("OnClick", function(self)
             local v = self:GetChecked()
             setter(v == true or v == 1)
-            Apotheca.UpdateAllButtons()
+            ;(update or Apotheca.UpdateAllButtons)()
         end)
         refreshCallbacks[#refreshCallbacks + 1] = Sync
         curH = curH + 24
@@ -242,7 +244,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
     end
 
     local sliderN = 0
-    local function Slider(labelText, minV, maxV, step, getter, setter, fmtFn)
+    local function Slider(labelText, minV, maxV, step, getter, setter, fmtFn, update)
         sliderN = sliderN + 1
         local fmt = fmtFn or tostring
         Gap(4)
@@ -275,7 +277,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
             v = math.floor(v / step + 0.5) * step
             setter(v)
             valText:SetText(fmt(v))
-            Apotheca.UpdateAllButtons()
+            ;(update or Apotheca.UpdateAllButtons)()
         end)
         refreshCallbacks[#refreshCallbacks + 1] = function()
             local v = getter() or minV
@@ -292,7 +294,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
     end
 
     local ddN = 0
-    local function Dropdown(labelText, options, getter, setter)
+    local function Dropdown(labelText, options, getter, setter, update)
         ddN = ddN + 1
         Gap(4)
         local lbl = curContent:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
@@ -313,7 +315,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
                     info.func    = function()
                         setter(opt.value)
                         UIDropDownMenu_SetText(dd, opt.label)
-                        Apotheca.UpdateAllButtons()
+                        ;(update or Apotheca.UpdateAllButtons)()
                     end
                     UIDropDownMenu_AddButton(info)
                 end
@@ -727,6 +729,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
         DBSet(v, "utility", ...)
         U.Refresh()
     end
+    local function NoMainUpdate() end
 
     SectionHeader("Profession Bar")
     SmallLabel("A second bar that builds itself from this character's professions: "
@@ -735,10 +738,10 @@ function Apotheca.BuildOptionsPanelContent(panel)
     Gap(4)
     Checkbox("Show the profession bar  |cff888888(/apo utility)|r",
         function() return DBGet("utility", "enabled") == true end,
-        function(v) USet(v, "enabled") end)
+        function(v) USet(v, "enabled") end, nil, NoMainUpdate)
     Checkbox("Lock its position  |cff888888(disables Alt+Drag)|r",
         function() return DBGet("utility", "lockPosition") == true end,
-        function(v) USet(v, "lockPosition") end)
+        function(v) USet(v, "lockPosition") end, nil, NoMainUpdate)
     SmallLabel("Key bindings: Options > Keybindings > Apotheca. A key follows its action "
         .. "(Disenchant stays Disenchant on every character) and does nothing while the action is off.")
 
@@ -776,11 +779,11 @@ function Apotheca.BuildOptionsPanelContent(panel)
             end
         end
     end
-    local function UMakeRow(i, key)
+    local function UMakeRow(key)
         local f = CreateFrame("Frame", nil, uContainer)
         f:SetWidth(U_ROW_W); f:SetHeight(U_ROW_H)
         local bg = f:CreateTexture(nil, "BACKGROUND")
-        bg:SetAllPoints(); bg:SetColorTexture(0.10, 0.10, 0.18, (i % 2 == 0) and 0.5 or 0.8)
+        bg:SetAllPoints()
         local cb = CreateFrame("CheckButton", nil, f, "InterfaceOptionsCheckButtonTemplate")
         cb:SetPoint("LEFT", f, "LEFT", 2, 0)
         if not cb.Text then
@@ -788,7 +791,6 @@ function Apotheca.BuildOptionsPanelContent(panel)
             cb.Text:SetPoint("LEFT", cb, "RIGHT", 2, 0)
         end
         cb.Text:SetText(U.BY_KEY[key].label)
-        cb:SetChecked(U.IsShown(key))
         cb:SetScript("OnClick", function(self)
             local v = self:GetChecked()
             -- nil is shown: only "off" is stored.
@@ -806,12 +808,20 @@ function Apotheca.BuildOptionsPanelContent(panel)
         down:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
         down:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Highlight")
         down:SetScript("OnClick", function() UMove(key, 1) end)
-        return { frame = f, key = key }
+        return { frame = f, key = key, bg = bg, cb = cb }
     end
+    -- One row per action, made once: a refresh only reorders and re-ticks
+    -- them (frames are never freed).
+    local uRowByKey = {}
+    for _, a in ipairs(U.ACTIONS) do uRowByKey[a.key] = UMakeRow(a.key) end
     local function UBuildRows()
-        for _, row in ipairs(uRows) do row.frame:Hide() end
         uRows = {}
-        for i, key in ipairs(U.Order()) do uRows[#uRows + 1] = UMakeRow(i, key) end
+        for i, key in ipairs(U.Order()) do
+            local row = uRowByKey[key]
+            row.bg:SetColorTexture(0.10, 0.10, 0.18, (i % 2 == 0) and 0.5 or 0.8)
+            row.cb:SetChecked(U.IsShown(key))
+            uRows[#uRows + 1] = row
+        end
         URelayout()
     end
     UBuildRows()
@@ -833,24 +843,24 @@ function Apotheca.BuildOptionsPanelContent(panel)
         function(v)
             USet(v, "matchBar")
             Apotheca.RefreshOptions()
-        end)
+        end, NoMainUpdate)
     local uMatchNote = SmallLabel(" ")
     Dropdown("Orientation:",
         { { value = "HORIZONTAL", label = "Horizontal" },
           { value = "VERTICAL",   label = "Vertical"   } },
         function() return DBGet("utility", "orientation") or "VERTICAL" end,
-        function(v) USet(v, "orientation") end)
+        function(v) USet(v, "orientation") end, NoMainUpdate)
     Slider("Rows", 1, 4, 1,
         function() return DBGet("utility", "rows") or 2 end,
-        function(v) USet(v, "rows") end)
+        function(v) USet(v, "rows") end, nil, NoMainUpdate)
     local uLayoutWidgets = {
         Slider("Icon Size", 20, 60, 2,
             function() return DBGet("utility", "iconSize") or 36 end,
             function(v) USet(v, "iconSize") end,
-            function(v) return v .. "px" end),
+            function(v) return v .. "px" end, NoMainUpdate),
         Slider("Icon Padding", 0, 10, 1,
             function() return DBGet("utility", "iconPadding") or 3 end,
-            function(v) USet(v, "iconPadding") end),
+            function(v) USet(v, "iconPadding") end, nil, NoMainUpdate),
     }
     local function USyncLayout()
         local layout, matched = Apotheca.LayoutSettings(U.Settings())

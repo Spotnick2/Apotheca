@@ -123,13 +123,13 @@ end
 
 -- The ordered list of { key, kind, value } this character can use and
 -- has switched on. kind is "spell" or "item".
-function Utility.Collect(bagMap)
+function Utility.Collect()
     local list = {}
     for _, key in ipairs(Utility.Order()) do
         local a = BY_KEY[key]
         if Utility.IsShown(key) then
             if a.item then
-                if (bagMap[a.item] or 0) > 0 then list[#list + 1] = { key = key, kind = "item", value = a.item } end
+                if Apotheca.API.ItemCount(a.item) > 0 then list[#list + 1] = { key = key, kind = "item", value = a.item } end
             else
                 local id = Utility.KnownSpell(a)
                 if id then list[#list + 1] = { key = key, kind = "spell", value = id } end
@@ -289,7 +289,8 @@ function Utility.RefreshVisuals()
                 else
                     st, dur = Apotheca.API.SpellCooldown(btn.value)
                 end
-                btn.cooldown:SetCooldown(st or 0, dur or 0)
+                -- Unchanged: `st or 0` would truth-test a secret, which throws.
+                btn.cooldown:SetCooldown(st, dur)
             end)
             btn.hotkey:SetText(ShortKey(GetBindingKey(Utility.BindingAction(btn.action.key))))
         end
@@ -314,12 +315,17 @@ function Utility.Reconcile()
     Utility.pending = false
     local s = Utility.Settings()
     if not s.enabled then
-        for _, btn in pairs(Utility.buttons) do ClearButton(btn) end
+        -- Off: every action cleared once; later events have nothing to do.
+        if not Utility.cleared then
+            for _, btn in pairs(Utility.buttons) do ClearButton(btn) end
+            Utility.cleared = true
+        end
         frame:Hide()
         return
     end
+    Utility.cleared = false
 
-    local list = Utility.Collect(Apotheca.BuildBagMap())
+    local list = Utility.Collect()
     local active, shown = {}, {}
     for _, entry in ipairs(list) do
         local btn = Utility.buttons[entry.key]
@@ -346,6 +352,13 @@ function Utility.Reconcile()
     Apotheca.GridLayout(frame, shown, layout)
     if #shown > 0 then frame:Show() else frame:Hide() end
     Utility.RefreshVisuals()
+end
+
+-- After a rebuild the matched action bar changed: the open options tab's
+-- "Following Action Bar" note and greyed sliders follow it.
+local function RefreshOpenOptions()
+    local panel = Apotheca.optionsPanel
+    if panel and panel:IsVisible() and Apotheca.RefreshOptions then Apotheca.RefreshOptions() end
 end
 
 -- A rebuild on the next frame: coalesces bursts (SPELLS_CHANGED fires
@@ -376,7 +389,8 @@ events:SetScript("OnEvent", function(_, event)
             print(PREFIX .. "new: a profession bar (Cooking, First Aid, your professions, "
                   .. "Disenchant, Hearthstone...) with its own key bindings. /apo utility to show it.")
         end
-        if not InCombatLockdown() then RestorePosition() end
+        -- A /reload in combat: the position waits for the end of combat.
+        if InCombatLockdown() then Utility.positionPending = true else RestorePosition() end
         Utility.Refresh()
     elseif not ready then
         return
@@ -384,6 +398,10 @@ events:SetScript("OnEvent", function(_, event)
         -- The interrupted drag first, before a rebuild can move or hide
         -- the frame, then whatever combat held back.
         if Utility.dragStopPending then StopDrag() end
+        if Utility.positionPending then
+            Utility.positionPending = false
+            RestorePosition()
+        end
         if Utility.pending then Utility.Reconcile() end
     elseif event == "BAG_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_COOLDOWN"
             or event == "UPDATE_BINDINGS" then
@@ -391,7 +409,10 @@ events:SetScript("OnEvent", function(_, event)
     elseif event == "MODIFIER_STATE_CHANGED" then
         UpdateAnchor()
     elseif event == "EDIT_MODE_LAYOUTS_UPDATED" then
-        if (tonumber(Utility.Settings().matchBar) or 0) > 0 then Utility.Refresh() end
+        if (tonumber(Utility.Settings().matchBar) or 0) > 0 then
+            Utility.Reconcile()
+            RefreshOpenOptions()
+        end
     else
         -- Professions learned or lost, bags (the Hearthstone), entering
         -- the world.
@@ -422,6 +443,7 @@ events:SetScript("OnUpdate", function(_, elapsed)
         if not InCombatLockdown() and frame:IsShown() and (tonumber(s.matchBar) or 0) > 0
                 and Apotheca.LayoutSignature((Apotheca.LayoutSettings(s))) ~= Utility._layoutSig then
             Utility.Reconcile()
+            RefreshOpenOptions()
         end
     end
 end)

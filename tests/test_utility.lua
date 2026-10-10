@@ -66,7 +66,7 @@ end
 
 -- The bar, built at login from what the character knows, in catalog order.
 H.check(frame:IsShown(), "enabled: the bar is shown")
-H.eq(keys(U.Collect(Apotheca.BuildBagMap())), "hearthstone,cooking,firstaid,fishing,enchanting,tailoring,disenchant",
+H.eq(keys(U.Collect()), "hearthstone,cooking,firstaid,fishing,enchanting,tailoring,disenchant",
     "what the warlock has, in the default order")
 H.eq(attr("hearthstone", "type"), "item", "the Hearthstone is an item button")
 H.eq(attr("hearthstone", "item"), "item:6948", "for the Hearthstone")
@@ -83,7 +83,7 @@ WoW.knownSpells[3274] = nil
 
 -- Order: a saved order first, unknown keys dropped, the rest appended.
 g.order = { "disenchant", "nonsense", "hearthstone" }
-H.eq(keys(U.Collect(Apotheca.BuildBagMap())), "disenchant,hearthstone,cooking,firstaid,fishing,enchanting,tailoring",
+H.eq(keys(U.Collect()), "disenchant,hearthstone,cooking,firstaid,fishing,enchanting,tailoring",
     "the saved order, then the rest")
 g.order = {}
 
@@ -216,5 +216,42 @@ deCB:GetScript("OnClick")(deCB)
 tick()
 H.eq(g.show.disenchant, nil, "ticking it again stores nothing (shown is the default)")
 H.eq(attr("disenchant", "spell"), 13262, "and Disenchant is back")
+
+-- Refreshing the options reuses the action rows (frames are never freed).
+local function count(label)
+    local n = 0
+    for _, f in ipairs(H.framesWithTemplate("InterfaceOptionsCheckButtonTemplate")) do
+        if f.Text and f.Text:GetText() == label then n = n + 1 end
+    end
+    return n
+end
+Apotheca.RefreshOptions()
+Apotheca.RefreshOptions()
+H.eq(count("Disenchant"), 1, "one Disenchant row after refreshes")
+
+-- A /reload in combat: the saved position waits for the end of combat
+-- (strictLockdown fails the test if it is set in combat).
+ApothecaCharDB.utility = { x = 123, y = 456 }
+WoW.enterCombat()
+WoW.fire("PLAYER_LOGIN")
+H.check(U.positionPending, "logged in during combat: the position waits")
+WoW.leaveCombat()
+WoW.fire("PLAYER_REGEN_ENABLED")
+H.check(not U.positionPending, "restored after combat")
+local pt = frame._points[#frame._points]
+H.eq(pt and pt[4], 123, "at the saved x")
+H.eq(pt and pt[5], 456, "and y")
+
+-- Off: the first rebuild clears every action, later ones have nothing to do.
+g.enabled = false
+U.Reconcile()
+H.check(U.cleared, "off: cleared once")
+U.buttons.cooking:SetAttribute("type", "spell")       -- would be cleared again if it rebuilt
+U.Reconcile()
+H.eq(attr("cooking", "type"), "spell", "an off bar doesn't redo the clearing")
+U.buttons.cooking:SetAttribute("type", nil)
+g.enabled = true
+U.Reconcile()
+H.check(not U.cleared and frame:IsShown(), "on again: rebuilt")
 
 H.done("test_utility")

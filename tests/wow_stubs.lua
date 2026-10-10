@@ -427,7 +427,16 @@ function C_Item.GetItemInfo(itemID)
     return name, "item:" .. itemID, 1, 1, 1, "Consumable", "Potion", 20, "", 134400
 end
 function C_Item.GetItemIconByID(itemID) return WoW.items[itemID] and 134400 or nil end
-function C_Item.GetItemCount(itemID) return 0 end
+-- The bags' count (C_Item.GetItemCount leaves the bank out by default).
+function C_Item.GetItemCount(itemID)
+    local n = 0
+    for _, bag in pairs(WoW.bags) do
+        for _, it in pairs(bag) do
+            if it.itemID == itemID then n = n + (it.stackCount or 1) end
+        end
+    end
+    return n
+end
 function C_Item.UseItemByName(name) WoW.itemsUsed[#WoW.itemsUsed + 1] = name end
 -- Reads the client's item DB: answers for any known ID, cache or not.
 -- Item class by ID ({ classID, subClassID, subType }); consumables by

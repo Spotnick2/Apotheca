@@ -1319,6 +1319,8 @@ local PROF_TEST_EVENTS = {
 }
 local profFrame, profAttempt, profEvents
 local profCount = 0
+-- The key watcher (WatchKeys, below); FinishProfAttempt reads it.
+local keyWatch
 
 local function FinishProfAttempt(reason)
     local att = profAttempt
@@ -1360,7 +1362,6 @@ end
 -- A CTRL-SHIFT key press, seen by a frame that passes every key on. If
 -- its button's PreClick doesn't follow within a second, the binding never
 -- reached the button: recorded as SILENT.
-local keyWatch
 local function WatchKeys(byKey)
     if not keyWatch then
         keyWatch = CreateFrame("Frame", nil, UIParent)

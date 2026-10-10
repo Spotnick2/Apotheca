@@ -77,11 +77,20 @@ end
 
 -- (start, duration) for a cooldown swipe. Secret in combat (measured on
 -- 70334: startTime, duration and modRate), so callers hand them straight
--- to Cooldown:SetCooldown and never compare them.
+-- to Cooldown:SetCooldown and never compare or truth-test them (not even
+-- `st or 0`).
 function API.SpellCooldown(spellID)
     local info = C_Spell.GetSpellCooldown(spellID)
     if type(info) ~= "table" then return 0, 0 end
     return info.startTime, info.duration
+end
+
+-- How many of an item the bags hold (not the bank): one count, without
+-- scanning every slot.
+function API.ItemCount(itemID)
+    local ok, n = pcall(C_Item.GetItemCount, itemID)
+    if ok and type(n) == "number" then return n end
+    return 0
 end
 
 -- ------------------------------------------------------------
