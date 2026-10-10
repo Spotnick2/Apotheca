@@ -367,8 +367,8 @@ function Utility.Reconcile()
         if not active[key] then ClearButton(btn) end
     end
 
-    local layout = Apotheca.LayoutSettings(s)
-    local sig = Apotheca.LayoutSignature(layout)
+    local layout, matched = Apotheca.LayoutSettings(s)
+    local sig = Apotheca.LayoutSignature(layout, matched)
     if sig ~= Utility._layoutSig then
         Utility._layoutSig = sig
         -- Whichever rebuild applies a new layout (poll, bags, spells, a
@@ -462,7 +462,7 @@ events:SetScript("OnUpdate", function(_, elapsed)
         pollElapsed = 0
         local s = Utility.Settings()
         if not InCombatLockdown() and frame:IsShown() and (tonumber(s.matchBar) or 0) > 0
-                and Apotheca.LayoutSignature((Apotheca.LayoutSettings(s))) ~= Utility._layoutSig then
+                and Apotheca.LayoutSignature(Apotheca.LayoutSettings(s)) ~= Utility._layoutSig then
             Utility.Reconcile()
         end
     end
