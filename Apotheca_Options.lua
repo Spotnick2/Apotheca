@@ -66,6 +66,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
     local TAB_DEFS = {
         { key = "general",     label = "General"      },
         { key = "consumables", label = "Consumables"  },
+        { key = "utility",     label = "Profession Bar" },
         { key = "buttonorder", label = "Button Order" },
         { key = "profile",     label = "Profile"      },
     }
@@ -715,6 +716,157 @@ function Apotheca.BuildOptionsPanelContent(panel)
         function() return DBGet("health", "preferHealthstone") ~= false end,
         function(v) DBSet(v, "health", "preferHealthstone") end)
     SmallLabel("|cff888888Only applies while the Healthstone button above is disabled.|r")
+    FinalizeTarget()
+
+    -- ════════════════════════════════════════════════════════════
+    -- TAB: PROFESSION BAR (#42, ApothecaUtility.lua)
+    -- ════════════════════════════════════════════════════════════
+    SetTarget(tabFrames["utility"])
+    local U = Apotheca.Utility
+    local function USet(v, ...)
+        DBSet(v, "utility", ...)
+        U.Refresh()
+    end
+
+    SectionHeader("Profession Bar")
+    SmallLabel("A second bar that builds itself from this character's professions: "
+        .. "Cooking, First Aid, Fishing, your professions' windows, Disenchant, Smelting, "
+        .. "Find Herbs, Find Minerals, Pick Lock and your Hearthstone. Hold Alt to drag it.")
+    Gap(4)
+    Checkbox("Show the profession bar  |cff888888(/apo utility)|r",
+        function() return DBGet("utility", "enabled") == true end,
+        function(v) USet(v, "enabled") end)
+    Checkbox("Lock its position  |cff888888(disables Alt+Drag)|r",
+        function() return DBGet("utility", "lockPosition") == true end,
+        function(v) USet(v, "lockPosition") end)
+    SmallLabel("Key bindings: Options > Keybindings > Apotheca. A key follows its action "
+        .. "(Disenchant stays Disenchant on every character) and does nothing while the action is off.")
+
+    SectionHeader("Actions")
+    SmallLabel("Tick what the bar may show; it shows only what this character has. "
+        .. "The arrows set the order.")
+    Gap(4)
+    local U_ROW_H, U_ROW_W = 24, CONTENT_W - PAD * 2
+    local uContainer = CreateFrame("Frame", nil, curContent)
+    uContainer:SetPoint("TOPLEFT", curContent, "TOPLEFT", PAD, Y())
+    uContainer:SetWidth(U_ROW_W)
+    local uRows = {}
+
+    local function URelayout()
+        for i, row in ipairs(uRows) do
+            row.frame:ClearAllPoints()
+            row.frame:SetPoint("TOPLEFT", uContainer, "TOPLEFT", 0, -(i - 1) * (U_ROW_H + 2))
+        end
+        uContainer:SetHeight(#uRows * (U_ROW_H + 2))
+    end
+    local function USaveOrder()
+        local order = {}
+        for _, row in ipairs(uRows) do order[#order + 1] = row.key end
+        USet(order, "order")
+    end
+    local function UMove(key, delta)
+        for j, row in ipairs(uRows) do
+            if row.key == key then
+                local k = j + delta
+                if k < 1 or k > #uRows then return end
+                uRows[j], uRows[k] = uRows[k], uRows[j]
+                URelayout()
+                USaveOrder()
+                return
+            end
+        end
+    end
+    local function UMakeRow(i, key)
+        local f = CreateFrame("Frame", nil, uContainer)
+        f:SetWidth(U_ROW_W); f:SetHeight(U_ROW_H)
+        local bg = f:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints(); bg:SetColorTexture(0.10, 0.10, 0.18, (i % 2 == 0) and 0.5 or 0.8)
+        local cb = CreateFrame("CheckButton", nil, f, "InterfaceOptionsCheckButtonTemplate")
+        cb:SetPoint("LEFT", f, "LEFT", 2, 0)
+        if not cb.Text then
+            cb.Text = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            cb.Text:SetPoint("LEFT", cb, "RIGHT", 2, 0)
+        end
+        cb.Text:SetText(U.BY_KEY[key].label)
+        cb:SetChecked(U.IsShown(key))
+        cb:SetScript("OnClick", function(self)
+            local v = self:GetChecked()
+            -- nil is shown: only "off" is stored.
+            local off = nil
+            if not (v == true or v == 1) then off = false end
+            USet(off, "show", key)
+        end)
+        local up = CreateFrame("Button", nil, f)
+        up:SetSize(16, 16); up:SetPoint("RIGHT", f, "RIGHT", -22, 0)
+        up:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollUp-Up")
+        up:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollUp-Highlight")
+        up:SetScript("OnClick", function() UMove(key, -1) end)
+        local down = CreateFrame("Button", nil, f)
+        down:SetSize(16, 16); down:SetPoint("RIGHT", f, "RIGHT", -4, 0)
+        down:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+        down:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Highlight")
+        down:SetScript("OnClick", function() UMove(key, 1) end)
+        return { frame = f, key = key }
+    end
+    local function UBuildRows()
+        for _, row in ipairs(uRows) do row.frame:Hide() end
+        uRows = {}
+        for i, key in ipairs(U.Order()) do uRows[#uRows + 1] = UMakeRow(i, key) end
+        URelayout()
+    end
+    UBuildRows()
+    Gap(#uRows * (U_ROW_H + 2) + 4)
+    local uReset = CreateFrame("Button", nil, curContent, "UIPanelButtonTemplate")
+    uReset:SetPoint("TOPLEFT", curContent, "TOPLEFT", PAD, Y())
+    uReset:SetSize(130, 22); uReset:SetText("Reset to Default")
+    uReset:SetScript("OnClick", function()
+        USet({}, "order")
+        USet({}, "show")
+        UBuildRows()
+    end)
+    curH = curH + 26
+    refreshCallbacks[#refreshCallbacks + 1] = UBuildRows
+
+    SectionHeader("Layout")
+    Dropdown("Match an action bar's icon size and padding:", BAR_OPTIONS,
+        function() return tonumber(DBGet("utility", "matchBar")) or 0 end,
+        function(v)
+            USet(v, "matchBar")
+            Apotheca.RefreshOptions()
+        end)
+    local uMatchNote = SmallLabel(" ")
+    Dropdown("Orientation:",
+        { { value = "HORIZONTAL", label = "Horizontal" },
+          { value = "VERTICAL",   label = "Vertical"   } },
+        function() return DBGet("utility", "orientation") or "VERTICAL" end,
+        function(v) USet(v, "orientation") end)
+    Slider("Rows", 1, 4, 1,
+        function() return DBGet("utility", "rows") or 2 end,
+        function(v) USet(v, "rows") end)
+    local uLayoutWidgets = {
+        Slider("Icon Size", 20, 60, 2,
+            function() return DBGet("utility", "iconSize") or 36 end,
+            function(v) USet(v, "iconSize") end,
+            function(v) return v .. "px" end),
+        Slider("Icon Padding", 0, 10, 1,
+            function() return DBGet("utility", "iconPadding") or 3 end,
+            function(v) USet(v, "iconPadding") end),
+    }
+    local function USyncLayout()
+        local layout, matched = Apotheca.LayoutSettings(U.Settings())
+        for _, w in ipairs(uLayoutWidgets) do SetSliderEnabled(w, not matched) end
+        local n = tonumber(DBGet("utility", "matchBar")) or 0
+        if matched then
+            uMatchNote:SetText(string.format("|cff888888Following Action Bar %d: %.1f px icons, %.1f px apart.|r",
+                n, layout.iconSize, layout.iconPadding))
+        elseif n > 0 then
+            uMatchNote:SetText(string.format("|cffff6666Action Bar %d can't be read here: using the settings below.|r", n))
+        else
+            uMatchNote:SetText(" ")
+        end
+    end
+    USyncLayout()
+    refreshCallbacks[#refreshCallbacks + 1] = USyncLayout
     FinalizeTarget()
 
     -- ════════════════════════════════════════════════════════════

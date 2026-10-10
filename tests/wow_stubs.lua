@@ -88,6 +88,7 @@ function WoW.reset()
     WoW.popups       = {}
     WoW.itemsUsed    = {}        -- names passed to C_Item.UseItemByName
     WoW.curvesRefused = false    -- simulate a client that refuses colour curves
+    WoW.strictLockdown = false   -- protected frames changed in combat fail the test
 end
 
 function WoW.AddItem(bag, slot, itemID, count, name)
@@ -168,7 +169,9 @@ function Frame:GetEffectiveScale() return 1 end
 function Frame:GetScale() return 1 end
 function Frame:SetFrameLevel(l) self._level = l end
 function Frame:GetFrameLevel() return self._level end
-function Frame:IsMouseOver() return false end
+function Frame:IsMouseOver() return self._mouseOver == true end
+function Frame:StartMoving() self._moving = true end
+function Frame:StopMovingOrSizing() self._moving = false end
 function Frame:IsProtected() return false end
 function Frame:GetChecked() return self._checked end
 function Frame:SetChecked(v) self._checked = v end
@@ -239,9 +242,30 @@ function CreateFrame(kind, name, parent, template)
         end
     end
     if kind == "Button" or kind == "CheckButton" then f._fs = NewRegion("FontString", f) end
+    -- A secure button and the frame that parents it are protected: in
+    -- combat the client refuses to change them (WoW.strictLockdown).
+    if tostring(template or ""):find("SecureActionButtonTemplate") then
+        f._protected = true
+        if parent then parent._protected = true end
+    end
     if name then _G[name] = f end
     WoW.frames[#WoW.frames + 1] = f
     return f
+end
+
+-- With WoW.strictLockdown, a protected frame changed in combat fails the
+-- test: the client would refuse the call (attributes silently, the rest
+-- with ADDON_ACTION_BLOCKED). Opt-in per test file.
+local PROTECTED_METHODS = { "Show", "Hide", "SetShown", "SetAttribute", "SetPoint", "ClearAllPoints",
+    "SetWidth", "SetHeight", "SetSize", "StartMoving", "StopMovingOrSizing", "SetClampedToScreen" }
+for _, m in ipairs(PROTECTED_METHODS) do
+    local plain = Frame[m] or function() end
+    Frame[m] = function(self, ...)
+        if WoW.strictLockdown and WoW.inCombat and self._protected then
+            error("protected " .. m .. " on " .. tostring(self._name) .. " in combat", 2)
+        end
+        return plain(self, ...)
+    end
 end
 
 UIParent = NewRegion("Frame", nil, "UIParent")
@@ -461,6 +485,10 @@ function GetProfessions()
 end
 function GetProfessionInfo() return nil end
 function C_Spell.GetSpellSubtext() return nil end
+function C_Spell.GetSpellTexture(id) return WoW.knownSpells[id] and 136243 or nil end
+-- Key bindings: WoW.bindings[action] = key.
+WoW.bindings = {}
+function GetBindingKey(action) return WoW.bindings[action] end
 function C_Spell.GetSpellCooldown()
     return { startTime = 0, duration = 0, isEnabled = true, modRate = 1 }
 end

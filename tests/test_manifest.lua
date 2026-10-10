@@ -21,6 +21,9 @@ for _, f in ipairs(files) do
     H.check(io.open(f) ~= nil, "TOC file exists: " .. f)
 end
 H.check(seen["Apotheca.lua"] and seen["Apotheca_Options.lua"], "both main files are listed")
+-- The client loads Bindings.xml by name from the addon folder (#42).
+H.check(io.open("Bindings.xml") ~= nil, "Bindings.xml exists")
+H.check(not seen["Bindings.xml"], "and is not in the TOC")
 H.check(not seen["ApothecaProbe.lua"], "the dev-only probe is not in the shipped TOC")
 H.check(io.open("Tools/ApothecaProbe/ApothecaProbe.toc") ~= nil, "the probe lives in its own dev addon under Tools/")
 

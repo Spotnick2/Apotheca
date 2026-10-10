@@ -52,6 +52,39 @@ function API.ItemCooldown(itemID)
 end
 
 -- ------------------------------------------------------------
+-- Spells (#42, the profession bar)
+-- ------------------------------------------------------------
+
+-- Whether the player knows a spell: true, false, or nil when the client
+-- doesn't say. Measured on 70334: C_SpellBook.IsSpellKnown agrees with
+-- IsSpellKnown, IsPlayerSpell and IsSpellInSpellBook on every profession
+-- spell, and only a profession's current rank is known.
+function API.SpellKnown(spellID)
+    local ok, known = pcall(C_SpellBook.IsSpellKnown, spellID)
+    if not ok or type(known) ~= "boolean" then return nil end
+    return known
+end
+
+function API.SpellIcon(spellID)
+    local ok, icon = pcall(C_Spell.GetSpellTexture, spellID)
+    return ok and icon or nil
+end
+
+function API.SpellName(spellID)
+    local ok, name = pcall(C_Spell.GetSpellName, spellID)
+    return ok and name or nil
+end
+
+-- (start, duration) for a cooldown swipe. Secret in combat (measured on
+-- 70334: startTime, duration and modRate), so callers hand them straight
+-- to Cooldown:SetCooldown and never compare them.
+function API.SpellCooldown(spellID)
+    local info = C_Spell.GetSpellCooldown(spellID)
+    if type(info) ~= "table" then return 0, 0 end
+    return info.startTime, info.duration
+end
+
+-- ------------------------------------------------------------
 -- Containers
 -- ------------------------------------------------------------
 

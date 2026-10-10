@@ -15,7 +15,9 @@ Apotheca.toc           — WoW addon manifest (interface version, files list, Sa
 ApothecaCompat.lua     — Apotheca.API: every moved or removed API; loads first
 ApothecaItems.lua      — GENERATED item data (Apotheca.DATA); see Item Data
 Apotheca.lua           — Main addon: all logic, item data, frame creation, events
+ApothecaUtility.lua    — The profession bar (#42): its own frame, secure buttons and events
 Apotheca_Options.lua   — In-game options panel: tabbed UI, DB read/write helpers
+Bindings.xml           — Key bindings (profession bar); loaded by name, NOT listed in the TOC
 Tools/ApothecaProbe/   — DEV-ONLY addon (never packaged): /apo probe, /apo scan, /apo scan2, /apo scan3, /apo applytest, /apo bar, /apo prof, /apo proftest; `deploy.ps1 -Probe`
 .pkgmeta               — BigWigs packager config (release packaging only, not used locally)
 tests/                 — Lua 5.1 unit tests against a strict-globals stub; tests/run.ps1
@@ -59,7 +61,7 @@ ApothecaDB = {
 ```
 - `DB()` (local in each file) always returns the active profile table.
 - `PROFILE_DEFAULTS` (top of `Apotheca.lua`) is the canonical schema — add new settings here with defaults.
-- `ApplyDefaults(dst, src)` fills in missing keys recursively; this runs on every load.
+- `ApplyDefaults(dst, src)` fills in missing keys **two levels deep** (a nested table's own members, not deeper); this runs on every load. Keep new settings flat, or fill deeper keys in `MigrateProfile`.
 - Always add migration logic in `InitDB()` when renaming or changing the type of existing settings.
 
 ### Button Keys
@@ -127,6 +129,15 @@ Secure button attributes (`type`, `item`) must **never** be set while `InCombatL
 
 ### Layout and the action bars (#40)
 `ApplyLayout` takes orientation, rows, icon size and padding from `Apotheca.LayoutSettings()`: the profile's own settings, with `matchBar` (0 = off, 1-8 = an Edit Mode action bar) replacing the icon size and padding (only: rows and orientation stay the profile's, since the bar often sits beside several stacked action bars) by that bar's, through `API.ActionBarLayout(n)` (`API.ACTION_BARS` names each bar's frame and first button; `GetSettingValue`, plain values; button 45 x icon size, gap padding x icon size; measured in docs/FOREVER-PROBE.md). A read that fails falls back to the profile's settings, which are kept while matching. Edit Mode fires nothing while a slider moves, so the 3-second out-of-combat poll compares the layout with the one last applied (`Apotheca._layoutSig`, shown bar only); `EDIT_MODE_LAYOUTS_UPDATED` covers a saved or switched layout.
+
+### Profession bar (#42)
+`ApothecaUtility.lua` (`Apotheca.Utility`): an optional second bar, `utility` in the profile (off by default, flat; `show[key] = false` hides an action, nil shows it; `order` lists keys and missing ones follow in catalog order, so a new action needs no migration). Position is per character (`ApothecaCharDB.utility`).
+- **Detection by spell ID.** `Utility.ACTIONS` lists each action's candidate spell IDs, highest rank first; only a profession's current rank is known (measured on 70334), so the action casts the one candidate `API.SpellKnown` says is known. `GetProfessions` answers on 70334 but returned nil x7 on 70009: it is not relied on. Adding an action is one `ACTIONS` entry plus its `Bindings.xml` line (`tests/test_utility.lua` checks both).
+- **Named key bindings.** One `CLICK ApothecaUtil_<key>:LeftButton` per action in `Bindings.xml`, with `category="Apotheca"` and no header (porting guide). The `BINDING_NAME_*` labels are set at file load (localized at login). Every button exists from load. **A binding acts on a hidden button** (measured), so an action that is off, unavailable or on a disabled bar has its `type`/`spell`/`item` attributes cleared, not just hidden.
+- **Combat.** `Utility.Reconcile()` only marks `pending` in combat; `PLAYER_REGEN_ENABLED` rebuilds from the current state. The bar has no hide-in-combat option (no working mechanism). Its drag makes **no** `StartMoving`/`StopMovingOrSizing` call in lockdown: an interrupted drag sets `dragStopPending` and finishes at `PLAYER_REGEN_ENABLED` before the rebuild. Spell cooldowns are secret in combat: they go straight to `SetCooldown`.
+- **Shared with the main bar:** `Apotheca.StyleButton`, `Apotheca.GridLayout`, `Apotheca.LayoutSettings(settings)` (so `matchBar` works for both) and `Apotheca.LayoutSignature`. `Utility.Refresh()` asks for a rebuild on the next frame; `SetProfile` calls it.
+- `tests/wow_stubs.lua` has `WoW.strictLockdown`: a protected frame (a secure button or its parent) changed in combat fails the test.
+- `Tools/deploy.ps1` and the package-check zip test ship `Bindings.xml` alongside the TOC's files.
 
 ### Drag Anchor
 `ApothecaAnchor` is the purple "Drag to move" overlay shown while Alt is held over the bar. Its visibility is derived from live state in `UpdateAnchorState()` (`IsAltKeyDown()`, combat, `lockPosition`, visibility, mouse-over), driven by both `MODIFIER_STATE_CHANGED` and a throttled `OnUpdate`. Do not go back to showing or hiding it purely on key-event edges — a missed key-up leaves the bar stuck in the unlocked state. All drag teardown goes through `StopAnchorDrag()`.

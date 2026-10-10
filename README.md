@@ -32,6 +32,18 @@ Battleground-only items (PvP draughts, Warsong Gulch, Arathi Basin, Alterac Vall
 
 Buffs are recognised on every client language.
 
+## Profession bar
+
+An optional second bar (off by default: `/apo utility`, or the Profession Bar tab) that builds itself from the character's professions, so you don't set up the same action bar on every character:
+
+- Cooking, First Aid and Fishing, and your professions' windows (Alchemy, Blacksmithing, Enchanting, Engineering, Leatherworking, Tailoring, Smelting, Poisons).
+- Their actions: Disenchant, Find Herbs, Find Minerals, Pick Lock, Bait and Tackle.
+- Your Hearthstone.
+
+Each action has its own key binding (Options > Keybindings > Apotheca). The key follows the action, so Disenchant on F9 is Disenchant on every character, wherever its button is. Tick what the bar may show and set the order in the options; it has its own position, layout and lock, and can match one of your action bars like the main bar.
+
+Measured in game so far: Cooking, First Aid, Fishing, Enchanting, Tailoring, Leatherworking, Disenchant and the Hearthstone. The others use the spell IDs from Vanilla and haven't been tried on Forever yet; please report one that doesn't show or doesn't work.
+
 ## Also
 
 - Ready check: missing buffs glow (buff food, XP food, flask and elixirs, scrolls, weapon oil).
@@ -49,6 +61,7 @@ Buffs are recognised on every client language.
 /apo          open the options
 /apo status   explain, per button, why it is or isn't clickable
 /apo debug    toggle debug mode (clicks don't consume items)
+/apo utility  show or hide the profession bar
 ```
 
 ## Issues
