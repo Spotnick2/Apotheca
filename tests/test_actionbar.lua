@@ -1,4 +1,4 @@
--- Match Action Bar 1 (#40): the bar takes its icon size and padding from
+-- Match an action bar (#40): the bar takes its icon size and padding from
 -- the client's Action Bar 1 while the setting is on, and its own settings
 -- otherwise or when the client doesn't say. Rows and orientation always
 -- stay its own: it often sits beside several stacked action bars.
@@ -112,14 +112,37 @@ end
 local size = sliderLabelled("Icon Size")
 H.check(size, "the Icon Size slider exists")
 H.check(size:IsEnabled(), "enabled while off")
+local function noteSaying(text)
+    for _, f in ipairs(WoW.fontStrings) do
+        if type(f._text) == "string" and f._text:find(text, 1, true) then return f end
+    end
+end
 db.matchBar = 1
 Apotheca.RefreshOptions()
 H.check(not size:IsEnabled(), "greyed out while matching")
 H.check(not sliderLabelled("Icon Padding"):IsEnabled(), "padding too")
+H.eq(select(2, size.valText:GetTextColor()), 0.5, "its value greys out too, not shown as the size in use")
+H.check(noteSaying("Following Action Bar 1: 67.5 px"), "the note names the bar and its size (150%)")
+-- The poll resizes the bar and refreshes the note with it.
+WoW.actionBar = { [0] = 0, [1] = 1, [2] = 12, [3] = 120, [4] = 2 }
+ApothecaFrame:Show()
+WoW.tick(3)
+WoW.tick(1)
+H.check(noteSaying("Following Action Bar 1: 54.0 px"), "the poll refreshes the note")
+-- Another update applying the change before the poll refreshes it too
+-- (Codex on #44): the poll then sees nothing new.
+WoW.actionBar = { [0] = 0, [1] = 1, [2] = 12, [3] = 100, [4] = 2 }
+WoW.fire("BAG_UPDATE_DELAYED")
+WoW.tick(0.5)
+H.check(math.abs(btn:GetWidth() - 45) < 1e-9, "a bag update applies the new size")
+H.check(noteSaying("Following Action Bar 1: 45.0 px"), "and the note follows it")
+WoW.tick(3)
+H.check(noteSaying("Following Action Bar 1: 45.0 px"), "still right after the poll")
 H.check(sliderLabelled("Rows"):IsEnabled(), "rows stay the bar's own setting")
 WoW.actionBarThrow = true
 Apotheca.RefreshOptions()
 H.check(size:IsEnabled(), "enabled again when Action Bar 1 can't be read")
+H.eq(select(2, size.valText:GetTextColor()), 0.82, "and its value is gold again")
 WoW.actionBarThrow = false
 
 H.done("test_actionbar")

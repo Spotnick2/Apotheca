@@ -2066,8 +2066,6 @@ local function SizeButtonBorder(btn, size)
     border:SetPoint("CENTER", btn, "CENTER", 0, -size / 36)
 end
 
--- Horizontal: buttons flow left→right, wrap into rows.
--- Vertical:   buttons flow top→bottom, wrap into columns.
 -- The layout the bar uses: its own settings, with the chosen action bar's
 -- icon size and padding while matchBar names one and the client reports
 -- them. The second return says whether they did, for the options panel.
@@ -2093,9 +2091,17 @@ local function LayoutSignature(l)
         l.iconSize or 0, l.iconPadding or 0)
 end
 
+-- Horizontal: buttons flow left→right, wrap into rows.
+-- Vertical:   buttons flow top→bottom, wrap into columns.
 local function ApplyLayout(active)
     local layout      = Apotheca.LayoutSettings()
-    Apotheca._layoutSig = LayoutSignature(layout)
+    local sig = LayoutSignature(layout)
+    if sig ~= Apotheca._layoutSig then
+        Apotheca._layoutSig = sig
+        -- Whichever update applies a new layout (poll, bags, a setting), the
+        -- options note follows it.
+        if Apotheca.SyncLayoutOptions then Apotheca.SyncLayoutOptions() end
+    end
     local orientation = layout.orientation or "HORIZONTAL"
     local rows        = math.max(1, layout.rows or 1)
     local btnSize     = math.max(16, layout.iconSize    or BUTTON_SIZE)
