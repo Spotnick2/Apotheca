@@ -66,7 +66,10 @@ for _, a in ipairs(ACTIONS) do
     _G["BINDING_NAME_" .. Utility.BindingAction(a.key)] = a.label
 end
 
+-- A name the client can't give yet (an item not cached, a spell not
+-- loaded) is retried on GET_ITEM_INFO_RECEIVED and SPELLS_CHANGED.
 local function LocalizeBindingNames()
+    local missing = false
     for _, a in ipairs(ACTIONS) do
         local name
         if a.item then
@@ -76,9 +79,13 @@ local function LocalizeBindingNames()
         end
         if type(name) == "string" and name ~= "" then
             _G["BINDING_NAME_" .. Utility.BindingAction(a.key)] = name
+        else
+            missing = true
         end
     end
+    Utility.namesPending = missing
 end
+Utility.LocalizeBindingNames = LocalizeBindingNames
 
 -- ------------------------------------------------------------
 -- Settings
@@ -178,9 +185,9 @@ for _, a in ipairs(ACTIONS) do
 end
 
 -- Position: per character, the BOTTOMLEFT corner, like the main bar.
-local function SavePosition()
+local function SavePosition(x, y)
     ApothecaCharDB = ApothecaCharDB or {}
-    ApothecaCharDB.utility = { x = frame:GetLeft() or 0, y = frame:GetBottom() or 200 }
+    ApothecaCharDB.utility = { x = x or frame:GetLeft() or 0, y = y or frame:GetBottom() or 200 }
 end
 
 local function RestorePosition()
@@ -210,19 +217,32 @@ do
 end
 
 -- Dragging. No StartMoving or StopMovingOrSizing in combat: the client
--- refuses them on a frame that parents secure buttons (porting guide). A
--- drag that combat interrupts is finished at PLAYER_REGEN_ENABLED, before
--- anything else touches the frame, and the bar stays where it was dropped.
+-- refuses them on a frame that parents secure buttons (porting guide), so
+-- a drag that combat interrupts keeps following the cursor until it ends.
+-- It is finished at PLAYER_REGEN_ENABLED, before anything else touches the
+-- frame, and the bar goes back to where it was when combat stopped the
+-- drag, not wherever the cursor is when combat ends.
 Utility.dragging, Utility.dragStopPending = false, false
 
 local function StopDrag()
     if not Utility.dragging then return end
     if InCombatLockdown() then
+        if not Utility.dragStopPending then
+            Utility.dropPos = { x = frame:GetLeft(), y = frame:GetBottom() }
+        end
         Utility.dragStopPending = true
         return
     end
     frame:StopMovingOrSizing()
-    SavePosition()
+    local p = Utility.dropPos
+    Utility.dropPos = nil
+    if p and p.x and p.y then
+        frame:ClearAllPoints()
+        frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", p.x, p.y)
+        SavePosition(p.x, p.y)
+    else
+        SavePosition()
+    end
     Utility.dragging, Utility.dragStopPending = false, false
 end
 Utility.StopDrag = StopDrag
@@ -377,7 +397,8 @@ Apotheca.API.RegisterEvents(events,
     "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED",
     "SKILL_LINES_CHANGED", "SPELLS_CHANGED", "LEARNED_SPELL_IN_SKILL_LINE",
     "BAG_UPDATE_DELAYED", "BAG_UPDATE_COOLDOWN", "SPELL_UPDATE_COOLDOWN",
-    "UPDATE_BINDINGS", "MODIFIER_STATE_CHANGED", "EDIT_MODE_LAYOUTS_UPDATED")
+    "UPDATE_BINDINGS", "MODIFIER_STATE_CHANGED", "EDIT_MODE_LAYOUTS_UPDATED",
+    "GET_ITEM_INFO_RECEIVED")
 
 events:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_LOGIN" then
@@ -408,6 +429,8 @@ events:SetScript("OnEvent", function(_, event)
         Utility.RefreshVisuals()
     elseif event == "MODIFIER_STATE_CHANGED" then
         UpdateAnchor()
+    elseif event == "GET_ITEM_INFO_RECEIVED" then
+        if Utility.namesPending then LocalizeBindingNames() end
     elseif event == "EDIT_MODE_LAYOUTS_UPDATED" then
         if (tonumber(Utility.Settings().matchBar) or 0) > 0 then
             Utility.Reconcile()
@@ -416,6 +439,7 @@ events:SetScript("OnEvent", function(_, event)
     else
         -- Professions learned or lost, bags (the Hearthstone), entering
         -- the world.
+        if event == "SPELLS_CHANGED" and Utility.namesPending then LocalizeBindingNames() end
         Utility.Refresh()
     end
 end)

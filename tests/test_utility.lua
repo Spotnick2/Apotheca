@@ -55,6 +55,19 @@ for _, a in ipairs(U.ACTIONS) do
 end
 H.check(not xml:find("header="), "no header (a raw HEADER_ row without a category)")
 
+-- A Hearthstone not cached at login: its label is retried when it arrives.
+local hearthLabel = "BINDING_NAME_CLICK ApothecaUtil_hearthstone:LeftButton"
+local cachedName = WoW.items[6948]
+WoW.items[6948] = nil
+_G[hearthLabel] = "Hearthstone"
+U.LocalizeBindingNames()
+H.check(U.namesPending, "a name the client can't give yet is pending")
+WoW.items[6948] = "Ruhestein"
+WoW.fire("GET_ITEM_INFO_RECEIVED", 6948, true)
+H.eq(_G[hearthLabel], "Ruhestein", "the label follows once the item is cached")
+WoW.items[6948] = cachedName
+U.LocalizeBindingNames()
+
 -- Catalog shape: no spell ID in two actions.
 local seenIDs = {}
 for _, a in ipairs(U.ACTIONS) do
@@ -155,8 +168,10 @@ U.UpdateAnchor()
 H.check(anchor:IsShown(), "Alt over the bar: the drag anchor")
 anchor:GetScript("OnDragStart")(anchor)
 H.check(frame._moving and U.dragging, "dragging")
+frame._left, frame._bottom = 300, 250                -- where combat catches it
 WoW.enterCombat()
 anchor:GetScript("OnDragStop")(anchor)               -- mouse up in combat
+frame._left, frame._bottom = 900, 500                -- it still follows the cursor
 WoW.altDown = false
 U.UpdateAnchor()
 H.check(frame._moving, "no stop in combat: the client would refuse it")
@@ -167,6 +182,9 @@ WoW.leaveCombat()
 WoW.fire("PLAYER_REGEN_ENABLED")
 H.check(not frame._moving, "stopped after combat")
 H.check(ApothecaCharDB.utility and ApothecaCharDB.utility.x, "the position saved, per character")
+H.eq(ApothecaCharDB.utility.x, 300, "where combat stopped the drag, not where the cursor ended")
+H.eq(ApothecaCharDB.utility.y, 250, "both coordinates")
+frame._left, frame._bottom = nil, nil
 H.check(not U.dragging and not U.dragStopPending, "drag state cleared")
 frame._mouseOver = false
 

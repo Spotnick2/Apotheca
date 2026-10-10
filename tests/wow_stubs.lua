@@ -162,8 +162,8 @@ function Frame:SetSize(w, h) self._w, self._h = w, h end
 function Frame:GetWidth() return self._w end
 function Frame:GetHeight() return self._h end
 function Frame:GetSize() return self._w, self._h end
-function Frame:GetLeft() return 600 end
-function Frame:GetBottom() return 200 end
+function Frame:GetLeft() return self._left or 600 end
+function Frame:GetBottom() return self._bottom or 200 end
 function Frame:GetCenter() return 960, 540 end
 function Frame:GetEffectiveScale() return 1 end
 function Frame:GetScale() return 1 end
