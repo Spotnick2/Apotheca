@@ -506,6 +506,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
     end
     SyncLayoutWidgets()
     refreshCallbacks[#refreshCallbacks + 1] = SyncLayoutWidgets
+    Apotheca.SyncLayoutOptions = SyncLayoutWidgets   -- called when a new layout is applied
     FinalizeTarget()
 
     -- ════════════════════════════════════════════════════════════

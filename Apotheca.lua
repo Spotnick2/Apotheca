@@ -2095,7 +2095,13 @@ end
 -- Vertical:   buttons flow top→bottom, wrap into columns.
 local function ApplyLayout(active)
     local layout      = Apotheca.LayoutSettings()
-    Apotheca._layoutSig = LayoutSignature(layout)
+    local sig = LayoutSignature(layout)
+    if sig ~= Apotheca._layoutSig then
+        Apotheca._layoutSig = sig
+        -- Whichever update applies a new layout (poll, bags, a setting), the
+        -- options note follows it.
+        if Apotheca.SyncLayoutOptions then Apotheca.SyncLayoutOptions() end
+    end
     local orientation = layout.orientation or "HORIZONTAL"
     local rows        = math.max(1, layout.rows or 1)
     local btnSize     = math.max(16, layout.iconSize    or BUTTON_SIZE)
@@ -3411,7 +3417,6 @@ eventFrame:SetScript("OnUpdate", function(self, elapsed)
             if (tonumber(DB().matchBar) or 0) > 0 and ApothecaFrame:IsShown()
                 and LayoutSignature((Apotheca.LayoutSettings())) ~= Apotheca._layoutSig then
                 RequestUpdate()
-                if Apotheca.RefreshOptions then Apotheca.RefreshOptions() end
             end
             -- A stronger item skipped for its cooldown (mana gem) is ready:
             -- re-pick it. Only out of combat, where the button may change.

@@ -129,6 +129,15 @@ ApothecaFrame:Show()
 WoW.tick(3)
 WoW.tick(1)
 H.check(noteSaying("Following Action Bar 1: 54.0 px"), "the poll refreshes the note")
+-- Another update applying the change before the poll refreshes it too
+-- (Codex on #44): the poll then sees nothing new.
+WoW.actionBar = { [0] = 0, [1] = 1, [2] = 12, [3] = 100, [4] = 2 }
+WoW.fire("BAG_UPDATE_DELAYED")
+WoW.tick(0.5)
+H.check(math.abs(btn:GetWidth() - 45) < 1e-9, "a bag update applies the new size")
+H.check(noteSaying("Following Action Bar 1: 45.0 px"), "and the note follows it")
+WoW.tick(3)
+H.check(noteSaying("Following Action Bar 1: 45.0 px"), "still right after the poll")
 H.check(sliderLabelled("Rows"):IsEnabled(), "rows stay the bar's own setting")
 WoW.actionBarThrow = true
 Apotheca.RefreshOptions()
