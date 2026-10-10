@@ -878,6 +878,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
     end
     USyncLayout()
     refreshCallbacks[#refreshCallbacks + 1] = USyncLayout
+    U.SyncLayoutOptions = USyncLayout   -- called when the bar applies a new layout
     FinalizeTarget()
 
     -- ════════════════════════════════════════════════════════════

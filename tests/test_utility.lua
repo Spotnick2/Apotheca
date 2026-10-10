@@ -272,4 +272,35 @@ g.enabled = true
 U.Reconcile()
 H.check(not U.cleared and frame:IsShown(), "on again: rebuilt")
 
+-- A bag event that rebuilds the bar with a new matched layout before the
+-- 3-second poll: the open tab's note and sliders follow it (Codex review).
+local function noteSaying(text)
+    for _, f in ipairs(WoW.fontStrings) do
+        if type(f._text) == "string" and f._text:find(text, 1, true) then return f end
+    end
+end
+local function utilitySlider(label)
+    local found
+    for _, sl in ipairs(H.framesWithTemplate("OptionsSliderTemplate")) do
+        if sl.label and sl.label:GetText() == label then found = sl end   -- the tab's is the last
+    end
+    return found
+end
+g.matchBar = 1
+WoW.actionBar = { [0] = 0, [1] = 1, [2] = 12, [3] = 100, [4] = 2 }
+U.Reconcile()
+WoW.actionBar = { [0] = 0, [1] = 1, [2] = 12, [3] = 120, [4] = 2 }
+WoW.fire("BAG_UPDATE_DELAYED")
+WoW.tick(0.1)                                     -- the next-frame rebuild, before any poll
+H.check(noteSaying("Following Action Bar 1: 54.0 px"), "the note follows a bag-triggered rebuild")
+H.check(not utilitySlider("Icon Size"):IsEnabled(), "its size slider is greyed while matching")
+WoW.actionBarThrow = true
+WoW.fire("SPELLS_CHANGED")
+WoW.tick(0.1)
+H.check(noteSaying("can't be read here"), "an unreadable bar: the note says so")
+H.check(utilitySlider("Icon Size"):IsEnabled(), "and the slider is enabled again")
+WoW.actionBarThrow = false
+g.matchBar = 0
+U.Reconcile()
+
 H.done("test_utility")

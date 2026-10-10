@@ -368,17 +368,17 @@ function Utility.Reconcile()
     end
 
     local layout = Apotheca.LayoutSettings(s)
-    Utility._layoutSig = Apotheca.LayoutSignature(layout)
+    local sig = Apotheca.LayoutSignature(layout)
+    if sig ~= Utility._layoutSig then
+        Utility._layoutSig = sig
+        -- Whichever rebuild applies a new layout (poll, bags, spells, a
+        -- setting), the tab's "Following Action Bar" note and greyed
+        -- sliders follow it, as on the main bar (SyncLayoutOptions).
+        if Utility.SyncLayoutOptions then Utility.SyncLayoutOptions() end
+    end
     Apotheca.GridLayout(frame, shown, layout)
     if #shown > 0 then frame:Show() else frame:Hide() end
     Utility.RefreshVisuals()
-end
-
--- After a rebuild the matched action bar changed: the open options tab's
--- "Following Action Bar" note and greyed sliders follow it.
-local function RefreshOpenOptions()
-    local panel = Apotheca.optionsPanel
-    if panel and panel:IsVisible() and Apotheca.RefreshOptions then Apotheca.RefreshOptions() end
 end
 
 -- A rebuild on the next frame: coalesces bursts (SPELLS_CHANGED fires
@@ -432,10 +432,7 @@ events:SetScript("OnEvent", function(_, event)
     elseif event == "GET_ITEM_INFO_RECEIVED" then
         if Utility.namesPending then LocalizeBindingNames() end
     elseif event == "EDIT_MODE_LAYOUTS_UPDATED" then
-        if (tonumber(Utility.Settings().matchBar) or 0) > 0 then
-            Utility.Reconcile()
-            RefreshOpenOptions()
-        end
+        if (tonumber(Utility.Settings().matchBar) or 0) > 0 then Utility.Reconcile() end
     else
         -- Professions learned or lost, bags (the Hearthstone), entering
         -- the world.
@@ -467,7 +464,6 @@ events:SetScript("OnUpdate", function(_, elapsed)
         if not InCombatLockdown() and frame:IsShown() and (tonumber(s.matchBar) or 0) > 0
                 and Apotheca.LayoutSignature((Apotheca.LayoutSettings(s))) ~= Utility._layoutSig then
             Utility.Reconcile()
-            RefreshOpenOptions()
         end
     end
 end)
