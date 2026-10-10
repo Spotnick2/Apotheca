@@ -1713,11 +1713,11 @@ end
 -- POSITION
 -- ============================================================
 
-local function SavePosition()
+local function SavePosition(left, bottom)
     -- Always store the BOTTOMLEFT corner so the bar grows rightward on resize.
     -- GetLeft/GetBottom return screen coordinates we can convert to UIParent offsets.
-    local left   = ApothecaFrame:GetLeft()
-    local bottom = ApothecaFrame:GetBottom()
+    left   = left   or ApothecaFrame:GetLeft()
+    bottom = bottom or ApothecaFrame:GetBottom()
     ApothecaCharDB         = ApothecaCharDB or {}
     ApothecaCharDB.point   = "BOTTOMLEFT"
     ApothecaCharDB.x       = left   or 0
@@ -2215,6 +2215,14 @@ anchorText:SetTextColor(1, 1, 1, 0.9)
 anchorText:SetText("Drag to move")
 
 local anchorDragging = false
+-- A drag that combat interrupts (#46). PLAYER_REGEN_DISABLED fires before
+-- lockdown engages, so the drag is normally stopped right there. If
+-- lockdown is already on, the client refuses StopMovingOrSizing on a frame
+-- that parents secure buttons (porting guide): the bar follows the cursor
+-- until combat ends, the anchor stays up so no click reaches a secure
+-- button under the cursor, and at PLAYER_REGEN_ENABLED the bar goes back
+-- to where combat caught it, which is what gets saved.
+local dragStopPending, dropPos = false, nil
 
 -- The overlay state is derived from the *live* input state, never from a
 -- single MODIFIER_STATE_CHANGED edge. A missed key-up (alt-tab, a popup
@@ -2229,17 +2237,50 @@ local function AnchorShouldShow()
 end
 
 local function StopAnchorDrag()
+    if not anchorDragging then return end
+    if InCombatLockdown() then
+        if not dragStopPending then
+            dropPos = { x = ApothecaFrame:GetLeft(), y = ApothecaFrame:GetBottom() }
+            dragStopPending = true
+        end
+        return
+    end
     ApothecaFrame:StopMovingOrSizing()
-    SavePosition()
-    anchorDragging = false
+    local p, wasPending = dropPos, dragStopPending
+    dropPos, dragStopPending, anchorDragging = nil, false, false
+    if p and p.x and p.y then
+        ApothecaFrame:ClearAllPoints()
+        ApothecaFrame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", p.x, p.y)
+        SavePosition(p.x, p.y)
+    elseif wasPending then
+        RestorePosition()    -- where combat caught it is unknown: the last saved spot
+    else
+        SavePosition()
+    end
+end
+
+-- The position to save at logout: never one the cursor dragged in combat.
+local function SaveLogoutPosition()
+    if not dragStopPending then
+        SavePosition()
+    elseif dropPos and dropPos.x and dropPos.y then
+        SavePosition(dropPos.x, dropPos.y)
+    end
 end
 
 local function UpdateAnchorState()
     if anchorDragging then
-        -- Mid-drag: only alt release, combat, or a lock ends the drag.
-        if not IsAltKeyDown() or InCombatLockdown() or DB().lockPosition then
+        if dragStopPending then
+            -- Combat interrupted it: the anchor stays up to keep clicks off
+            -- the buttons, and it ends once combat is over, even with Alt held.
+            if not InCombatLockdown() then
+                StopAnchorDrag()
+                anchor:Hide()
+            end
+        elseif not IsAltKeyDown() or InCombatLockdown() or DB().lockPosition then
+            -- Mid-drag: only alt release, combat, or a lock ends the drag.
             StopAnchorDrag()
-            anchor:Hide()
+            if not dragStopPending then anchor:Hide() end
         end
         return
     end
@@ -2275,6 +2316,10 @@ modFrame:SetScript("OnEvent", function(_, event, key)
     if event == "MODIFIER_STATE_CHANGED" and key ~= "LALT" and key ~= "RALT" then
         return
     end
+    -- The last moment before lockdown: stop a drag cleanly, where it is.
+    if event == "PLAYER_REGEN_DISABLED" and anchorDragging and not InCombatLockdown() then
+        StopAnchorDrag()
+    end
     UpdateAnchorState()
 end)
 
@@ -2283,6 +2328,7 @@ end)
 local anchorElapsed = 0
 modFrame:SetScript("OnUpdate", function(_, elapsed)
     if not (anchor:IsShown() or anchorDragging or IsAltKeyDown()) then return end
+    if dragStopPending and InCombatLockdown() then return end   -- nothing to do until it's over
     anchorElapsed = anchorElapsed + elapsed
     if anchorElapsed < 0.1 then return end
     anchorElapsed = 0
@@ -3687,6 +3733,9 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         end
 
     elseif event == "PLAYER_REGEN_ENABLED" then
+        -- A drag combat interrupted first (#46), before an update can move
+        -- or resize the frame.
+        if dragStopPending then StopAnchorDrag(); UpdateAnchorState() end
         -- Combat ended — reapply secure attributes that were skipped
         -- during lockdown so buttons are immediately clickable.
         for _, btn in pairs(Apotheca.buttons) do
@@ -3697,6 +3746,6 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         RequestUpdate()
 
     elseif event == "PLAYER_LOGOUT" then
-        SavePosition()
+        SaveLogoutPosition()
     end
 end)

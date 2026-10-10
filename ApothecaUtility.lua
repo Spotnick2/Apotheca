@@ -217,11 +217,12 @@ do
 end
 
 -- Dragging. No StartMoving or StopMovingOrSizing in combat: the client
--- refuses them on a frame that parents secure buttons (porting guide), so
--- a drag that combat interrupts keeps following the cursor until it ends.
--- It is finished at PLAYER_REGEN_ENABLED, before anything else touches the
--- frame, and the bar goes back to where it was when combat stopped the
--- drag, not wherever the cursor is when combat ends.
+-- refuses them on a frame that parents secure buttons (porting guide).
+-- PLAYER_REGEN_DISABLED fires before lockdown engages, so a drag is
+-- normally stopped there (#46). If lockdown is already on, the bar follows
+-- the cursor until combat ends, the anchor stays up so no click reaches a
+-- button under the cursor, and at PLAYER_REGEN_ENABLED the bar goes back
+-- to where combat caught it, not wherever the cursor is then.
 Utility.dragging, Utility.dragStopPending = false, false
 
 local function StopDrag()
@@ -234,12 +235,14 @@ local function StopDrag()
         return
     end
     frame:StopMovingOrSizing()
-    local p = Utility.dropPos
+    local p, wasPending = Utility.dropPos, Utility.dragStopPending
     Utility.dropPos = nil
     if p and p.x and p.y then
         frame:ClearAllPoints()
         frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", p.x, p.y)
         SavePosition(p.x, p.y)
+    elseif wasPending then
+        RestorePosition()    -- where combat caught it is unknown: the last saved spot
     else
         SavePosition()
     end
@@ -254,9 +257,16 @@ end
 
 local function UpdateAnchor()
     if Utility.dragging then
-        if not IsAltKeyDown() or InCombatLockdown() or Utility.Settings().lockPosition then
+        if Utility.dragStopPending then
+            -- Combat interrupted it: the anchor stays up to keep clicks off
+            -- the buttons, and it ends once combat is over, even with Alt held.
+            if not InCombatLockdown() then
+                StopDrag()
+                anchor:Hide()
+            end
+        elseif not IsAltKeyDown() or InCombatLockdown() or Utility.Settings().lockPosition then
             StopDrag()
-            anchor:Hide()
+            if not Utility.dragStopPending then anchor:Hide() end
         end
         return
     end
@@ -398,7 +408,7 @@ Apotheca.API.RegisterEvents(events,
     "SKILL_LINES_CHANGED", "SPELLS_CHANGED", "LEARNED_SPELL_IN_SKILL_LINE",
     "BAG_UPDATE_DELAYED", "BAG_UPDATE_COOLDOWN", "SPELL_UPDATE_COOLDOWN",
     "UPDATE_BINDINGS", "MODIFIER_STATE_CHANGED", "EDIT_MODE_LAYOUTS_UPDATED",
-    "GET_ITEM_INFO_RECEIVED")
+    "GET_ITEM_INFO_RECEIVED", "PLAYER_REGEN_DISABLED")
 
 events:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_LOGIN" then
@@ -415,10 +425,14 @@ events:SetScript("OnEvent", function(_, event)
         Utility.Refresh()
     elseif not ready then
         return
+    elseif event == "PLAYER_REGEN_DISABLED" then
+        -- The last moment before lockdown: stop a drag cleanly, where it is.
+        if Utility.dragging and not InCombatLockdown() then StopDrag() end
+        UpdateAnchor()
     elseif event == "PLAYER_REGEN_ENABLED" then
         -- The interrupted drag first, before a rebuild can move or hide
         -- the frame, then whatever combat held back.
-        if Utility.dragStopPending then StopDrag() end
+        if Utility.dragStopPending then StopDrag(); UpdateAnchor() end
         if Utility.positionPending then
             Utility.positionPending = false
             RestorePosition()
@@ -453,7 +467,11 @@ events:SetScript("OnUpdate", function(_, elapsed)
     anchorElapsed = anchorElapsed + elapsed
     if anchorElapsed >= 0.1 then
         anchorElapsed = 0
-        if Utility.dragging or anchor:IsShown() or frame:IsMouseOver() then UpdateAnchor() end
+        if Utility.dragStopPending and InCombatLockdown() then
+            -- nothing to do until combat is over
+        elseif Utility.dragging or anchor:IsShown() or frame:IsMouseOver() then
+            UpdateAnchor()
+        end
     end
     -- The matched action bar changed in Edit Mode, which fires nothing
     -- while a slider moves (#40).
