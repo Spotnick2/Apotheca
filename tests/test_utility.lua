@@ -160,27 +160,39 @@ Apotheca.SetProfile("Global")
 tick()
 H.check(frame:IsShown(), "switching back shows it")
 
--- Dragging: interrupted by combat, finished after it, with no movement
--- call in combat (strictLockdown).
+-- Dragging (#46): stopped as combat starts (PLAYER_REGEN_DISABLED comes
+-- before lockdown); with lockdown already on, finished after it, with no
+-- movement call in combat (strictLockdown).
 local anchor = ApothecaUtilityAnchor
-frame._mouseOver, WoW.altDown = true, true
-U.UpdateAnchor()
-H.check(anchor:IsShown(), "Alt over the bar: the drag anchor")
-anchor:GetScript("OnDragStart")(anchor)
-H.check(frame._moving and U.dragging, "dragging")
-frame._left, frame._bottom = 300, 250                -- where combat catches it
+local function startUtilDrag()
+    frame._mouseOver, WoW.altDown = true, true
+    U.UpdateAnchor()
+    H.check(anchor:IsShown(), "Alt over the bar: the drag anchor")
+    anchor:GetScript("OnDragStart")(anchor)
+    H.check(frame._moving and U.dragging, "dragging")
+end
+startUtilDrag()
+frame._left, frame._bottom = 350, 260
 WoW.enterCombat()
+H.check(not frame._moving and not U.dragging, "stopped cleanly as combat starts")
+H.eq(ApothecaCharDB.utility.x, 350, "saved where it was")
+WoW.leaveCombat()
+
+startUtilDrag()
+frame._left, frame._bottom = 300, 250                -- where combat catches it
+WoW.enterLockdown()
 anchor:GetScript("OnDragStop")(anchor)               -- mouse up in combat
 frame._left, frame._bottom = 900, 500                -- it still follows the cursor
 WoW.altDown = false
 U.UpdateAnchor()
 H.check(frame._moving, "no stop in combat: the client would refuse it")
 H.check(U.dragStopPending, "the stop waits")
+H.check(anchor:IsShown(), "the anchor stays up: no click reaches a button under the cursor")
 ApothecaCharDB = ApothecaCharDB or {}
 ApothecaCharDB.utility = nil
 WoW.leaveCombat()
-WoW.fire("PLAYER_REGEN_ENABLED")
 H.check(not frame._moving, "stopped after combat")
+H.check(not anchor:IsShown(), "and the anchor hides")
 H.check(ApothecaCharDB.utility and ApothecaCharDB.utility.x, "the position saved, per character")
 H.eq(ApothecaCharDB.utility.x, 300, "where combat stopped the drag, not where the cursor ended")
 H.eq(ApothecaCharDB.utility.y, 250, "both coordinates")
