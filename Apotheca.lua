@@ -2066,8 +2066,6 @@ local function SizeButtonBorder(btn, size)
     border:SetPoint("CENTER", btn, "CENTER", 0, -size / 36)
 end
 
--- Horizontal: buttons flow left→right, wrap into rows.
--- Vertical:   buttons flow top→bottom, wrap into columns.
 -- The layout the bar uses: its own settings, with the chosen action bar's
 -- icon size and padding while matchBar names one and the client reports
 -- them. The second return says whether they did, for the options panel.
@@ -2093,6 +2091,8 @@ local function LayoutSignature(l)
         l.iconSize or 0, l.iconPadding or 0)
 end
 
+-- Horizontal: buttons flow left→right, wrap into rows.
+-- Vertical:   buttons flow top→bottom, wrap into columns.
 local function ApplyLayout(active)
     local layout      = Apotheca.LayoutSettings()
     Apotheca._layoutSig = LayoutSignature(layout)
@@ -3411,6 +3411,7 @@ eventFrame:SetScript("OnUpdate", function(self, elapsed)
             if (tonumber(DB().matchBar) or 0) > 0 and ApothecaFrame:IsShown()
                 and LayoutSignature((Apotheca.LayoutSettings())) ~= Apotheca._layoutSig then
                 RequestUpdate()
+                if Apotheca.RefreshOptions then Apotheca.RefreshOptions() end
             end
             -- A stronger item skipped for its cooldown (mana gem) is ready:
             -- re-pick it. Only out of combat, where the button may change.

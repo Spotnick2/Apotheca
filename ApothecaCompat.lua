@@ -433,10 +433,18 @@ function API.ActionBarLayout(n)
     if not ok or type(size) ~= "number" or type(pad) ~= "number" or size <= 0 then
         return nil
     end
+    -- The button's own effective scale is the size it is drawn at, wherever
+    -- the client puts the icon scale (measured: on the button). Without a
+    -- button, the percent times the bar's scale.
     local button = _G[names.button]
-    local base = (button and button:GetWidth()) or BAR_BUTTON
-    -- The bar's own scale, should it ever differ from UIParent's.
-    local factor = size / 100 * bar:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    local base, factor
+    if button and button.GetEffectiveScale then
+        base = button:GetWidth()
+        factor = button:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    else
+        base = BAR_BUTTON
+        factor = size / 100 * bar:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    end
     return { size = base * factor, padding = pad * factor }
 end
 

@@ -269,6 +269,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
         valText:SetPoint("LEFT", sl, "RIGHT", 10, 0)
         valText:SetTextColor(1, 0.82, 0)
         valText:SetText(fmt(getter() or minV))
+        sl.valText = valText
         sl:SetScript("OnValueChanged", function(self, v)
             v = math.floor(v / step + 0.5) * step
             setter(v)
@@ -328,19 +329,12 @@ function Apotheca.BuildOptionsPanelContent(panel)
         return dd
     end
 
-    -- Greys widgets out while another setting decides them. A dropdown has
-    -- no Enable/Disable of its own: the FrameXML helpers do it, if present.
-    local function SetWidgetEnabled(w, on)
-        if w.GetObjectType and w:GetObjectType() == "Slider" then
-            if on then w:Enable() else w:Disable() end
-        else
-            local fn = rawget(_G, on and "UIDropDownMenu_EnableDropDown" or "UIDropDownMenu_DisableDropDown")
-            if fn then fn(w) end
-        end
-        w:SetAlpha(on and 1 or 0.5)
-        if w.label then
-            if on then w.label:SetTextColor(1, 1, 1) else w.label:SetTextColor(0.5, 0.5, 0.5) end
-        end
+    -- Greys a slider out while another setting decides it, its value too.
+    local function SetSliderEnabled(sl, on)
+        if on then sl:Enable() else sl:Disable() end
+        sl:SetAlpha(on and 1 or 0.5)
+        if on then sl.label:SetTextColor(1, 1, 1) else sl.label:SetTextColor(0.5, 0.5, 0.5) end
+        if on then sl.valText:SetTextColor(1, 0.82, 0) else sl.valText:SetTextColor(0.5, 0.5, 0.5) end
     end
 
     local function Divider()
@@ -499,7 +493,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
     -- values for when it is switched off. Asked again at every open.
     local function SyncLayoutWidgets()
         local layout, matched = Apotheca.LayoutSettings()
-        for _, w in ipairs(layoutWidgets) do SetWidgetEnabled(w, not matched) end
+        for _, w in ipairs(layoutWidgets) do SetSliderEnabled(w, not matched) end
         if matched then
             matchNote:SetText(string.format("|cff888888Following Action Bar %d: %.1f px icons, %.1f px apart.|r",
                 DBGet("matchBar"), layout.iconSize, layout.iconPadding))
