@@ -89,6 +89,12 @@ H.eq(attr("disenchant", "spell"), 13262, "Disenchant")
 H.eq(attr("alchemy", "type"), nil, "an unknown profession has no action")
 H.check(not U.buttons.alchemy:IsShown(), "and no button")
 
+-- Skinning opens a window on Forever (#52): a skinner gets its button.
+WoW.knownSpells[8617] = true
+H.eq(keys(U.Collect()), "hearthstone,cooking,firstaid,fishing,enchanting,tailoring,skinning,disenchant",
+    "Skinning (Journeyman, measured) after the crafting professions")
+WoW.knownSpells[8617] = nil
+
 -- Two ranks known: the higher one.
 WoW.knownSpells[3274] = true
 H.eq(U.KnownSpell(U.BY_KEY.firstaid), 3274, "two ranks known: the higher")

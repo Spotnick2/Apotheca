@@ -31,7 +31,8 @@ local HEARTHSTONE = 6948
 -- The actions, in their default order. `spells`: candidate IDs, highest
 -- rank first (only one is known at a time). Measured on 70334: hearthstone,
 -- cooking, firstaid, fishing, baittackle (seen), enchanting, tailoring,
--- leatherworking, disenchant. The rest are Vanilla's IDs, not measured yet.
+-- leatherworking, skinning, disenchant. The rest are Vanilla's IDs, not
+-- measured yet. Skinning opens a window on Forever (Camping recipes, #52).
 local ACTIONS = {
     { key = "hearthstone",    label = "Hearthstone",     item = HEARTHSTONE },
     { key = "cooking",        label = "Cooking",         spells = { 18260, 3413, 3102, 2550 } },
@@ -44,6 +45,7 @@ local ACTIONS = {
     { key = "engineering",    label = "Engineering",     spells = { 12656, 4038, 4037, 4036 } },
     { key = "leatherworking", label = "Leatherworking",  spells = { 10662, 3811, 3104, 2108 } },
     { key = "tailoring",      label = "Tailoring",       spells = { 12180, 3910, 3909, 3908 } },
+    { key = "skinning",       label = "Skinning",        spells = { 10768, 8618, 8617, 8613 } },
     { key = "smelting",       label = "Smelting",        spells = { 2656 } },
     { key = "poisons",        label = "Poisons",         spells = { 2842 } },
     { key = "disenchant",     label = "Disenchant",      spells = { 13262 } },
