@@ -3297,6 +3297,10 @@ SlashCmdList["APOTHECA"] = function(msg)
         Apotheca.RunSpellScan()
     elseif cmd == "scan3" and Apotheca.RunWellFedScan then
         Apotheca.RunWellFedScan()
+    elseif cmd:match("^proftest") and Apotheca.RunProfTest then
+        Apotheca.RunProfTest(cmd:match("^proftest%s*(.*)$"))
+    elseif cmd:match("^prof") and Apotheca.RunProfProbe then
+        Apotheca.RunProfProbe(cmd:match("^prof%s*(.*)$"))
     elseif cmd:match("^bar") and Apotheca.RunBarProbe then
         Apotheca.RunBarProbe(cmd:match("^bar%s*(.*)$"))
     elseif cmd:match("^applytest") and Apotheca.RunApplyTest then

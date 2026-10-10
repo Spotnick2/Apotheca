@@ -353,6 +353,8 @@ Enum = { BagIndex = { Backpack = 0, ReagentBag = 5 }, PowerType = { Mana = 0 },
         IconPadding = 4, VisibleSetting = 5, HideBarArt = 6, DeprecatedSnapToSide = 7,
         HideBarScrolling = 8, AlwaysShowButtons = 9 },
     ActionBarOrientation = { Horizontal = 0, Vertical = 1 },
+    -- The client UI source's values (Player and Pet only); not measured.
+    SpellBookSpellBank = { Player = 0, Pet = 1 },
 }
 
 C_Container = {}
@@ -432,6 +434,50 @@ function C_Spell.GetSpellDescription(spellID)
     if spellID == 433 then return "Restores 61 health over 18 sec." end
     return WoW.spellDescriptions[spellID] or ""
 end
+
+-- Professions (#42). GetProfessions returns nil x7 on Forever (porting
+-- guide), so professions are read from known spells. WoW.knownSpells:
+-- [spellID] = true for the player's spellbook.
+WoW.knownSpells = {}
+function GetProfessions() return nil, nil, nil, nil, nil, nil, nil end
+function C_Spell.GetSpellSubtext() return nil end
+function C_Spell.GetSpellCooldown()
+    return { startTime = 0, duration = 0, isEnabled = true, modRate = 1 }
+end
+function IsSpellKnown(id) return WoW.knownSpells[id] == true end
+function IsPlayerSpell(id) return WoW.knownSpells[id] == true end
+C_SpellBook = {}
+function C_SpellBook.IsSpellKnown(id) return WoW.knownSpells[id] == true end
+function C_SpellBook.IsSpellInSpellBook(id) return WoW.knownSpells[id] == true end
+-- The spellbook: known spells in ID order, one "Professions" line.
+local function SpellBookSlots()
+    local ids = {}
+    for id in pairs(WoW.knownSpells) do ids[#ids + 1] = id end
+    table.sort(ids)
+    return ids
+end
+function C_SpellBook.FindSpellBookSlotForSpell(id)
+    for slot, known in ipairs(SpellBookSlots()) do
+        if known == id then return slot, Enum.SpellBookSpellBank.Player end
+    end
+end
+function C_SpellBook.GetSpellBookItemInfo(slot)
+    local id = SpellBookSlots()[slot]
+    if id then return { spellID = id, actionID = id, name = WoW.spellNames[id], isPassive = false } end
+end
+function C_SpellBook.GetNumSpellBookSkillLines() return 1 end
+function C_SpellBook.GetSpellBookSkillLineInfo(i)
+    if i == 1 then return { name = "Professions", itemIndexOffset = 0, numSpellBookItems = #SpellBookSlots() } end
+end
+C_SkillInfo = {}
+function C_SkillInfo.GetNumSkillLines() return 0 end
+function C_SkillInfo.GetSkillLineInfo() return nil end
+WoW.overrideBindings = {}     -- [key] = "buttonName:mouseButton"
+function SetOverrideBindingClick(owner, priority, key, name, button)
+    WoW.overrideBindings[key] = name .. ":" .. (button or "LeftButton")
+end
+function ClearOverrideBindings() WoW.overrideBindings = {} end
+function date(fmt) return os.date(fmt) end
 
 -- A profiling clock that advances with every read, so a per-frame time
 -- budget really ends a frame's work in tests.

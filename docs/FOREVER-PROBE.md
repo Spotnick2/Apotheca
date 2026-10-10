@@ -243,6 +243,13 @@ Geometry in UIParent units (`ActionButton1` stays 45 x 45; the icon size is its 
 
 ## Still to measure
 
+- **Professions (#42), the gate for the profession bar.** `GetProfessions()` returns nil x7, so the bar will detect professions from spell IDs. The draft catalog (`PROF_CATALOG` in the probe) holds the Vanilla IDs, highest rank first. Run, out of combat unless noted:
+  1. `/apo prof <label>` on characters with each profession (an enchanter, a miner/herbalist, a rogue, one with no primary profession), and once **in combat** (spell and Hearthstone cooldowns: secret?). It records, per candidate: name and rank text, `C_SpellBook.IsSpellKnown` / `IsSpellKnown` / `IsPlayerSpell` / `IsSpellInSpellBook`, the spellbook slot and its item info. Then every spellbook line and slot (spells the catalog misses) and every skill row as returned (collapsed headers kept), kept as `profProbe[<label>]`.
+  2. **Train a rank** (First Aid, Fishing or Mining Apprentice to Journeyman), then `/apo prof <label>` again: does the old rank stay known, and which ID is in use? Learning and unlearning are logged all the time in `profEvents` (event, arguments, the catalog known after it), and the catalog known at `PLAYER_LOGIN` and `PLAYER_ENTERING_WORLD` in `profLoad`.
+  3. `/apo proftest`: one secure button per known family (its rank in use) plus the Hearthstone, each bound to `CTRL-SHIFT-1`, `-2`, ... For each, click it, and press its key **with the cursor off the frame**. Do this on both `ActionButtonUseKeyDown` settings, and in combat. The verdict line says what happened: `window`, `cursor`, `channel`, `tracking`, `succeeded`, `error`, `BLOCKED`, and the number of casts. A press should be one cast. `/apo proftest hide`, then a key: does a CLICK binding act on a hidden button? `/apo proftest close` clears the bindings.
+
+  Exit the game to write `SavedVariables/ApothecaProbe.lua` (`profProbe`, `profEvents`, `profLoad`, `profTests`).
+
 - **Poisons and the off hand (#24).** The main hand is measured with an oil (above). `/apo applytest <itemID>` shows four buttons:
   - method A (`type=item` + `target-slot`) for each hand;
   - method B (the `/use item:<id>` + `/use 16|17` macro) for each hand.
