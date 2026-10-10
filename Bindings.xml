@@ -15,6 +15,8 @@
 	<Binding name="CLICK ApothecaUtil_leatherworking:LeftButton" category="Apotheca"/>
 	<Binding name="CLICK ApothecaUtil_tailoring:LeftButton" category="Apotheca"/>
 	<Binding name="CLICK ApothecaUtil_skinning:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_mining:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_herbalism:LeftButton" category="Apotheca"/>
 	<Binding name="CLICK ApothecaUtil_smelting:LeftButton" category="Apotheca"/>
 	<Binding name="CLICK ApothecaUtil_poisons:LeftButton" category="Apotheca"/>
 	<Binding name="CLICK ApothecaUtil_disenchant:LeftButton" category="Apotheca"/>
