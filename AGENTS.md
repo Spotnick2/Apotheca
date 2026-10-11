@@ -223,7 +223,7 @@ On a new Forever build, the login note tells players the build differs from `Apo
 
 - **Color prefix for addon chat**: `"|cff9966ffApotheca:|r "` (purple)
 - **Fallback icon**: `"Interface\\Icons\\INV_Misc_QuestionMark"`
-- **Options panel**: Built lazily on first `OnShow` in `Apotheca_Options.lua`. DB helpers `DBGet(...)` and `DBSet(value, ...)` accept vararg key paths into the active profile.
+- **Options panel**: Built lazily on first `OnShow` in `Apotheca_Options.lua`. DB helpers `DBGet(...)` and `DBSet(value, ...)` accept vararg key paths into the active profile. Reorderable lists (Button Order, the Profession Bar's Actions) make each row once and reuse it on refresh (frames are never freed); `EnableRowDrag` adds drag and drop (#54), with the arrows kept. `Checkbox`, `Slider` and `Dropdown` take an optional `update` (default: the main bar's `UpdateAllButtons`).
 - **No libraries**: Do not introduce LibStub, Ace3, or any other library dependencies.
 - **Buff checks** go through `ReadAuras` / `AurasHave` in `Apotheca.lua`: read the auras once, match by spell ID or by the spell's localized name (cached only once found: `GetSpellName` answers nil until the spell loads). Never add an English-name-only check.
 - **Roles**, not classes, decide what the bar offers: see Roles under Item Data. `CLASS_ROLES` holds each class's default role, its preference among several ticked roles, and its damage profile.

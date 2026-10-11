@@ -165,6 +165,11 @@ function Frame:GetSize() return self._w, self._h end
 -- _left = false: the frame has no position yet (GetLeft answers nil).
 function Frame:GetLeft() if self._left == false then return nil end return self._left or 600 end
 function Frame:GetBottom() if self._bottom == false then return nil end return self._bottom or 200 end
+function Frame:GetTop() if self._top == false then return nil end return self._top or 500 end
+-- Scroll frames (the options tabs).
+function Frame:GetVerticalScroll() return self._vscroll or 0 end
+function Frame:GetVerticalScrollRange() return self._vrange or 0 end
+function Frame:SetVerticalScroll(v) self._vscroll = v end
 function Frame:GetCenter() return 960, 540 end
 function Frame:GetEffectiveScale() return 1 end
 function Frame:GetScale() return 1 end
@@ -385,6 +390,9 @@ function GetWeaponEnchantInfo()
 end
 WoW.targeting, WoW.popup = false, nil
 function SpellIsTargeting() return WoW.targeting end
+-- The cursor in screen pixels (drag and drop in the options, #54).
+WoW.cursorX, WoW.cursorY = 0, 0
+function GetCursorPosition() return WoW.cursorX, WoW.cursorY end
 function StaticPopup_Visible(which) return WoW.popup == which and {} or nil end
 
 local function maybeSecret(v) if WoW.healthSecret then return Secret() end return v end
