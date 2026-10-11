@@ -32,6 +32,8 @@ Battleground-only items (PvP draughts, Warsong Gulch, Arathi Basin, Alterac Vall
 
 Buffs are recognised on every client language.
 
+Every button has its own key binding too (Options > Keybindings > Apotheca): the Mana Potion key always uses your best mana potion, whatever it is. A key does nothing while its button isn't on the bar, and keeps working if you hide the bar with the Visibility setting.
+
 ## Profession bar
 
 An optional second bar (off by default: `/apo utility`, or the Profession Bar tab) that builds itself from the character's professions, so you don't set up the same action bar on every character:

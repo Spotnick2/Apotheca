@@ -302,14 +302,7 @@ anchor:SetScript("OnHide", function() StopDrag() end)
 -- Building the bar (out of combat only)
 -- ------------------------------------------------------------
 
-local SHORT_KEYS = { { "CTRL%-", "c" }, { "SHIFT%-", "s" }, { "ALT%-", "a" }, { "NUMPAD", "N" },
-                     { "MOUSEWHEELUP", "MwU" }, { "MOUSEWHEELDOWN", "MwD" }, { "BUTTON", "M" } }
-
-local function ShortKey(key)
-    if not key then return "" end
-    for _, r in ipairs(SHORT_KEYS) do key = key:gsub(r[1], r[2]) end
-    return key
-end
+local ShortKey = Apotheca.ShortKey
 
 -- Cooldown swipes and key text: no secure change, safe in combat. Spell
 -- cooldowns are secret in combat (measured): the values go straight to

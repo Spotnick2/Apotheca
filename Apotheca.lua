@@ -2341,8 +2341,21 @@ end)
 -- single function. Never write them directly anywhere else.
 -- ============================================================
 
+-- Key bindings (#49) click a button even while it is hidden (measured on
+-- the profession bar), so a button that isn't on the bar has no item. The
+-- full update sets every button, then clears the ones not on the bar
+-- (ClearInactiveButtons); outside it, an inactive button is cleared here.
+-- Apotheca._activeKeys is the bar's last layout; nil before the first.
+local updatingButtons = false
+
+local function IsActiveButton(btn)
+    local active = Apotheca._activeKeys
+    return active ~= nil and btn.cfg ~= nil and active[btn.cfg.key] == true
+end
+
 function Apotheca.ApplySecureItemAttributes(btn, itemID)
     if InCombatLockdown() then return end
+    if not updatingButtons and not IsActiveButton(btn) then itemID = nil end
     -- A button aimed at a weapon hand (poisons) also carries target-slot;
     -- cleared with the item on every other path, so no stale target is
     -- left behind (Codex review of #24).
@@ -2427,6 +2440,10 @@ local function CreateApothecaButton(cfg)
     -- Dragging is handled on ApothecaFrame itself (see below).
 
     Apotheca.StyleButton(btn, "ApothecaCD_" .. cfg.key)
+    -- The key bound to this button (#49), like an action bar's.
+    local hk = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmallGray")
+    hk:SetPoint("TOPRIGHT", btn, "TOPRIGHT", -2, -3)
+    btn.hotkey = hk
 
     -- OnEnter/OnLeave are safe on secure buttons (they are not restricted).
     btn:SetScript("OnEnter", function(self)
@@ -2726,6 +2743,44 @@ for _, k in ipairs(Apotheca.DEFAULT_BUTTON_ORDER) do
     Apotheca.ALL_BUTTON_KEYS[k] = true
 end
 
+-- Each button's name in the options (Button Order) and in Key Bindings.
+Apotheca.BUTTON_LABELS = {
+    mana = "Mana Potion", health = "Health Potion", healthstone = "Healthstone",
+    rune = "Rune (mana)", managem = "Mana Gem",
+    recovery = "Recovery (Conjured)", food = "Food", drink = "Drink",
+    flask = "Flask", battle = "Elixir", guardian = "Elixir 2",
+    bufffood = "Buff Food", xpfood = "XP Food", spiritscroll = "Spirit Scroll",
+    protectionscroll = "Protection Scroll", intellectscroll = "Intellect Scroll",
+    staminascroll = "Stamina Scroll", strengthscroll = "Strength Scroll",
+    agilityscroll = "Agility Scroll", weaponoil = "Weapon Oil",
+    poisonmh = "Poison (main hand)", poisonoh = "Poison (off hand)",
+    stonemh = "Stone (main hand)", stoneoh = "Stone (off hand)", bandage = "Bandage",
+}
+
+-- Named key bindings (#49): one per button in Bindings.xml, clicking it
+-- like the left mouse button. The labels are set at load, so Key Bindings
+-- shows them on its first open.
+function Apotheca.BindingAction(key) return "CLICK ApothecaButton_" .. key .. ":LeftButton" end
+for _, k in ipairs(Apotheca.DEFAULT_BUTTON_ORDER) do
+    _G["BINDING_NAME_" .. Apotheca.BindingAction(k)] = Apotheca.BUTTON_LABELS[k] or k
+end
+
+-- A bound key as an action bar shows it: CTRL-SHIFT-F becomes csF.
+local SHORT_KEYS = { { "CTRL%-", "c" }, { "SHIFT%-", "s" }, { "ALT%-", "a" }, { "NUMPAD", "N" },
+                     { "MOUSEWHEELUP", "MwU" }, { "MOUSEWHEELDOWN", "MwD" }, { "BUTTON", "M" } }
+function Apotheca.ShortKey(key)
+    if not key then return "" end
+    for _, r in ipairs(SHORT_KEYS) do key = key:gsub(r[1], r[2]) end
+    return key
+end
+
+-- Key text on every button: no secure change, safe in combat.
+function Apotheca.RefreshHotkeys()
+    for key, btn in pairs(Apotheca.buttons) do
+        btn.hotkey:SetText(Apotheca.ShortKey(GetBindingKey(Apotheca.BindingAction(key))))
+    end
+end
+
 -- Returns the saved order from the profile, validated and
 -- back-filled with any missing keys.
 function Apotheca.GetButtonOrder()
@@ -2829,6 +2884,7 @@ local function RefreshLayout(recoveryMode, elixirMode, staticFlags, scrollFlags)
     for key, btn in pairs(Apotheca.buttons) do
         if not activeSet[key] then btn:Hide() end
     end
+    Apotheca._activeKeys = activeSet
 end
 
 -- ============================================================
@@ -2963,11 +3019,23 @@ function Apotheca.UpdateAllButtons()
     -- Resolve the role once, fresh, for this whole update (quietly: this
     -- IS the update a change would ask for).
     Apotheca.RefreshRole(true)
+    updatingButtons = true
     UpdateAllButtonsBody()
+    updatingButtons = false
+    Apotheca.ClearInactiveButtons()
     Apotheca.RefreshFullTint()
     -- Counts full updates: a deferred request (RequestUpdate) made before
     -- this one is satisfied by it and does not run again.
     Apotheca._updateSeq = (Apotheca._updateSeq or 0) + 1
+end
+
+-- A button not on the bar loses its item, so its key binding does nothing
+-- (#49): the bar switched off, a slot with nothing to offer, a hidden one.
+function Apotheca.ClearInactiveButtons()
+    if InCombatLockdown() then return end
+    for _, btn in pairs(Apotheca.buttons) do
+        if not IsActiveButton(btn) then Apotheca.ApplySecureItemAttributes(btn, nil) end
+    end
 end
 
 function UpdateAllButtonsBody()
@@ -2977,16 +3045,25 @@ function UpdateAllButtonsBody()
     if db.enabled == false then
         ApothecaFrame:Hide()
         remindPending = false   -- a hidden bar has nothing to remind
+        Apotheca._activeKeys = {}
         return
     end
 
     local specOk = (not db.onlyWhenHealer) or Apotheca.IsHealerSpec()
-    if not specOk or not Apotheca.IsVisible() then
+    if not specOk then
         ApothecaFrame:Hide()
         remindPending = false
+        Apotheca._activeKeys = {}
         return
     end
-    ApothecaFrame:Show()
+    -- The Visibility setting only hides the bar: its buttons stay set up,
+    -- so their key bindings work with the bar hidden (#49).
+    if Apotheca.IsVisible() then
+        ApothecaFrame:Show()
+    else
+        ApothecaFrame:Hide()
+        remindPending = false
+    end
 
     if db.debug then debugLabel:Show() else debugLabel:Hide() end
 
@@ -3459,7 +3536,7 @@ Apotheca.API.RegisterEvents(eventFrame,
     "GET_ITEM_INFO_RECEIVED", "PLAYER_LOGOUT", "PLAYER_TALENT_UPDATE",
     "READY_CHECK", "READY_CHECK_FINISHED", "ZONE_CHANGED_NEW_AREA", "PLAYER_LEVEL_UP",
     "DISABLE_XP_GAIN", "ENABLE_XP_GAIN", "PLAYER_EQUIPMENT_CHANGED", "WEAPON_ENCHANT_CHANGED",
-    "EDIT_MODE_LAYOUTS_UPDATED")
+    "EDIT_MODE_LAYOUTS_UPDATED", "UPDATE_BINDINGS")
 
 -- UNIT_MAXHEALTH / UNIT_MAXPOWER: percentage potions are ranked against the
 -- maximum (FindBestPotion), so a Fortitude buff, a level-up or gear can
@@ -3587,6 +3664,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         ClearTextureCache()
         RestorePosition()
         RequestUpdate()
+        Apotheca.RefreshHotkeys()
 
     elseif event == "PLAYER_TALENT_UPDATE" or event == "ZONE_CHANGED_NEW_AREA" then
         if playerReady then RequestUpdate() end
@@ -3684,6 +3762,9 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
     elseif event == "WEAPON_ENCHANT_CHANGED" then
         -- A coating applied or run out (#24): the poison glows follow.
         if playerReady and not InCombatLockdown() then UpdateCoatingGlow() end
+
+    elseif event == "UPDATE_BINDINGS" then
+        Apotheca.RefreshHotkeys()
 
     elseif event == "EDIT_MODE_LAYOUTS_UPDATED" then
         -- A layout saved or switched (#40). Changes still being made in
