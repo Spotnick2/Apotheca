@@ -1,9 +1,9 @@
 """
 consumables_reference.py - write a readable catalog of every consumable the
-client reports, for C:\\Projects\\References.
+client reports, for C:\\Projects\\WoW\\References.
 
     python Tools/consumables_reference.py docs/forever-consumables-69977.tsv \\
-        C:/Projects/References/forever-consumables-1.60.1.69977.md
+        C:/Projects/WoW/References/forever-consumables-1.60.1.69977.md
 
 The catalog is a snapshot of one client build, like the API dumps. After a
 new build, re-scan in game (/apo scan, /apo scan2, /reload), re-export, and

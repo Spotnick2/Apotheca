@@ -6,7 +6,7 @@
 --
 -- The important rule: READING AN UNSTUBBED GLOBAL IS AN ERROR. This file is
 -- the list of APIs verified present on builds 1.60.1.69977 and 70009
--- (C:\Projects\References\forever-api-1.60.1.70009.md). Stub a global only
+-- (C:\Projects\WoW\References\forever-api-1.60.1.70338.md). Stub a global only
 -- after confirming it there, with the client's signature. Names the client
 -- does NOT have go in KNOWN_ABSENT, so the addon has to cope without them.
 -- A forgiving stub quietly certifies calls the client will reject.
@@ -692,7 +692,7 @@ function UIDropDownMenu_SetText(dd, t) dd._ddText = t end
 -- Names the client does not have, or that start nil. Reading one returns
 -- nil instead of failing the test, so guarded feature checks still run.
 local KNOWN_ABSENT = {
-    -- Removed on Forever (forever-api-1.60.1.70009.md).
+    -- Removed on Forever (forever-api-1.60.1.70338.md).
     AnimateTexCoords = true, InterfaceOptions_AddCategory = true,
     InterfaceOptionsFrame_OpenToCategory = true, GetItemInfo = true,
     GetItemIcon = true, UnitBuff = true, UnitDebuff = true, UnitAura = true,
@@ -712,7 +712,7 @@ setmetatable(_G, {
     __index = function(_, k)
         if KNOWN_ABSENT[k] then return nil end
         error("read of undefined global '" .. tostring(k) .. "': stub it only if "
-              .. "forever-api-1.60.1.70009.md confirms it exists, or list it in KNOWN_ABSENT", 2)
+              .. "forever-api-1.60.1.70338.md confirms it exists, or list it in KNOWN_ABSENT", 2)
     end,
 })
 

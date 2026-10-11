@@ -6,7 +6,7 @@
 
 **TBC Classic Anniversary is no longer supported.** v1.0.5 was the final TBC release; it stays on CurseForge for Anniversary players, and the code is archived on the `tbc-anniversary` branch / `v1.0.5` tag. Do not add flavor branching for it.
 
-Read `C:\Projects\References\PORTING-TBC-TO-FOREVER.md` before touching an unfamiliar API, and `docs/FOREVER-PROBE.md` for what was measured in game for this addon. The full declared API surface is `C:\Projects\References\forever-api-1.60.1.70009.md`.
+Read `C:\Projects\WoW\References\PORTING-TBC-TO-FOREVER.md` before touching an unfamiliar API, and `docs/FOREVER-PROBE.md` for what was measured in game for this addon. The full declared API surface is `C:\Projects\WoW\References\forever-api-1.60.1.70338.md`.
 
 ## Repository Layout
 
@@ -74,7 +74,7 @@ The canonical set of button keys (also `Apotheca.DEFAULT_BUTTON_ORDER`):
 1. `pwsh Tools/deploy.ps1 -Probe` (the scan lives in the dev-only probe addon). In game, out of combat, in one session (the scan is written to disk only at logout). The probe keeps its results in its own SavedVariable, `ApothecaProbeDB` (`SavedVariables/ApothecaProbe.lua`), never in Apotheca's settings; `scan2` refuses a saved scan from another build: `/apo scan`, then `/apo scan2`, then `/reload` to write the file. `scan` walks every item ID with `C_Item.GetItemInfoInstant` (the client's item DB, no cache needed) and reads each consumable's tooltip and item spell; `scan2` loads the spells whose "Use:" text was missing. `/apo scan3` (#19) collects every spell named "Well Fed" with its description, because an XP food's aura is "Well Fed" with its own spell ID, not the item's; export it with `lua5.1 Tools/export_wellfed.lua <WTF>/.../ApothecaProbe.lua docs/forever-wellfed-<build>.tsv`, whose first lines give COMPLETE or INCOMPLETE with the coverage counts, and the hidden spells (names the client never serves; Blizzard keeps some data encrypted until discovered). Only skipped unnamed spells make a scan INCOMPLETE (exit 2). The XP line is in no spell text the API returns, so which Well Fed auras are XP is decided from the description family (docs/FOREVER-PROBE.md).
 2. `lua5.1 Tools/export_scan.lua <WTF>/Account/<id>/SavedVariables/ApothecaProbe.lua docs/forever-consumables-<build>.tsv`
 3. `python Tools/build_item_tables.py docs/forever-consumables-<build>.tsv`, which writes `ApothecaItems.lua` (`Apotheca.DATA`). Read its "skipped" report and the diff.
-4. `python Tools/consumables_reference.py docs/forever-consumables-<build>.tsv C:/Projects/References/forever-consumables-<version>.<build>.md` refreshes the shared human-readable catalog, and copy the TSV next to it. Diffing two builds' catalogs shows what Blizzard changed.
+4. `python Tools/consumables_reference.py docs/forever-consumables-<build>.tsv C:/Projects/WoW/References/forever-consumables-<version>.<build>.md` refreshes the shared human-readable catalog, and copy the TSV next to it. Diffing two builds' catalogs shows what Blizzard changed.
 
 To change what the addon offers, change the generator or the role profiles, not `ApothecaItems.lua`. `tests/test_items.lua` pins the shape (strongest first, no duplicates) and the decisions (which elixir a healer or caster gets, rejuvenation after pure potions, battleground gates).
 
@@ -214,7 +214,7 @@ TBC Classic Anniversary is archived on the `tbc-anniversary` branch (`v1.0.5`). 
 
 On a new Forever build, the login note tells players the build differs from `Apotheca.API.MEASURED_ON_BUILD` (`ApothecaCompat.lua`). To re-measure:
 
-1. `/apidump` → `C:/Projects/References/forever-api-<version>.<build>.md` (see the porting guide).
+1. `/apidump` → `C:/Projects/WoW/References/forever-api-<version>.<build>.md` (see the porting guide).
 2. `pwsh Tools/deploy.ps1 -Probe`, then `/apo probe` in and out of combat. Update `docs/FOREVER-PROBE.md`.
 3. Re-scan the consumables (`/apo scan`, `/apo scan2`) and the Well Fed spells (`/apo scan3`, exported next to the consumables TSV), and regenerate: see Item Data. The generator refuses an INCOMPLETE Well Fed scan, and fails if an XP food's stat has no XP Well Fed aura or the measured one (1248422) is missing. Write the new `forever-consumables-<version>.<build>.md` to References and diff it against the previous build.
 4. Bump `MEASURED_ON_BUILD`, and `WoW.build` in `tests/wow_stubs.lua`. Bumping without re-measuring silences the only reminder that the notes are stale.
