@@ -24,7 +24,7 @@ tests/                 — Lua 5.1 unit tests against a strict-globals stub; tes
 Tools/deploy.ps1       — deploy to the local Forever AddOns folder
 Tools/*.py, *.lua      — scan export, item-table generator, consumables reference
 docs/FOREVER-PROBE.md  — in-game measurements this addon depends on
-.github/workflows/     — package-check: luac, tests, dry-run package, zip contents
+.github/workflows/     — package-check: luac, tests, dry-run package, zip contents; github-release: a GitHub Release per tag
 CHANGELOG.md           — Version history
 README.md              — Feature overview and slash command docs
 AGENTS.md              — This file
@@ -205,8 +205,9 @@ CurseForge builds from the repository webhook (project `1498195`) when it sees a
 2. Commit, then tag and push: `git tag v2.0.1 && git push origin v2.0.1`.
 3. **The release type comes from the tag name**: `alpha` → Alpha, `beta` → Beta, anything else → Release. This is a distribution channel, not a stability claim. CurseForge defaults every user to Release, so tag `beta` only to hold a build back on purpose. The game client being in beta is not a reason: say that in the notes and ship a Release.
 4. Check the published file on CurseForge: the game flavor is **Forever** (derived from `## Interface: 16001`), and the zip holds exactly `Apotheca/` with the TOC and the files it lists. There is no probe and no `Tools`.
+5. Check the GitHub Release the tag made (Actions, "GitHub release"): its notes are the version's changelog section and its zip is the same build.
 
-**Do not add a release workflow.** The webhook publishes; a packager workflow on tags would publish a second time, and without a secret it would silently skip CurseForge while still cutting a GitHub release. The `package-check` workflow's `-d` dry run publishes nothing.
+**The GitHub Release is automatic (#36).** Pushing a `v*` tag runs `.github/workflows/github-release.yml`: it takes the version's `CHANGELOG.md` section as the notes (`Tools/changelog_section.sh`, which fails if the section is missing), packages with the packager's `-d` (no upload anywhere), checks the zip (`Tools/check_package.sh`, the same check as the package check) and creates the GitHub Release with the zip; `alpha`/`beta` tags become pre-releases. Run it by hand (Actions, "GitHub release", with a tag) to backfill or redo one. **Never let a workflow publish to CurseForge:** the webhook does, and a packager upload would publish a second time. Keep `-d` on every packager run.
 
 TBC Classic Anniversary is archived on the `tbc-anniversary` branch (`v1.0.5`). Do not tag it again.
 

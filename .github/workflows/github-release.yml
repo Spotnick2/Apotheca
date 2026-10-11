@@ -1,0 +1,74 @@
+name: GitHub release
+
+# A GitHub Release for every version tag: the changelog section as notes and
+# the packaged zip (#36). CurseForge is NOT published from here: its own
+# packager builds from the repository webhook (AGENTS.md, Releasing). So the
+# packager runs with -d (no upload anywhere), and `gh release create` makes
+# the GitHub Release alone.
+on:
+  push:
+    tags: ['v*']
+  # Backfill or redo the release of an existing tag.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to release (e.g. v2.6.0)
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: github-release-${{ inputs.tag || github.ref_name }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          fetch-depth: 0
+
+      # The scripts come from the workflow's own commit: an older tag being
+      # backfilled may predate them. They read that tag's files.
+      - name: Release scripts
+        run: |
+          for f in changelog_section.sh check_package.sh; do
+            git show "$GITHUB_SHA:Tools/$f" > "$RUNNER_TEMP/$f"
+            chmod +x "$RUNNER_TEMP/$f"
+          done
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          case "$TAG" in v[0-9]*) ;; *) echo "not a version tag: $TAG"; exit 1 ;; esac
+          "$RUNNER_TEMP/changelog_section.sh" "${TAG#v}" > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+
+      # Same packager SHA as the package check.
+      - name: Package (no upload)
+        uses: BigWigsMods/packager@e50a250f8705041e40f2fa1ddcb280a686d65aa0
+        with:
+          args: -d
+
+      - name: The package ships only the addon files
+        run: |
+          zips=(.release/*.zip)
+          test "${#zips[@]}" -eq 1 || { echo "expected one zip: ${zips[*]}"; exit 1; }
+          "$RUNNER_TEMP/check_package.sh" "${zips[0]}"
+          echo "ZIP=${zips[0]}" >> "$GITHUB_ENV"
+
+      # alpha / beta tags are pre-releases, as on CurseForge.
+      - name: Create or update the GitHub Release
+        run: |
+          pre=()
+          case "$TAG" in *alpha*|*beta*) pre=(--prerelease) ;; esac
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes.md" "${pre[@]}"
+            gh release upload "$TAG" "$ZIP" --clobber
+          else
+            gh release create "$TAG" "$ZIP" --verify-tag --title "Apotheca ${TAG#v}" --notes-file "$RUNNER_TEMP/notes.md" "${pre[@]}"
+          fi

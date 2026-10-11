@@ -57,18 +57,14 @@ jobs:
         with:
           args: -d
 
-      # The zip must hold the TOC, the Lua it lists and Bindings.xml (loaded
-      # by name, never from the TOC), and nothing else.
+      # The zip must hold the TOC, the Lua it lists and Bindings.xml, and
+      # nothing else (the release workflow runs the same check).
       - name: The package ships only the addon files
-        run: |
-          zip=$(ls .release/*.zip | head -1)
-          rm -rf unpacked && mkdir unpacked && unzip -q "$zip" -d unpacked
-          { echo Apotheca.toc; echo Bindings.xml; grep -v '^#' Apotheca.toc | tr -d '\r' | sed '/^$/d'; } | sort > expected.txt
-          (cd unpacked/Apotheca && find . -type f | sed 's|^\./||' | sort) > actual.txt
-          diff -u expected.txt actual.txt
-          # ...and nothing outside Apotheca/ (no ApothecaProbe, no Tools).
-          extra=$(cd unpacked && find . -mindepth 1 -maxdepth 1 ! -name Apotheca)
-          test -z "$extra" || { echo "zip has entries outside Apotheca/: $extra"; exit 1; }
+        run: Tools/check_package.sh "$(ls .release/*.zip | head -1)"
+
+      # The changelog section the GitHub release would use must exist.
+      - name: Release notes script
+        run: Tools/changelog_section.sh "$(grep -m1 -o '^## \[[0-9.]*\]' CHANGELOG.md | tr -dc '0-9.')" > /dev/null
 
       # .release is hidden; upload-artifact skips hidden content by default.
       - name: Keep the zip for inspection
