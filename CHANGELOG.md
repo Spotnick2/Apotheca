@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.6.0] - 2026-10-11
+
+### Added
+- **Profession Bar (optional, off by default).** A second bar that builds itself from what this character knows, so you no longer set up the same professions bar by hand on every character. Turn it on with `/apo utility` or in the options' new Profession Bar tab. It can show:
+  - Hearthstone
+  - Cooking, First Aid, Fishing and Bait and Tackle
+  - Your professions' windows: Alchemy, Blacksmithing, Enchanting, Engineering, Leatherworking, Tailoring, Skinning, Mining, Herbalism, Smelting and Poisons
+  - Disenchant, Find Herbs, Find Minerals and Pick Lock
+
+  Only what the character has appears, and a newly learned or trained profession shows up by itself (after combat, if you learn it in combat). Tick what the bar may show and set its order in the options. It has its own layout (icon size, padding, rows, or matching an action bar) and its own position per character: hold Alt and drag it, or lock it in the options. Some professions haven't been tried in game yet, so please tell us if one doesn't open.
+- **Key bindings for the Profession Bar.** Every action has its own entry under Apotheca in the game's Key Bindings, so a key (say F9 for Disenchant) does the same thing on every character. A binding does nothing for an action the bar isn't showing.
+- **Match an action bar's size.** Under Layout, pick one of the game's action bars and Apotheca uses its icon size and padding, and follows it when you change the bar in Edit Mode. Your own rows and orientation are kept.
+- **Drag and drop to reorder.** In the options, drag a row in Button Order or in the Profession Bar's list to move it. A gold line shows where it will land; let go away from the list to cancel. The arrows still work.
+
+### Fixed
+- If combat starts while you're moving the bar, the bar now drops back where combat caught it once combat ends, and that spot is saved. Before, it could stay stuck to the cursor.
+- The layout options no longer show a stale note or greyed-out sliders after the matched action bar is lost or comes back.
+
 ## [2.5.0] - 2026-09-28
 
 ### Added
