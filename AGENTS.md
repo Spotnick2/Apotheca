@@ -17,7 +17,7 @@ ApothecaItems.lua      — GENERATED item data (Apotheca.DATA); see Item Data
 Apotheca.lua           — Main addon: all logic, item data, frame creation, events
 ApothecaUtility.lua    — The profession bar (#42): its own frame, secure buttons and events
 Apotheca_Options.lua   — In-game options panel: tabbed UI, DB read/write helpers
-Bindings.xml           — Key bindings (profession bar); loaded by name, NOT listed in the TOC
+Bindings.xml           — Key bindings (main bar and profession bar); loaded by name, NOT listed in the TOC
 Tools/ApothecaProbe/   — DEV-ONLY addon (never packaged): /apo probe, /apo scan, /apo scan2, /apo scan3, /apo applytest, /apo bar, /apo prof, /apo proftest; `deploy.ps1 -Probe`
 .pkgmeta               — BigWigs packager config (release packaging only, not used locally)
 tests/                 — Lua 5.1 unit tests against a strict-globals stub; tests/run.ps1
@@ -138,6 +138,9 @@ Secure button attributes (`type`, `item`) must **never** be set while `InCombatL
 - **Shared with the main bar:** `Apotheca.StyleButton`, `Apotheca.GridLayout`, `Apotheca.LayoutSettings(settings)` (so `matchBar` works for both) and `Apotheca.LayoutSignature`. `Utility.Refresh()` asks for a rebuild on the next frame; `SetProfile` calls it.
 - `tests/wow_stubs.lua` has `WoW.strictLockdown`: a protected frame (a secure button or its parent) changed in combat fails the test.
 - `Tools/deploy.ps1` and the package-check zip test ship `Bindings.xml` alongside the TOC's files.
+
+### Key bindings for the main bar (#49)
+One `CLICK ApothecaButton_<key>:LeftButton` per button in `Bindings.xml` (category Apotheca, the default order), labelled from `Apotheca.BUTTON_LABELS` (also the Button Order names) at load; `Apotheca.BindingAction(key)`. **A binding clicks a hidden button**, so a button not on the bar has no item: `RefreshLayout` records the bar's buttons (`Apotheca._activeKeys`), and after each full update `ClearInactiveButtons` clears every other one. Outside the full update, `ApplySecureItemAttributes` gives an inactive button no item, so no other path (the bandage debuff check, leaving combat, debug mode, the waste bypass) can arm one. The bar switched off or "only while Healer" not met: every key does nothing. The **Visibility** setting only hides the frame: the update still sets the buttons up, so keys work on a hidden bar. Key text (`btn.hotkey`, `Apotheca.ShortKey`, shared with the profession bar) refreshes on `UPDATE_BINDINGS` and at login. A new button key needs its `Bindings.xml` line and label (`tests/test_bindings.lua` checks both).
 
 ### Drag Anchor
 `ApothecaAnchor` is the purple "Drag to move" overlay shown while Alt is held over the bar. Its visibility is derived from live state in `UpdateAnchorState()` (`IsAltKeyDown()`, combat, `lockPosition`, visibility, mouse-over), driven by both `MODIFIER_STATE_CHANGED` and a throttled `OnUpdate`. Do not go back to showing or hiding it purely on key-event edges — a missed key-up leaves the bar stuck in the unlocked state. All drag teardown goes through `StopAnchorDrag()`. `PLAYER_REGEN_DISABLED` fires just before lockdown (as on Retail; `WoW.enterCombat` in the stubs fires it first too), so a drag is stopped there, where it is. If lockdown is already on (`WoW.enterLockdown`), `StopAnchorDrag` only records where the bar is and a pending stop: the client refuses `StopMovingOrSizing` on a frame parenting secure buttons, so the bar follows the cursor until combat ends, with the anchor kept up so no click reaches a secure button under it. Then `PLAYER_REGEN_ENABLED` or the anchor poll stops it, puts it back where combat caught it and saves that; a logout meanwhile saves that point too (#46; the profession bar does the same).

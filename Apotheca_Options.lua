@@ -1040,18 +1040,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
     SmallLabel("Drag a row, or use the arrows, to set the order of the buttons on the bar.")
     Gap(6)
 
-    local BUTTON_LABELS = {
-        mana = "Mana Potion", health = "Health Potion", healthstone = "Healthstone",
-        rune = "Rune (mana)", managem = "Mana Gem",
-        recovery = "Recovery (Conjured)", food = "Food", drink = "Drink",
-        flask = "Flask", battle = "Elixir", guardian = "Elixir 2",
-        bufffood = "Buff Food", xpfood = "XP Food", spiritscroll = "Spirit Scroll",
-        protectionscroll = "Protection Scroll", intellectscroll = "Intellect Scroll",
-        staminascroll = "Stamina Scroll", strengthscroll = "Strength Scroll",
-        agilityscroll = "Agility Scroll", weaponoil = "Weapon Oil",
-        poisonmh = "Poison (main hand)", poisonoh = "Poison (off hand)",
-        stonemh = "Stone (main hand)", stoneoh = "Stone (off hand)", bandage = "Bandage",
-    }
+    local BUTTON_LABELS = Apotheca.BUTTON_LABELS
     local ROW_HEIGHT, ROW_WIDTH = 22, CONTENT_W - PAD * 2
     local orderContainer = CreateFrame("Frame", nil, curContent)
     orderContainer:SetPoint("TOPLEFT", curContent, "TOPLEFT", PAD, Y())

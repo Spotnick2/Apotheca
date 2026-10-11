@@ -1,4 +1,33 @@
 <Bindings>
+	<!-- The consumable bar (#49): one binding per button (ApothecaButton_<key>,
+	     Apotheca.lua), in its default order. The labels are BINDING_NAME_*
+	     globals set in Apotheca.lua. A button not on the bar has no item, so
+	     its key does nothing. -->
+	<Binding name="CLICK ApothecaButton_mana:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_managem:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_health:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_healthstone:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_rune:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_recovery:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_food:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_drink:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_flask:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_battle:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_guardian:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_bufffood:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_xpfood:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_spiritscroll:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_protectionscroll:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_intellectscroll:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_staminascroll:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_strengthscroll:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_agilityscroll:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_weaponoil:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_poisonmh:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_poisonoh:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_stonemh:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_stoneoh:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_bandage:LeftButton" category="Apotheca"/>
 	<!-- The profession bar (#42): one binding per action, clicking its button
 	     (ApothecaUtility.lua). category, not header: a header without a category
 	     lands in Other as a raw HEADER_ row (measured, PORTING-TBC-TO-FOREVER.md).
