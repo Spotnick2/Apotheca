@@ -377,8 +377,18 @@ function Apotheca.BuildOptionsPanelContent(panel)
             local top, left, width = container:GetTop(), container:GetLeft(), container:GetWidth()
             if not (x and y and top and left and width) then return nil end
             local scale = container:GetEffectiveScale()
-            x, y = x / scale, y / scale
-            return top - y, x >= left and x <= left + width
+            local inside = x / scale >= left and x / scale <= left + width
+            -- A scrolled list reaches past the scroll frame: only the part
+            -- in view counts, so a drop over the tabs or below the panel
+            -- is away from the list.
+            local content = container:GetParent()
+            local sf = content and content:GetParent()
+            if inside and sf and sf.GetVerticalScrollRange then
+                local sTop, sBottom = sf:GetTop(), sf:GetBottom()
+                local sy = y / sf:GetEffectiveScale()
+                inside = sTop ~= nil and sBottom ~= nil and sy <= sTop and sy >= sBottom
+            end
+            return top - y / scale, inside
         end
         -- The slot under the cursor, or nil away from the list (a row's
         -- height of slack above and below it).

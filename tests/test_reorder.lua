@@ -105,6 +105,17 @@ H.eq(table.concat(db.utility.order, ","), before, "dropped beside the list: unch
 dropAt(de, 610, -2000)
 H.eq(table.concat(db.utility.order, ","), before, "dropped far below it: unchanged")
 
+-- Scrolled: the list's top is above the view (scroll frame 500 to 200).
+-- Over the tabs above it or below the panel, level with rows out of view,
+-- a drop is away from the list.
+local uList = de:GetParent()
+uList._top = 700
+dropAt(de, 610, 550)
+H.eq(table.concat(db.utility.order, ","), before, "scrolled, dropped above the view: unchanged")
+dropAt(de, 610, 190)
+H.eq(table.concat(db.utility.order, ","), before, "scrolled, dropped below the view: unchanged")
+uList._top = nil
+
 -- A refresh during the drag: the row is found again at the drop.
 de._scripts.OnDragStart(de)
 db.utility.order = { "hearthstone", "cooking", "firstaid", "disenchant" }
