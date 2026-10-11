@@ -8,7 +8,9 @@ zip=$1
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 unzip -q "$zip" -d "$work/unpacked"
-{ echo Apotheca.toc; echo Bindings.xml; grep -v '^#' Apotheca.toc | tr -d '\r' | sed '/^$/d'; } | sort > "$work/expected.txt"
+# Bindings.xml is expected only where the checkout has it (from 2.6.0):
+# backfilling an older tag checks that tag's own files.
+{ echo Apotheca.toc; if [ -f Bindings.xml ]; then echo Bindings.xml; fi; grep -v '^#' Apotheca.toc | tr -d '\r' | sed '/^$/d'; } | sort > "$work/expected.txt"
 (cd "$work/unpacked/Apotheca" && find . -type f | sed 's|^\./||' | sort) > "$work/actual.txt"
 diff -u "$work/expected.txt" "$work/actual.txt"
 extra=$(cd "$work/unpacked" && find . -mindepth 1 -maxdepth 1 ! -name Apotheca)
