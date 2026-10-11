@@ -1,6 +1,6 @@
 # Apotheca on WoW: Forever: probe results
 
-These were measured with `/apo probe` (`ApothecaProbe.lua`) on build **1.60.1.69977**, interface 16001. Addon-agnostic findings live in `C:\Projects\References\PORTING-TBC-TO-FOREVER.md`. This file records only what Apotheca itself depends on.
+These were measured with `/apo probe` (`ApothecaProbe.lua`) on build **1.60.1.69977**, interface 16001. Addon-agnostic findings live in `C:\Projects\WoW\References\PORTING-TBC-TO-FOREVER.md`. This file records only what Apotheca itself depends on.
 
 ## Run 1: 2026-09-23, out of combat (level 15 Hunter)
 
@@ -81,7 +81,7 @@ On specs: the Priest also has one spec (`1487, "Priest", ..., "DAMAGER"`). The r
 
 ## Run 5: 2026-09-23, the consumable database (`/apo scan` + `/apo scan2`)
 
-`C_Item.GetItemInfoInstant` over item IDs 1 to 300000 finds **2442 consumables** (classID 0). Their tooltips and item spells went into `docs/forever-consumables-69977.tsv`, from which `ApothecaItems.lua` is generated. The shared, readable catalog is `C:/Projects/References/forever-consumables-1.60.1.69977.md`.
+`C_Item.GetItemInfoInstant` over item IDs 1 to 300000 finds **2442 consumables** (classID 0). Their tooltips and item spells went into `docs/forever-consumables-69977.tsv`, from which `ApothecaItems.lua` is generated. The shared, readable catalog is `C:/Projects/WoW/References/forever-consumables-1.60.1.69977.md`.
 
 - **Tooltips arrive without their "Use:" line until the item's SPELL is loaded.** After the first pass, only 17 of 106 potions had it. `C_Spell.RequestLoadSpellData` in a second pass brought that to 103.
 - **Forever food is a new system.** Most cooked food uses a "Nutritious Food" spell that restores health, gives Well Fed and adds +5% kill XP. Restore values are rescaled (58 / 234 / 530 / 841 / 1338 / 2065 against Vanilla's 61 / 243 / 552 / 874 / 1392 / 2148).
@@ -136,9 +136,9 @@ Talent-based detection would need a hand-made role map of every class's new tree
 ## Build 1.60.1.70009 (client built Sep 23), 2026-09-25
 
 - **SavedVariables load back.** The owner confirmed it with a **full exit and relaunch**: settings, the bar position and options survive. On disk, `svLoadCheck` was written as before; what changed is that the client now reads it. Through 69977 nothing loaded (account-wide or per-character). `API.SV_BROKEN_THROUGH_BUILD = 69977` limits the "not loaded" login line to those builds.
-- **API dump** `C:/Projects/References/forever-api-1.60.1.70009.md`: 6596 documented functions (69977: 6577). Of 220 changed or removed lines against 69977, **none touches an API Apotheca or the probe calls**. The changes are UI mixins, LFG frames, a role-poll popup, and `C_UnitAuras.GetRefreshCarryOverDuration` (new).
+- **API dump** `C:/Projects/WoW/References/forever-api-1.60.1.70009.md`: 6596 documented functions (69977: 6577). Of 220 changed or removed lines against 69977, **none touches an API Apotheca or the probe calls**. The changes are UI mixins, LFG frames, a role-poll popup, and `C_UnitAuras.GetRefreshCarryOverDuration` (new).
 - **Probe on 70009:** identical to 69977. Health and power are secret (max readable), cooldowns and auras are not secret out of combat, the role selector and talents read the same, and templates, bags and weapon slots are unchanged.
-- **Consumable scan on 70009** (`docs/forever-consumables-70009.tsv`, catalog `C:/Projects/References/forever-consumables-1.60.1.70009.md`):
+- **Consumable scan on 70009** (`docs/forever-consumables-70009.tsv`, catalog `C:/Projects/WoW/References/forever-consumables-1.60.1.70009.md`):
   - The first scan exposed a tool gap: `/apo scan2` skipped subclass 8 ("Other"), so healthstones, rations, mana gems, Holy Water and Dense Runecloth had no Use text, and regenerating would have dropped them silently. scan2 now covers subclass 8, and the generator's `--expect-present` (in CI) fails the build if a must-have item is missing.
   - Five Forever fruits (249791 to 249795: Shiny Green Apple, Sweetsour Grapes, Wayward Pomegranate, Tel'Abim Plantains, Flame Papaya) never loaded their item data. Their 69977 rows are carried over and marked `CARRIED FROM 69977`.
   - **Real changes vs 69977:**
@@ -257,6 +257,10 @@ Geometry in UIParent units (`ActionButton1` stays 45 x 45; the icon size is its 
   - Fishing: "Must have a Fishing Pole equipped" without a pole.
   - Hearthstone: casts (8690), by key **in combat** too, from a **hidden** button.
   - **Every key press reached its button** (none SILENT), **a binding acts on a hidden button**, and nothing was blocked.
+
+## API dump 1.60.1.70338 (client built Oct 9), 2026-10-11
+
+Every API (90 names: the stubbed globals and each `C_*` call in the addon) and every event Apotheca uses is present in `forever-api-1.60.1.70338.md`, as it was in 70009; nothing was removed. Interface is still 16001. No behaviour was re-measured on this build, so `MEASURED_ON_BUILD` stays 70009.
 
 ## Still to measure
 

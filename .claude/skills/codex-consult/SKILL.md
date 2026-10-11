@@ -85,7 +85,7 @@ health, power, auras or cooldowns (all can be secret on this client), or a chang
 measured on the live client, and a cold reviewer will otherwise argue from Classic-era or Retail
 behaviour that does not hold here - that the player's current health and mana are secret even out
 of combat, that auras throw in combat, that SavedVariables never load, that the client's secure
-handler decides which mouse edge acts. `C:/Projects/References/forever-api-1.60.1.69977.md` is the
+handler decides which mouse edge acts. `C:/Projects/WoW/References/forever-api-1.60.1.70338.md` is the
 full measured API surface if a question turns on whether something exists.
 
 Say what you have already established and ask it not to repeat that work. A clean "no defect found"

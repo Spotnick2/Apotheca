@@ -8,8 +8,8 @@
 -- copy functions into file locals.
 --
 -- Measured facts behind these adapters:
---   C:\Projects\References\PORTING-TBC-TO-FOREVER.md
---   C:\Projects\References\forever-api-1.60.1.70009.md
+--   C:\Projects\WoW\References\PORTING-TBC-TO-FOREVER.md
+--   C:\Projects\WoW\References\forever-api-1.60.1.70338.md
 -- ============================================================
 
 Apotheca = Apotheca or {}
