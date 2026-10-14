@@ -26,6 +26,12 @@ function H.eq(actual, expected, msg)
 end
 
 function H.done(name)
+    -- Every blocked secret operation is a taint.log line in game, even
+    -- when a pcall catches it (wow_stubs.lua counts them).
+    local stubs = rawget(_G, "WoW")
+    if stubs and stubs.secretBlocked then
+        H.eq(stubs.secretBlocked, 0, "no arithmetic or comparison was attempted on a secret")
+    end
     if failed > 0 then
         io.stderr:write(name .. ": " .. failed .. " failed, " .. passed .. " passed\n")
         os.exit(1)

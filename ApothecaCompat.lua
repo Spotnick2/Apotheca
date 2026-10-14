@@ -159,7 +159,16 @@ end
 -- The player's current health and power are secret on this client, even
 -- out of combat (docs/FOREVER-PROBE.md); cooldowns and counts may be in
 -- combat. A secret must never reach a comparison outside a pcall.
+--
+-- Nor inside one, when it can be helped: the client logs every blocked
+-- arithmetic or comparison to taint.log even when a pcall catches it (106
+-- lines in one session from the health and mana reads alone). So a value
+-- is tested with issecretvalue first; the pcall stays as the backstop.
 -- ------------------------------------------------------------
+
+local function secret(v)
+    return issecretvalue ~= nil and issecretvalue(v)
+end
 
 -- Missing health and missing MANA as plain numbers, each nil when the
 -- client would not hand it over. Read separately: the two secrecy switches
@@ -167,8 +176,9 @@ end
 -- shapeshifted druid's energy or rage is never mistaken for it.
 local function missing(cur, max)
     local ok, m = pcall(function()
-        local v = (max() or 0) - (cur() or 0)
-        -- Comparing a secret is what throws; do it here, inside the pcall.
+        local c, x = cur(), max()
+        if secret(c) or secret(x) then return nil end
+        local v = (x or 0) - (c or 0)
         local _ = v > 0
         return v
     end)
@@ -191,6 +201,7 @@ function API.PlayerMax()
     local mana = Enum and Enum.PowerType and Enum.PowerType.Mana or 0
     local ok, h, m = pcall(function()
         local hh, mm = UnitHealthMax("player"), UnitPowerMax("player", mana)
+        if secret(hh) or secret(mm) then return nil, nil end
         local _ = (hh > 0), (mm >= 0)
         return hh, mm
     end)

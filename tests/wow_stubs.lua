@@ -54,10 +54,20 @@ function WoW.Reveal(v)
     if getmetatable(v) == secretMT then return hidden[v] end
     return v
 end
+-- Arithmetic or ordering on a secret is blocked: the client throws, and
+-- logs every attempt to taint.log even inside a pcall. So both throw here
+-- too, and are counted (WoW.secretBlocked): code that tests issecretvalue
+-- first never reaches them.
 for _, op in ipairs({ "__add", "__sub", "__mul", "__div", "__unm" }) do
-    secretMT[op] = function() return Secret() end
+    secretMT[op] = function()
+        WoW.secretBlocked = WoW.secretBlocked + 1
+        error("attempt to perform arithmetic on a secret value", 2)
+    end
 end
-secretMT.__lt = function() error("attempt to compare a secret number value", 2) end
+secretMT.__lt = function()
+    WoW.secretBlocked = WoW.secretBlocked + 1
+    error("attempt to compare a secret number value", 2)
+end
 secretMT.__le = secretMT.__lt
 WoW.Secret = Secret
 function WoW.IsSecret(v) return getmetatable(v) == secretMT end
@@ -89,6 +99,7 @@ function WoW.reset()
     WoW.itemsUsed    = {}        -- names passed to C_Item.UseItemByName
     WoW.curvesRefused = false    -- simulate a client that refuses colour curves
     WoW.strictLockdown = false   -- protected frames changed in combat fail the test
+    WoW.secretBlocked = 0     -- blocked secret arithmetic or comparisons (taint.log lines)
 end
 
 function WoW.AddItem(bag, slot, itemID, count, name)
