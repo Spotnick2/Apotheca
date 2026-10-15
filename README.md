@@ -2,6 +2,10 @@
 
 **Apotheca** is a smart consumable bar for **World of Warcraft: Forever**. It scans your bags and shows the best potion, food, drink, buff food, flask, elixir, scroll, weapon oil, healthstone and bandage you carry as clickable buttons. The bar updates as your bags change.
 
+![The Apotheca bar beside the action bars](https://raw.githubusercontent.com/Spotnick2/Apotheca/main/docs/screenshots/bar-context.png)
+
+*Shown on TBC Anniversary; the bar looks the same on Forever.*
+
 What it offers follows your role: Tank, Healer or Damage. Apotheca reads it from the game's role selector (or your class), or you set it per character in the options. Druids and Shamans also choose Spell or Physical damage. Warriors and Rogues get no mana buttons. "Only show the bar while my role is Healer" is there if you want the old healer-only bar.
 
 > **TBC Classic Anniversary** players: 1.0.5 was the last Anniversary release. It stays available on CurseForge, but won't get updates.
