@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.7.0] - 2026-10-14
+
+### Added
+- **Key bindings for the main bar.** Every button has its own entry under Apotheca in the game's Key Bindings (Options > Keybindings > Apotheca). The key follows the button, not the item: your Mana Potion key always uses your best mana potion, whatever it is. The bound key shows on the button, like on an action bar.
+  - A key does nothing while its button isn't on the bar (switched off, used up, or a flask slot hidden by a running flask), so it never uses an item you can't see.
+  - If you hide the bar with the Visibility setting, the keys keep working, so you can play from keys alone. With the bar switched off, or "only while my role is Healer" not met, every key does nothing.
+
+### Fixed
+- Apotheca no longer fills the game's taint log (`Logs/taint.log`) with "arithmetic on a secret value was blocked" lines, about a hundred in a session. Nothing was broken in game; Apotheca now checks first whether your health and mana are hidden instead of trying the sum.
+
 ## [2.6.0] - 2026-10-11
 
 ### Added
