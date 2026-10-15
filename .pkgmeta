@@ -10,6 +10,7 @@ ignore:
   - .gitignore
   - .claude
   - README.md
+  - README.curseforge.md
   - CHANGELOG.md
   - AGENTS.md
   - CLAUDE.md
