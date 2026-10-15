@@ -40,6 +40,16 @@ H.eq(mana and mana:GetAttribute("type"), "item", "mana button type is item")
 ------------------------------------------------------------
 WoW.healthSecret = true
 H.eq(Apotheca.API.PlayerMissing(), nil, "secret health reads as unknown, and does not throw")
+-- Inside a pcall is not enough: the client logs every blocked attempt to
+-- taint.log (106 lines in one session), so a secret is never subtracted.
+WoW.secretBlocked = 0
+local _, mm = Apotheca.API.PlayerMissing()
+H.eq(mm, nil, "secret mana reads as unknown")
+H.eq(WoW.secretBlocked, 0, "no arithmetic is attempted on secret health or mana")
+WoW.healthMax = WoW.Secret(1000)
+H.eq(Apotheca.API.PlayerMax(), nil, "a secret maximum (seen on a PvP realm) reads as unknown")
+H.eq(WoW.secretBlocked, 0, "and is not compared or subtracted either")
+WoW.healthMax = 1000
 
 local id = Apotheca.FindBestHealthstone(Apotheca.BuildBagMap())
 H.eq(id, 9421, "with health unreadable, the strongest healthstone is offered")
