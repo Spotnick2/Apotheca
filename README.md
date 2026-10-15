@@ -2,7 +2,7 @@
 
 **Apotheca** is a smart consumable bar for **World of Warcraft: Forever**. It scans your bags and shows the best potion, food, drink, buff food, flask, elixir, scroll, weapon oil, healthstone and bandage you carry as clickable buttons. The bar updates as your bags change.
 
-It is built for healers (Priest, Paladin, Shaman, Druid). Casters and other roles are next ([#9](https://github.com/Spotnick2/Apotheca/issues/9)).
+What it offers follows your role: Tank, Healer or Damage. Apotheca reads it from the game's role selector (or your class), or you set it per character in the options. Druids and Shamans also choose Spell or Physical damage. Warriors and Rogues get no mana buttons. "Only show the bar while my role is Healer" is there if you want the old healer-only bar.
 
 > **TBC Classic Anniversary** players: 1.0.5 was the last Anniversary release. It stays available on CurseForge, but won't get updates.
 
@@ -15,12 +15,14 @@ Your settings are saved per profile (global or per character), and your role cho
 | Button | Picks |
 |---|---|
 | Mana / Health | The strongest potion you carry. Rejuvenation potions come after plain potions of the same strength. Percentage potions (Restored Healing 30%, Restored Mana 20%) are compared using your own maximum health and mana. |
+| Mana Gem *(mages)* | The strongest gem that is off cooldown: each gem has its own. |
 | Healthstone | The strongest stone. |
+| Rune | A Demonic or Dark Rune, for mana. |
 | Food / Drink | The best plain food and water. Conjured items are preferred unless vendor food is clearly better; the threshold is configurable. Food that restores both health and mana can appear on both buttons. |
-| Buff food | Well Fed food for your stat priority. On Forever that means the teas (mana + healing), the smoothies (mana + spirit), and the new cooking. |
+| Buff food | Well Fed food for your role's stat priority, which you can reorder in the options. For a healer on Forever that means the teas (mana + healing), the smoothies (mana + spirit), and the new cooking. |
 | XP food *(optional, off by default)* | While you're levelling: food or drink with Forever's 5% kill-XP bonus that you can eat at your level: a stat your role uses first, then the highest level. When you leave combat without that buff, it glows for a few seconds as a reminder. |
-| Flask / Elixir / Elixir 2 | Three separate slots, each offering its best item for your role on its own: Distilled Wisdom, Cleric's Elixirs, Mageblood… Forever has no TBC-style battle/guardian elixir limit. Which elixirs stack with each other hasn't been measured yet; if two don't, please report it. A slot whose buff is already running offers nothing, so a misclick can't waste a two-hour flask. |
-| Spirit / Protection scroll | The strongest scroll. |
+| Flask / Elixir / Elixir 2 | Three separate slots, each offering its best item for your role on its own (for a healer: Distilled Wisdom, Cleric's Elixirs, Mageblood…). Forever has no TBC-style battle/guardian elixir limit. Which elixirs stack with each other hasn't been measured yet; if two don't, please report it. A slot whose buff is already running offers nothing, so a misclick can't waste a two-hour flask. |
+| Scrolls | Spirit, Protection, Intellect, Stamina, Strength and Agility: the kinds your role uses, each its own button with the strongest scroll you carry. A scroll doesn't glow while a buff it doesn't stack with is on you (Divine Spirit, Arcane Intellect, Power Word: Fortitude). |
 | Weapon oil | By role: healers get mana oil, casters wizard oil (a Druid or Shaman on Spell damage too), tanks and physical damage mana oil; you can choose instead. Only an oil you can use yet. Left-click applies it to your main-hand weapon; right-click lets you pick the weapon. |
 | Weapon stones *(experimental, chosen per character and hand)* | Pick "Damage stone first" or "Elemental first" for a hand: a sharpening stone for a sharp weapon, a weightstone for a blunt one, Elemental (crit) for any. A stone on the main hand replaces the Weapon Oil button there. Not yet tried in game. |
 | Poisons *(rogues, experimental, off by default)* | One button per hand: your strongest poison of the kind you pick for that hand (Instant and Deadly by default), applied to that weapon on click. Not yet tried on a rogue in game, so please report whether it works. |
@@ -49,6 +51,7 @@ Measured in game so far: Cooking, First Aid, Fishing, Enchanting, Tailoring, Lea
 ## Also
 
 - Ready check: missing buffs glow (buff food, XP food, flask and elixirs, scrolls, weapon oil).
+- Potions, food, drink and healthstones turn grey while you're at full health or mana (on by default). The game colours the icon itself, so this works even though addons can't read your health.
 - Global or per-character profiles.
 - Horizontal or vertical layout, rows, icon size and padding, or the icon size and padding of one of your action bars (Edit Mode), followed as you change it.
 - Visibility: always, in combat only, out of combat only, or hidden.
