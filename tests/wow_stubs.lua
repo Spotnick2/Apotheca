@@ -69,6 +69,21 @@ secretMT.__lt = function()
     error("attempt to compare a secret number value", 2)
 end
 secretMT.__le = secretMT.__lt
+-- But Lua 5.1 calls __lt / __le only between two tables: `secret > 0`
+-- raises its own type error before any metamethod runs (lvm.c,
+-- luaV_lessthan). The addon catches that in a pcall, so the pcall is where
+-- it is counted. A stub secret is the only table the addon would compare
+-- with a number.
+local rawpcall = pcall
+local function counted(ok, ...)
+    local err = ...
+    if not ok and type(err) == "string"
+       and (err:find("attempt to compare %a+ with table") or err:find("attempt to compare table with")) then
+        WoW.secretBlocked = WoW.secretBlocked + 1
+    end
+    return ok, ...
+end
+function pcall(f, ...) return counted(rawpcall(f, ...)) end
 WoW.Secret = Secret
 function WoW.IsSecret(v) return getmetatable(v) == secretMT end
 

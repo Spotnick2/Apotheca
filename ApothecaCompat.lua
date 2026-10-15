@@ -28,6 +28,13 @@ API.SV_BROKEN_THROUGH_BUILD = 69977
 
 local PREFIX = "|cff9966ffApotheca:|r "
 
+-- True for a secret value (see "Secret values" below). Test this BEFORE
+-- any arithmetic or ordering: the client logs every blocked attempt to
+-- taint.log even when a pcall catches it.
+local function secret(v)
+    return issecretvalue ~= nil and issecretvalue(v)
+end
+
 -- ------------------------------------------------------------
 -- Items
 -- ------------------------------------------------------------
@@ -105,10 +112,15 @@ function API.ContainerItemID(bag, slot)
     return C_Container.GetContainerItemID(bag, slot)
 end
 
--- GetContainerItemInfo returns a struct here, not the old tuple.
+-- GetContainerItemInfo returns a struct here, not the old tuple. Counts
+-- are readable in combat (measured), but should a build make them secret,
+-- this raises a plain error rather than hand one to `count > 0`: callers
+-- that pcall the bag scan keep the counts they already show.
 function API.ContainerItemCount(bag, slot)
     local info = C_Container.GetContainerItemInfo(bag, slot)
-    return info and info.stackCount or 0
+    local n = info and info.stackCount
+    if secret(n) then error("secret stack count", 2) end
+    return n or 0
 end
 
 -- Carried bags: backpack, bags 1..NUM_BAG_SLOTS, and the reagent bag.
@@ -165,10 +177,6 @@ end
 -- lines in one session from the health and mana reads alone). So a value
 -- is tested with issecretvalue first; the pcall stays as the backstop.
 -- ------------------------------------------------------------
-
-local function secret(v)
-    return issecretvalue ~= nil and issecretvalue(v)
-end
 
 -- Missing health and missing MANA as plain numbers, each nil when the
 -- client would not hand it over. Read separately: the two secrecy switches
