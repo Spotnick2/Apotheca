@@ -2932,20 +2932,6 @@ end
 -- APPLY ITEM TO BUTTON
 -- ============================================================
 
--- An empty slot or a filled one: the empty-slot art, or under GAB's glass
--- (#68) the player's empty-slot look there (frosted by default), since GAB
--- counts a skinned button as filled until told. Only a change is sent. A
--- GAB build without SetButtonEmpty shows every slot as filled.
-local function ShowSlotEmpty(btn, empty)
-    btn.emptyBg:SetAlpha(empty and 0.6 or 0)
-    if not btn.glass or btn.glassEmpty == empty then return end
-    local GAB = GlassActionBars
-    if type(GAB) == "table" and type(GAB.SetButtonEmpty) == "function"
-        and GAB.SetButtonEmpty(btn, empty) == true then
-        btn.glassEmpty = empty
-    end
-end
-
 local function ApplyItemToButton(btn, itemID, count, texture)
     local db = DB()
     if db.debug and itemID ~= btn.itemID then
@@ -2961,7 +2947,7 @@ local function ApplyItemToButton(btn, itemID, count, texture)
         btn.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
         btn.icon:SetDesaturated(false)
         btn.icon:Show()
-        ShowSlotEmpty(btn, false)
+        btn.emptyBg:SetAlpha(0)
         btn.countText:SetText(count and count > 1 and count or "")
         ApplyItemCooldown(btn.cooldown, itemID)
     else
@@ -2973,7 +2959,7 @@ local function ApplyItemToButton(btn, itemID, count, texture)
         btn.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
         btn.icon:SetDesaturated(true)
         btn.icon:Show()
-        ShowSlotEmpty(btn, true)
+        btn.emptyBg:SetAlpha(0.6)
     end
 end
 
@@ -3605,7 +3591,6 @@ function Apotheca.WearGlass(btn)
     if ok ~= true then return false end
     btn.btnBorder:Hide()
     btn.emptyBg:Hide()
-    btn.glass = true   -- its empty slots now go through GAB (ShowSlotEmpty)
     return true
 end
 
