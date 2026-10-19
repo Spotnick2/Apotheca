@@ -17,6 +17,7 @@
 ## IconTexture: Interface\Icons\INV_Potion_76
 ## SavedVariables: ApothecaDB
 ## SavedVariablesPerCharacter: ApothecaCharDB
+## OptionalDeps: GlassActionBars
 ## X-Curse-Project-ID: 1498195
 
 ApothecaCompat.lua

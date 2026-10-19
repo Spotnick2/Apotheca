@@ -1713,7 +1713,20 @@ end
 -- POSITION
 -- ============================================================
 
+-- Docked by Glass Action Bars (#68, see GLASS ACTION BARS below): while
+-- `hosted`, GAB owns the bar's position, so nothing here saves, restores or
+-- drags it, and the saved spot is kept for when it is undocked. `geom` is
+-- the size and padding of the bar it matches (nil: the bar's own); `active`
+-- the last laid-out button keys, for GAB's Layout calls.
+-- `sent`: the grid last given to the dock. DOCK_ID is the player's dock
+-- settings' key in GAB: never change it.
+local DOCK_ID = "apotheca"
+local dock = { hosted = false, geom = nil, active = nil, sent = nil }
+
+function Apotheca.DockHosted() return dock.hosted end
+
 local function SavePosition(left, bottom)
+    if dock.hosted then return end
     -- Always store the BOTTOMLEFT corner so the bar grows rightward on resize.
     -- GetLeft/GetBottom return screen coordinates we can convert to UIParent offsets.
     left   = left   or ApothecaFrame:GetLeft()
@@ -1725,6 +1738,7 @@ local function SavePosition(left, bottom)
 end
 
 local function RestorePosition()
+    if dock.hosted then return end
     local db = ApothecaCharDB
     ApothecaFrame:ClearAllPoints()
     if db and db.point and db.x and db.y then
@@ -2090,12 +2104,25 @@ end
 -- given: the profession bar's), with the chosen action bar's icon size and
 -- padding while matchBar names one and the client reports them. The second
 -- return says whether they did, for the options panel.
+-- Docked (#68, the main bar only): the dock decides instead of matchBar, so
+-- the size and padding are those of the bar Glass Action Bars matches, else
+-- the bar's own; rows and orientation stay the bar's own (owner: one
+-- two-row Apotheca block sits beside three stacked one-row bars). No
+-- margin around the buttons, so the dock lines them up with the bar's.
 function Apotheca.LayoutSettings(src)
     local db = src or DB()
     local layout = {
         orientation = db.orientation, rows = db.rows,
         iconSize = db.iconSize, iconPadding = db.iconPadding,
     }
+    if not src and dock.hosted then
+        layout.inset = 0
+        if dock.geom then
+            layout.iconSize, layout.iconPadding = dock.geom.size, dock.geom.padding
+            return layout, true
+        end
+        return layout, false
+    end
     if (tonumber(db.matchBar) or 0) > 0 then
         local bar = Apotheca.API.ActionBarLayout(tonumber(db.matchBar))
         if bar then
@@ -2127,10 +2154,11 @@ function Apotheca.GridLayout(frame, buttons, layout)
     local btnSize     = math.max(16, layout.iconSize    or BUTTON_SIZE)
     local btnGap      = math.max(0,  layout.iconPadding or BUTTON_GAP)
     local n           = #buttons
+    local inset       = layout.inset or FRAME_PADDING
 
     if n == 0 then
-        frame:SetWidth(FRAME_PADDING * 2 + btnSize)
-        frame:SetHeight(FRAME_PADDING * 2 + btnSize)
+        frame:SetWidth(inset * 2 + btnSize)
+        frame:SetHeight(inset * 2 + btnSize)
         return
     end
 
@@ -2142,8 +2170,8 @@ function Apotheca.GridLayout(frame, buttons, layout)
         cols = math.ceil(n / rows)
     end
 
-    local frameW = FRAME_PADDING * 2 + cols * btnSize + (cols - 1) * btnGap
-    local frameH = FRAME_PADDING * 2 + rows * btnSize + (rows - 1) * btnGap
+    local frameW = inset * 2 + cols * btnSize + (cols - 1) * btnGap
+    local frameH = inset * 2 + rows * btnSize + (rows - 1) * btnGap
     frame:SetWidth(frameW)
     frame:SetHeight(frameH)
 
@@ -2151,8 +2179,8 @@ function Apotheca.GridLayout(frame, buttons, layout)
         local idx  = i - 1
         local col  = idx % cols
         local row  = math.floor(idx / cols)
-        local x    = FRAME_PADDING + col * (btnSize + btnGap)
-        local y    = -(FRAME_PADDING + row * (btnSize + btnGap))
+        local x    = inset + col * (btnSize + btnGap)
+        local y    = -(inset + row * (btnSize + btnGap))
         btn:SetWidth(btnSize)
         btn:SetHeight(btnSize)
         SizeButtonBorder(btn, btnSize)
@@ -2174,6 +2202,17 @@ local function ApplyLayout(active)
     local buttons = {}
     for i, key in ipairs(active) do buttons[i] = Apotheca.buttons[key] end
     Apotheca.GridLayout(ApothecaFrame, buttons, layout)
+    dock.active = active
+    -- Docked: a bar that changed size is placed again (#68). Asked only
+    -- when its grid changed, not on every update; GAB ignores the request
+    -- from inside its own Layout call.
+    if dock.hosted then
+        local grid = sig .. "#" .. #active
+        if grid ~= dock.sent then
+            dock.sent = grid
+            GlassActionBars.RequestLayout(DOCK_ID)
+        end
+    end
 end
 
 local ApothecaFrame = CreateFrame("Frame", "ApothecaFrame", UIParent)
@@ -2232,6 +2271,7 @@ local function AnchorShouldShow()
     return IsAltKeyDown()
        and not InCombatLockdown()
        and not DB().lockPosition
+       and not dock.hosted
        and ApothecaFrame:IsVisible()
        and ApothecaFrame:IsMouseOver()
 end
@@ -2293,7 +2333,7 @@ local function UpdateAnchorState()
 end
 
 anchor:SetScript("OnDragStart", function()
-    if not InCombatLockdown() and not DB().lockPosition then
+    if not InCombatLockdown() and not DB().lockPosition and not dock.hosted then
         ApothecaFrame:StartMoving()
         anchorDragging = true
     end
@@ -2411,6 +2451,7 @@ function Apotheca.StyleButton(btn, cooldownName)
     hl:SetBlendMode("ADD")
     hl:SetAllPoints(btn)
     btn:SetHighlightTexture(hl)
+    btn.highlightTex = hl
 
     local ct = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
     ct:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 2)
@@ -3519,6 +3560,83 @@ SlashCmdList["APOTHECA"] = function(msg)
 end
 
 -- ============================================================
+-- GLASS ACTION BARS (#68)
+-- With Glass Action Bars (GAB) installed, the bar can dock beside one of
+-- the action bars (the player's choice, in GAB's Dock settings), and every
+-- button wears GAB's glass, so its theme and button feedback apply here
+-- too. Only GAB's public API (its docs/PUBLIC-API.md, version 1): nothing
+-- of its settings is read. Without GAB none of this runs.
+-- ============================================================
+
+local function GlassAPI()
+    local GAB = GlassActionBars
+    if type(GAB) == "table" and GAB.PUBLIC_API_VERSION == 1 then return GAB end
+end
+
+-- GAB's glass on one button. The icon and cooldown stay Apotheca's: the
+-- full tint and the greyed-out states are painted on the icon, and GAB
+-- never touches either. The glass body and rim replace the bronze frame and
+-- the empty-slot art, so those go (GAB's `border` and `empty` keys fade
+-- them too once it has them; older versions ignore unknown keys). The skin
+-- isn't undone without a /reload. "Apotheca" lists it on Glass UI's page
+-- as following GAB's look.
+function Apotheca.WearGlass(btn)
+    local GAB = GlassAPI()
+    if not GAB then return false end
+    local ok = GAB.SkinButton(btn, {
+        icon = btn.icon, cooldown = btn.cooldown, count = btn.countText, hotkey = btn.hotkey,
+        highlight = btn.highlightTex, pushed = btn:GetPushedTexture(),
+        border = btn.btnBorder, empty = btn.emptyBg,
+    }, "Apotheca")
+    if ok ~= true then return false end
+    btn.btnBorder:Hide()
+    btn.emptyBg:Hide()
+    return true
+end
+
+-- The dock takes the bar (always out of combat): a drag in progress ends
+-- where it is and is saved first, then nothing of Apotheca's moves it.
+-- Given back: the saved spot and the bar's own layout return.
+local function DockHosted(hosted)
+    if hosted then
+        if anchorDragging then StopAnchorDrag() end
+        dock.hosted, dock.sent = true, nil
+        anchor:Hide()
+    else
+        dock.hosted, dock.geom, dock.sent = false, nil, nil
+        RestorePosition()
+        if dock.active then ApplyLayout(dock.active) end
+    end
+    if Apotheca.SyncLayoutOptions then Apotheca.SyncLayoutOptions() end
+end
+
+-- Every placement: `geom` is the matched bar's geometry in our frame's
+-- units, or nil for the bar's own. Only its size and padding are used.
+-- Before the first update there is nothing to arrange; that update will,
+-- and asks to be placed again.
+local function DockLayout(geom)
+    if type(geom) == "table" and type(geom.size) == "number" and type(geom.padding) == "number" then
+        dock.geom = { size = geom.size, padding = geom.padding }
+    else
+        dock.geom = nil
+    end
+    if dock.active then ApplyLayout(dock.active) end
+end
+
+-- At PLAYER_LOGIN. The bar isn't docked until the player docks it.
+function Apotheca.ConnectGlassActionBars()
+    local GAB = GlassAPI()
+    if not GAB then return end
+    local ok, why = GAB.RegisterBar({ id = DOCK_ID, label = "Apotheca", frame = ApothecaFrame,
+        OnHosted = DockHosted, Layout = DockLayout })
+    if not ok then
+        print("|cff9966ffApotheca:|r couldn't register with Glass Action Bars: " .. tostring(why))
+    end
+    for _, btn in pairs(Apotheca.buttons) do Apotheca.WearGlass(btn) end
+    for _, btn in pairs(Apotheca.Utility.buttons) do Apotheca.WearGlass(btn) end
+end
+
+-- ============================================================
 -- EVENTS
 -- ============================================================
 
@@ -3632,6 +3750,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- Safe to build the options panel here — no loading-screen crash risk.
         -- DB is already initialised by ADDON_LOADED above.
         Apotheca.CreateOptionsPanel()
+        Apotheca.ConnectGlassActionBars()
 
         -- No saved settings loaded is a first install, or the client bug
         -- fixed in 70009; the sentinel can't tell them apart.
