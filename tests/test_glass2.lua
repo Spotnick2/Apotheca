@@ -94,7 +94,6 @@ local function noteSaying(text)
 end
 local rowsSlider = sliderLabelled("Rows")
 H.check(rowsSlider, "the Rows slider exists")
-Apotheca.RefreshOptions()
 H.check(noteSaying("Docked by Glass Action Bars: 40.0 px icons, 5.0 px apart.|r"), "note: size only")
 H.check(rowsSlider:IsEnabled(), "rows are Apotheca's: the slider works")
 H.check(not sliderLabelled("Icon Size"):IsEnabled(), "the size is the dock's: greyed out")
@@ -107,7 +106,6 @@ H.check(matched and layout.dockRows, "both matched")
 H.eq(layout.rows, 1, "the bar's rows")
 frameIs("one row of the bar's size", grid(40, 5, #shown, 1))
 H.eq(GAB.requests, before, "no request from inside Layout")
-Apotheca.RefreshOptions()
 H.check(noteSaying("40.0 px icons, 5.0 px apart; the bar's rows and direction."), "note: both")
 H.check(not rowsSlider:IsEnabled(), "the rows are the dock's: greyed out")
 H.eq(db.rows, 2, "the own rows are kept for later")
@@ -119,7 +117,6 @@ H.check(not matched, "size not matched")
 H.eq(layout.orientation, "VERTICAL", "the bar's direction")
 H.eq(layout.iconSize, 36, "own size")
 frameIs("two columns of the own size", grid(36, 3, 2, math.ceil(#shown / 2)))
-Apotheca.RefreshOptions()
 H.check(noteSaying("Docked by Glass Action Bars: the bar's rows and direction.|r"), "note: rows only")
 H.check(sliderLabelled("Icon Size"):IsEnabled(), "the size is Apotheca's again")
 
@@ -131,6 +128,21 @@ H.eq(layout.orientation, "HORIZONTAL", "own orientation back")
 frameIs("the own grid", grid(36, 3, cols, 2))
 H.check(noteSaying("Docked by Glass Action Bars, which places the bar."), "note: nothing matched")
 H.check(rowsSlider:IsEnabled(), "rows slider back")
+
+-- The dock starting or stopping to decide rows equal to the bar's own:
+-- the same grid, but the options follow, with no explicit refresh (Codex
+-- on #71). Every note and slider above follows the layout the same way.
+pass({ size = 40, padding = 5 })
+H.check(rowsSlider:IsEnabled(), "own rows: the slider works")
+local sig = Apotheca._layoutSig
+pass({ size = 40, padding = 5, rows = 2, orientation = 0 })
+frameIs("the same grid", grid(40, 5, cols, 2))
+H.check(Apotheca._layoutSig ~= sig, "whose rows they are is part of the layout")
+H.check(not rowsSlider:IsEnabled(), "the dock's rows, equal to the own: greyed out")
+H.check(noteSaying("5.0 px apart; the bar's rows and direction."), "  and the note says so")
+pass({ size = 40, padding = 5 })
+H.check(rowsSlider:IsEnabled(), "given back at the same grid: the slider works again")
+H.check(noteSaying("Docked by Glass Action Bars: 40.0 px icons, 5.0 px apart.|r"), "  and the note follows")
 
 -- A rows value that makes no sense is ignored, not laid out.
 pass({ size = 40, padding = 5, rows = 0, orientation = 0 })

@@ -2143,10 +2143,12 @@ end
 -- What the layout was built from, to notice the matched action bar changing:
 -- LayoutSettings' two returns. Whether matching worked is part of it, so
 -- losing or regaining the bar refreshes the options even when its size
--- equals the bar's own settings (Codex on #45).
+-- equals the bar's own settings (Codex on #45). Whose rows they are too:
+-- the dock starting or stopping to decide them refreshes the options even
+-- when its rows equal the bar's own (Codex on #71).
 local function LayoutSignature(l, matched)
-    return string.format("%s/%s/%.2f/%.2f/%s", tostring(l.orientation), tostring(l.rows),
-        l.iconSize or 0, l.iconPadding or 0, matched and "m" or "-")
+    return string.format("%s/%s/%.2f/%.2f/%s%s", tostring(l.orientation), tostring(l.rows),
+        l.iconSize or 0, l.iconPadding or 0, matched and "m" or "-", l.dockRows and "r" or "-")
 end
 Apotheca.LayoutSignature = LayoutSignature
 
