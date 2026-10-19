@@ -54,7 +54,7 @@ Measured in game so far: Cooking, First Aid, Fishing, Enchanting, Tailoring, Lea
 
 ## Glass Action Bars
 
-With [Glass Action Bars](https://www.curseforge.com/wow/addons/glass-action-bars) installed, Apotheca's buttons (both bars) wear its glass: the same theme, hover and click feedback as your action bars, following its settings. You can also dock the bar beside one of your action bars in Glass Action Bars' Dock settings; it then places the bar and can match that bar's icon size and padding, while Apotheca keeps its own rows and orientation. Undock it and the bar goes back where you had it. Without Glass Action Bars, Apotheca looks as it always has.
+With [Glass Action Bars](https://www.curseforge.com/wow/addons/glass-action-bars) installed, Apotheca's buttons (both bars) wear its glass: the same theme, hover and click feedback as your action bars, following its settings. You can also dock the bar beside one of your action bars in Glass Action Bars' Dock settings; it then places the bar and can match that bar's icon size and padding. Apotheca keeps its own rows and orientation unless you also tick "Match the bar's rows and direction" there. Undock it and the bar goes back where you had it. Without Glass Action Bars, Apotheca looks as it always has.
 
 ## Also
 

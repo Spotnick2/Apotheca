@@ -1716,12 +1716,13 @@ end
 -- Docked by Glass Action Bars (#68, see GLASS ACTION BARS below): while
 -- `hosted`, GAB owns the bar's position, so nothing here saves, restores or
 -- drags it, and the saved spot is kept for when it is undocked. `geom` is
--- the size and padding of the bar it matches (nil: the bar's own); `active`
--- the last laid-out button keys, for GAB's Layout calls.
--- `sent`: the grid last given to the dock. DOCK_ID is the player's dock
--- settings' key in GAB: never change it.
+-- what the player matches of the bar: its size and padding, its rows and
+-- orientation (#70), either or both (nil: the bar's own); `active` the
+-- last laid-out button keys, for GAB's Layout calls.
+-- `sent`: the grid last given to the dock; `api`: GAB's public API version.
+-- DOCK_ID is the player's dock settings' key in GAB: never change it.
 local DOCK_ID = "apotheca"
-local dock = { hosted = false, geom = nil, active = nil, sent = nil }
+local dock = { hosted = false, geom = nil, active = nil, sent = nil, api = nil }
 
 function Apotheca.DockHosted() return dock.hosted end
 
@@ -2106,9 +2107,11 @@ end
 -- return says whether they did, for the options panel.
 -- Docked (#68, the main bar only): the dock decides instead of matchBar, so
 -- the size and padding are those of the bar Glass Action Bars matches, else
--- the bar's own; rows and orientation stay the bar's own (owner: one
--- two-row Apotheca block sits beside three stacked one-row bars). No
--- margin around the buttons, so the dock lines them up with the bar's.
+-- the bar's own. The rows and orientation are the bar's own unless the
+-- player ticks GAB's "Match the bar's rows and direction" (#70; off for
+-- Apotheca, owner: one two-row block sits beside three stacked one-row
+-- bars); `dockRows` then says so, for the options. No margin around the
+-- buttons, so the dock lines them up with the bar's.
 function Apotheca.LayoutSettings(src)
     local db = src or DB()
     local layout = {
@@ -2117,8 +2120,12 @@ function Apotheca.LayoutSettings(src)
     }
     if not src and dock.hosted then
         layout.inset = 0
-        if dock.geom then
-            layout.iconSize, layout.iconPadding = dock.geom.size, dock.geom.padding
+        local g = dock.geom
+        if g and g.rows then
+            layout.rows, layout.orientation, layout.dockRows = g.rows, g.orientation, true
+        end
+        if g and g.size then
+            layout.iconSize, layout.iconPadding = g.size, g.padding
             return layout, true
         end
         return layout, false
@@ -3564,13 +3571,17 @@ end
 -- With Glass Action Bars (GAB) installed, the bar can dock beside one of
 -- the action bars (the player's choice, in GAB's Dock settings), and every
 -- button wears GAB's glass, so its theme and button feedback apply here
--- too. Only GAB's public API (its docs/PUBLIC-API.md, version 1): nothing
--- of its settings is read. Without GAB none of this runs.
+-- too. Only GAB's public API (its docs/PUBLIC-API.md, versions 1 and 2):
+-- nothing of its settings is read. Without GAB none of this runs.
 -- ============================================================
 
+-- Version 2 (#70) differs only in Layout's geom: it carries what the player
+-- matches, the size and the rows separately. Anything else is left alone.
 local function GlassAPI()
     local GAB = GlassActionBars
-    if type(GAB) == "table" and GAB.PUBLIC_API_VERSION == 1 then return GAB end
+    if type(GAB) ~= "table" then return end
+    local v = GAB.PUBLIC_API_VERSION
+    if v == 1 or v == 2 then return GAB, v end
 end
 
 -- GAB's glass on one button. The icon and cooldown stay Apotheca's: the
@@ -3610,25 +3621,38 @@ local function DockHosted(hosted)
     if Apotheca.SyncLayoutOptions then Apotheca.SyncLayoutOptions() end
 end
 
--- Every placement: `geom` is the matched bar's geometry in our frame's
--- units, or nil for the bar's own. Only its size and padding are used.
+-- Every placement: `geom` is what the player matches of the bar, in our
+-- frame's units, or nil for the bar's own. The size and padding, and on
+-- version 2 the rows and direction (0 horizontal, 1 vertical; rows are
+-- columns on a vertical bar, as Apotheca's own). Version 1 always sent the
+-- bar's rows, with no choice for the player, so there they stay ours.
 -- Before the first update there is nothing to arrange; that update will,
 -- and asks to be placed again.
 local function DockLayout(geom)
-    if type(geom) == "table" and type(geom.size) == "number" and type(geom.padding) == "number" then
-        dock.geom = { size = geom.size, padding = geom.padding }
-    else
-        dock.geom = nil
+    local g = {}
+    if type(geom) == "table" then
+        if type(geom.size) == "number" and type(geom.padding) == "number" then
+            g.size, g.padding = geom.size, geom.padding
+        end
+        if dock.api == 2 and type(geom.rows) == "number" and geom.rows >= 1
+            and (geom.orientation == 0 or geom.orientation == 1) then
+            g.rows = math.floor(geom.rows)
+            g.orientation = geom.orientation == 1 and "VERTICAL" or "HORIZONTAL"
+        end
     end
+    dock.geom = next(g) and g or nil
     if dock.active then ApplyLayout(dock.active) end
 end
 
--- At PLAYER_LOGIN. The bar isn't docked until the player docks it.
+-- At PLAYER_LOGIN. The bar isn't docked until the player docks it, and on
+-- version 2 keeps its own rows unless the player matches them too.
 function Apotheca.ConnectGlassActionBars()
-    local GAB = GlassAPI()
+    local GAB, version = GlassAPI()
     if not GAB then return end
+    dock.api = version
     local ok, why = GAB.RegisterBar({ id = DOCK_ID, label = "Apotheca", frame = ApothecaFrame,
-        OnHosted = DockHosted, Layout = DockLayout })
+        OnHosted = DockHosted, Layout = DockLayout,
+        default = version == 2 and { matchRows = false } or nil })
     if not ok then
         print("|cff9966ffApotheca:|r couldn't register with Glass Action Bars: " .. tostring(why))
     end

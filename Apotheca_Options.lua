@@ -620,12 +620,12 @@ function Apotheca.BuildOptionsPanelContent(panel)
         end)
     -- One line reserved: the text is set after the widgets below exist.
     local matchNote = SmallLabel(" ")
-    Dropdown("Orientation:",
+    local orientationDD = Dropdown("Orientation:",
         { { value = "HORIZONTAL", label = "Horizontal" },
           { value = "VERTICAL",   label = "Vertical"   } },
         function() return DBGet("orientation") or "HORIZONTAL" end,
         function(v) DBSet(v, "orientation") end)
-    Slider("Rows", 1, 4, 1,
+    local rowsSlider = Slider("Rows", 1, 4, 1,
         function() return DBGet("rows") or 1 end,
         function(v) DBSet(v, "rows") end)
     local layoutWidgets = {
@@ -642,12 +642,22 @@ function Apotheca.BuildOptionsPanelContent(panel)
     local function SyncLayoutWidgets()
         local layout, matched = Apotheca.LayoutSettings()
         for _, w in ipairs(layoutWidgets) do SetSliderEnabled(w, not matched) end
+        -- The dock's rows and direction (#70), when the player matches them.
+        local dockRows = layout.dockRows == true
+        SetSliderEnabled(rowsSlider, not dockRows)
+        if dockRows then orientationDD.label:SetTextColor(0.5, 0.5, 0.5)
+        else orientationDD.label:SetTextColor(1, 1, 1) end
         -- Docked by Glass Action Bars (#68): its Dock settings place the bar
-        -- and say whether it matches a bar; the setting above and Alt+Drag wait.
+        -- and say what it matches of a bar; the setting above and Alt+Drag wait.
         if Apotheca.DockHosted() then
-            matchNote:SetText(matched
-                and string.format("|cff888888Docked by Glass Action Bars: %.1f px icons, %.1f px apart.|r",
+            local parts = {}
+            if matched then
+                parts[#parts + 1] = string.format("%.1f px icons, %.1f px apart",
                     layout.iconSize, layout.iconPadding)
+            end
+            if dockRows then parts[#parts + 1] = "the bar's rows and direction" end
+            matchNote:SetText(#parts > 0
+                and "|cff888888Docked by Glass Action Bars: " .. table.concat(parts, "; ") .. ".|r"
                 or "|cff888888Docked by Glass Action Bars, which places the bar.|r")
         elseif matched then
             matchNote:SetText(string.format("|cff888888Following Action Bar %d: %.1f px icons, %.1f px apart.|r",

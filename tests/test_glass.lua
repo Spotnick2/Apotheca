@@ -3,6 +3,8 @@
 -- The fake below follows GAB's contract (its docs/PUBLIC-API.md and
 -- Dock.lua): OnHosted(true) once, then Layout(geom) on every placement,
 -- then the frame is placed; RequestLayout from inside Layout is ignored.
+-- This is version 1, whose geom always holds the bar's rows: they stay
+-- Apotheca's there. test_glass2.lua covers version 2 (#70).
 
 dofile("tests/wow_stubs.lua")
 local H = dofile("tests/harness.lua")
@@ -54,6 +56,7 @@ local db = Apotheca.GetDB and Apotheca.GetDB() or ApothecaDB.profiles[ApothecaDB
 -- Registration at login.
 H.check(client, "the bar is registered")
 H.eq(client.def.id, "apotheca", "a stable dock id")
+H.eq(client.def.default, nil, "version 1: no default (it has no matchRows)")
 H.eq(client.def.frame, ApothecaFrame, "the main bar's frame")
 H.check(not Apotheca.DockHosted(), "not docked until GAB says so")
 
@@ -117,8 +120,9 @@ local layout, matched = Apotheca.LayoutSettings()
 H.check(matched, "matched while the dock matches")
 H.eq(layout.iconSize, 40, "the dock's size, not matchBar's")
 H.eq(layout.iconPadding, 5, "the dock's padding")
-H.eq(layout.rows, 2, "rows stay Apotheca's own (owner)")
-H.eq(layout.orientation, "HORIZONTAL", "orientation stays Apotheca's own (owner)")
+H.eq(layout.rows, 2, "version 1: rows stay Apotheca's own (owner)")
+H.eq(layout.orientation, "HORIZONTAL", "version 1: orientation stays Apotheca's own (owner)")
+H.check(not layout.dockRows, "version 1: never the dock's rows")
 local first = Apotheca.buttons[shown[1]]
 H.eq(first:GetWidth(), 40, "buttons take the matched size")
 local pt = first._points[1]
@@ -213,7 +217,7 @@ ApothecaFrame._mouseOver = false
 -- ------------------------------------------------------------
 -- A GAB with another API version is left alone.
 -- ------------------------------------------------------------
-GAB.PUBLIC_API_VERSION = 2
+GAB.PUBLIC_API_VERSION = 3
 H.eq(Apotheca.WearGlass(Apotheca.buttons.health), false, "no skin from an incompatible GAB")
 rawset(_G, "GlassActionBars", nil)
 H.eq(Apotheca.WearGlass(Apotheca.buttons.health), false, "no skin without GAB")
