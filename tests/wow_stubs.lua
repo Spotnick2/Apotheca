@@ -739,6 +739,8 @@ local KNOWN_ABSENT = {
     Apotheca = true,
     -- Frames the addon names itself; nil until created.
     ApothecaFrame = true, ApothecaAnchor = true,
+    -- Another addon's namespace (an OptionalDep, #68): nil unless installed.
+    GlassActionBars = true,
 }
 WoW.KNOWN_ABSENT = KNOWN_ABSENT
 

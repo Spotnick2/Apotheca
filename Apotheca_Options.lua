@@ -642,7 +642,14 @@ function Apotheca.BuildOptionsPanelContent(panel)
     local function SyncLayoutWidgets()
         local layout, matched = Apotheca.LayoutSettings()
         for _, w in ipairs(layoutWidgets) do SetSliderEnabled(w, not matched) end
-        if matched then
+        -- Docked by Glass Action Bars (#68): its Dock settings place the bar
+        -- and say whether it matches a bar; the setting above and Alt+Drag wait.
+        if Apotheca.DockHosted() then
+            matchNote:SetText(matched
+                and string.format("|cff888888Docked by Glass Action Bars: %.1f px icons, %.1f px apart.|r",
+                    layout.iconSize, layout.iconPadding)
+                or "|cff888888Docked by Glass Action Bars, which places the bar.|r")
+        elseif matched then
             matchNote:SetText(string.format("|cff888888Following Action Bar %d: %.1f px icons, %.1f px apart.|r",
                 DBGet("matchBar"), layout.iconSize, layout.iconPadding))
         elseif (tonumber(DBGet("matchBar")) or 0) > 0 then
