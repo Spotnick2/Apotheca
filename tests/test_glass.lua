@@ -29,6 +29,14 @@ function GAB.SkinButton(button, regions, owner)
     GAB.owners[#GAB.owners + 1] = owner
     return true
 end
+-- Added within v1 (GAB #43): a skinned button counts as filled until told.
+GAB.empty, GAB.emptyCalls = {}, 0
+function GAB.SetButtonEmpty(button, isEmpty)
+    if not GAB.skinned[button] then return false, "the button isn't skinned (SkinButton first)" end
+    GAB.empty[button] = isEmpty
+    GAB.emptyCalls = GAB.emptyCalls + 1
+    return true
+end
 -- One dock pass, as Dock.lua's: out of combat only.
 local function pass(geom)
     assert(not WoW.inCombat, "the dock never runs in combat")
@@ -85,6 +93,33 @@ for _, key in ipairs(Apotheca.GetButtonOrder()) do
     if Apotheca.buttons[key]:IsShown() then shown[#shown + 1] = key end
 end
 H.check(#shown >= 2, "several buttons on the bar")
+
+-- Empty slots take GAB's empty-slot look; filled ones the filled look.
+H.eq(GAB.empty[mana], false, "a held item: a filled slot")
+db.showEmptyButtons = true
+Apotheca.UpdateAllButtons()
+local emptyBtn
+for _, key in ipairs(Apotheca.GetButtonOrder()) do
+    local b = Apotheca.buttons[key]
+    if b:IsShown() and not b.itemID then emptyBtn = b break end
+end
+H.check(emptyBtn, "an empty button is shown")
+H.eq(GAB.empty[emptyBtn], true, "an empty slot is told empty")
+H.check(emptyBtn.icon:IsDesaturated(), "its icon still greys out (Apotheca's)")
+local calls = GAB.emptyCalls
+Apotheca.UpdateAllButtons()
+H.eq(GAB.emptyCalls, calls, "only a change is sent")
+db.showEmptyButtons = false
+Apotheca.UpdateAllButtons()
+
+-- A GAB build without SetButtonEmpty: nothing breaks, slots stay filled.
+local setEmpty = GAB.SetButtonEmpty
+GAB.SetButtonEmpty = nil
+db.showEmptyButtons = true
+Apotheca.UpdateAllButtons()
+db.showEmptyButtons = false
+Apotheca.UpdateAllButtons()
+GAB.SetButtonEmpty = setEmpty
 
 -- ------------------------------------------------------------
 -- Docked: matching a bar takes its size and padding only.
