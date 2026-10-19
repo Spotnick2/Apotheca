@@ -102,6 +102,9 @@ H.eq(btn:GetWidth(), 36, "own settings once switched off")
 -- The options panel: the layout controls grey out while matching.
 local panel = Apotheca.optionsPanel
 H.check(panel, "the options panel exists")
+-- Created shown, Settings' first showing would fire no OnShow and the page
+-- would stay blank until the second visit (#72).
+H.check(not panel:IsShown(), "the panel starts hidden, so its first showing builds it")
 panel._scripts.OnShow(panel)
 local sliders = H.framesWithTemplate("OptionsSliderTemplate")
 local function sliderLabelled(text)
