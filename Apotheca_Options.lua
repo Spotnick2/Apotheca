@@ -41,6 +41,10 @@ end
 function Apotheca.CreateOptionsPanel()
     local panel = CreateFrame("Frame", "ApothecaOptionsPanel", UIParent)
     panel.name  = "Apotheca"
+    -- A frame is created shown: Settings showing it the first time would
+    -- fire no OnShow, so nothing would be built until the second visit (#72;
+    -- porting guide, "An Options page with sub-pages and an About page").
+    panel:Hide()
     Apotheca.optionsPanel = panel
     local built = false
     panel:SetScript("OnShow", function(self)
