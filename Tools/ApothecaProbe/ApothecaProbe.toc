@@ -1,9 +1,9 @@
 ## Interface: 16001
-## Title: Apotheca Probe (dev)
-## Notes: Development-only measurement tool for Apotheca: /apo probe, /apo scan, /apo scan2, /apo scan3, /apo applytest, /apo bar, /apo prof, /apo proftest. Not shipped to players.
+## Title: ApothecaProbe
+## Notes: Throwaway probe for Apotheca: the APIs the bar depends on, the client's consumable and Well Fed data, the action bars' layout, professions and weapon coatings. A ForeverProbe module: /fp apo. Not shipped to players.
 ## Author: Spotnick
 ## Version: dev
-## RequiredDeps: Apotheca
+## Dependencies: ForeverProbe, Apotheca
 ## SavedVariables: ApothecaProbeDB
 
 ApothecaProbe.lua

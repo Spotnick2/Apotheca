@@ -26,6 +26,16 @@ H.check(io.open("Bindings.xml") ~= nil, "Bindings.xml exists")
 H.check(not seen["Bindings.xml"], "and is not in the TOC")
 H.check(not seen["ApothecaProbe.lua"], "the dev-only probe is not in the shipped TOC")
 H.check(io.open("Tools/ApothecaProbe/ApothecaProbe.toc") ~= nil, "the probe lives in its own dev addon under Tools/")
+-- A ForeverProbe module (#76): the host is its dependency, /fp its only command.
+do
+    local toc = io.open("Tools/ApothecaProbe/ApothecaProbe.toc"):read("*a")
+    H.check(toc:find("\n## Dependencies: ForeverProbe") ~= nil, "the probe's TOC depends on ForeverProbe")
+    local lua = io.open("Tools/ApothecaProbe/ApothecaProbe.lua"):read("*a")
+    H.check(not lua:find("SLASH_%u") and not lua:find("SlashCmdList"), "the probe has no slash command of its own")
+    H.check(not lua:find("[^%w_]print%("), "the probe writes nothing to chat")
+    local shipped = io.open("Apotheca.toc"):read("*a")
+    H.check(not shipped:find("ForeverProbe"), "the shipped TOC never names ForeverProbe")
+end
 
 local pkg = assert(io.open(".pkgmeta")):read("*a"):gsub("\r", "")
 H.check(pkg:find("package%-as: Apotheca\n"), ".pkgmeta packages as Apotheca")

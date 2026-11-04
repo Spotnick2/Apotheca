@@ -819,7 +819,7 @@ local POISON_BUTTON_CONFIG = {
 }
 
 -- Left-click applies the oil to the main hand directly, with no targeting
--- cursor (measured on 70009 with Minor Wizard Oil, /apo applytest: a
+-- cursor (measured on 70009 with Minor Wizard Oil, /fp apo applytest: a
 -- 3-second cast, then the oil renewed; #24). Right-click keeps the old way:
 -- the cursor, to pick any weapon (Codex review of #28). leftClickOnly sets
 -- "target-slot1" (the secure template's left-button variant, upstream);
@@ -1163,7 +1163,7 @@ end
 -- buff is one aura named "Well Fed", like ordinary food, with its own
 -- spell ID, so it is recognised by ID only (never by name: the name is
 -- shared). DATA.XP_WELL_FED_SPELLS and DATA.WELL_FED_SPELLS come from the
--- client's own spell data (/apo scan3, docs/FOREVER-PROBE.md).
+-- client's own spell data (/fp apo scan3, docs/FOREVER-PROBE.md).
 -- ============================================================
 local XP_WELL_FED, ORDINARY_WELL_FED = {}, {}
 for _, id in ipairs(DATA.XP_WELL_FED_SPELLS or {}) do XP_WELL_FED[id] = true end
@@ -3506,26 +3506,11 @@ SLASH_APOTHECA1 = "/apotheca"
 SLASH_APOTHECA2 = "/apo"
 SlashCmdList["APOTHECA"] = function(msg)
     local cmd = msg and msg:lower():match("^%s*(.-)%s*$") or ""
+    -- The developer probe's commands are /fp apo ... (Tools/ApothecaProbe, #76).
     if cmd == "debug" then
         Apotheca.SetDebug(not DB().debug)
-    elseif cmd == "probe" and Apotheca.RunProbe then
-        Apotheca.RunProbe()
-    elseif cmd == "scan" and Apotheca.RunItemScan then
-        Apotheca.RunItemScan()
-    elseif cmd == "scan2" and Apotheca.RunSpellScan then
-        Apotheca.RunSpellScan()
-    elseif cmd == "scan3" and Apotheca.RunWellFedScan then
-        Apotheca.RunWellFedScan()
     elseif cmd == "utility" then
         Apotheca.Utility.Toggle()
-    elseif cmd:match("^proftest") and Apotheca.RunProfTest then
-        Apotheca.RunProfTest(cmd:match("^proftest%s*(.*)$"))
-    elseif cmd:match("^prof") and Apotheca.RunProfProbe then
-        Apotheca.RunProfProbe(cmd:match("^prof%s*(.*)$"))
-    elseif cmd:match("^bar") and Apotheca.RunBarProbe then
-        Apotheca.RunBarProbe(cmd:match("^bar%s*(.*)$"))
-    elseif cmd:match("^applytest") and Apotheca.RunApplyTest then
-        Apotheca.RunApplyTest(cmd:match("^applytest%s*(.*)$"))
     elseif cmd == "status" then
         -- Diagnostic for "I click a button and nothing happens".
         local db = DB()

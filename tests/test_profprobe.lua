@@ -1,4 +1,4 @@
--- #42 step 1: /apo prof and /apo proftest, the dev probe that measures
+-- #42 step 1: /fp apo prof and /fp apo proftest, the dev probe that measures
 -- which profession spells the client knows and what each one does from a
 -- secure button, by mouse and by key.
 
@@ -10,14 +10,14 @@ for _, id in ipairs({ 7411, 13262, 2550, 3273, 3274 }) do WoW.knownSpells[id] = 
 WoW.spellNames[3274] = "First Aid"
 H.loadAddon({ probe = true })
 
-local function slash(s) WoW.messages = {} ; SlashCmdList["APOTHECA"](s) end
+local slash = H.fp
 local function has(log, prefix)
     for _, line in ipairs(log) do
         if line:sub(1, #prefix) == prefix then return line end
     end
 end
 
--- /apo prof: every candidate, the rank in use, the spellbook, saved by label.
+-- /fp apo prof: every candidate, the rank in use, the spellbook, saved by label.
 slash("prof run1")
 local log = ApothecaProbeDB.profProbe and ApothecaProbeDB.profProbe.run1
 H.check(log, "the run is kept under its label")
@@ -37,14 +37,14 @@ WoW.fire("LEARNED_SPELL_IN_SKILL_LINE", 7924, 3)
 local ev = ApothecaProbeDB.profEvents[#ApothecaProbeDB.profEvents]
 H.check(ev:find("LEARNED_SPELL_IN_SKILL_LINE 7924") and ev:find("firstaid:7924"), "learn event with the new rank")
 
--- /apo proftest: refused in combat (secure frames and bindings).
+-- /fp apo proftest: refused in combat (secure frames and bindings).
 WoW.enterCombat()
 slash("proftest")
-H.eq(H.messagesMatching("out of combat only"), 1, "in combat: refused")
+H.eq(H.probeMatching("out of combat only"), 1, "in combat: refused")
 WoW.leaveCombat()
 
 slash("proftest")
-local f = Apotheca._profTestFrame
+local f = H.probe.profFrame
 H.check(f and f.buttons, "the test frame is built")
 H.eq(f.buttons.firstaid:GetAttribute("type"), "spell", "a family is a spell button")
 H.eq(f.buttons.firstaid:GetAttribute("spell"), 7924, "for the rank in use, by ID")
@@ -66,7 +66,7 @@ local function press(btn, events)
     btn:GetScript("PostClick")(btn, "LeftButton", true)
     btn:GetScript("PreClick")(btn, "LeftButton", false)
     btn:GetScript("PostClick")(btn, "LeftButton", false)
-    WoW.messages = {}
+    ForeverProbe.lines = {}
     for _ = 1, 5 do WoW.tick(1) end
     return ApothecaProbeDB.profTests[#ApothecaProbeDB.profTests]
 end
@@ -76,7 +76,7 @@ local r = press(f.buttons.firstaid,
 H.eq(#ApothecaProbeDB.profTests, 1, "one press, one attempt")
 H.eq(r.verdict, "window+succeeded (1 cast)", "a profession window opened by one cast")
 H.eq(r.via, "key", "the cursor off the button: recorded as a key press")
-H.eq(H.messagesMatching("#1 firstaid by key"), 1, "a verdict line in chat")
+H.eq(H.probeMatching("#1 firstaid by key"), 1, "a verdict line in chat")
 
 -- The cursor waits for an item to be picked: no verdict while it's up.
 WoW.targeting = true
@@ -100,7 +100,7 @@ if watcher then
     WoW.ctrlDown, WoW.shiftDown = true, true
     local before = #ApothecaProbeDB.profTests
     watcher:GetScript("OnKeyDown")(watcher, "1")
-    WoW.messages = {}
+    ForeverProbe.lines = {}
     WoW.tick(2)
     local s = ApothecaProbeDB.profTests[#ApothecaProbeDB.profTests]
     H.eq(#ApothecaProbeDB.profTests, before + 1, "a key that reached nothing is recorded")
@@ -127,4 +127,5 @@ H.eq(next(WoW.overrideBindings), nil, "close clears the bindings")
 slash("proftest show")
 H.check(WoW.overrideBindings["CTRL-SHIFT-1"], "show binds them again")
 
+H.eq(H.messagesMatching("."), 0, "the probe wrote nothing to chat")
 H.done("test_profprobe")

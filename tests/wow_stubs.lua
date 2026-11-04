@@ -303,10 +303,10 @@ end
 UIParent = NewRegion("Frame", nil, "UIParent")
 
 -- The action bars (#40): frames, so not in the API dump. Bar 1 is measured
--- on 70291 (/apo bar): MainActionBar's GetSettingValue returns plain values
+-- on 70291 (/fp apo bar): MainActionBar's GetSettingValue returns plain values
 -- (icon size in percent, padding), and ActionButton1 stays 45 wide at every
 -- size. Bars 2-8 carry Retail's names (Apotheca.API.ACTION_BARS), checked
--- by /apo bar. WoW.actionBar sets bar 1, WoW.actionBars[n] any bar;
+-- by /fp apo bar. WoW.actionBar sets bar 1, WoW.actionBars[n] any bar;
 -- WoW.actionBarThrow refuses every read.
 WoW.actionBar = { [0] = 0, [1] = 1, [2] = 12, [3] = 100, [4] = 2 }
 WoW.actionBars = {}
@@ -430,7 +430,7 @@ function issecretvalue(v) return WoW.IsSecret(v) end
 
 NUM_BAG_SLOTS = 4
 Enum = { BagIndex = { Backpack = 0, ReagentBag = 5 }, PowerType = { Mana = 0 },
-    -- Measured on 70291 (/apo bar, docs/FOREVER-PROBE.md).
+    -- Measured on 70291 (/fp apo bar, docs/FOREVER-PROBE.md).
     EditModeActionBarSetting = { Orientation = 0, NumRows = 1, NumIcons = 2, IconSize = 3,
         IconPadding = 4, VisibleSetting = 5, HideBarArt = 6, DeprecatedSnapToSide = 7,
         HideBarScrolling = 8, AlwaysShowButtons = 9 },

@@ -2,6 +2,12 @@
 
 These were measured with `/apo probe` (`ApothecaProbe.lua`) on build **1.60.1.69977**, interface 16001. Addon-agnostic findings live in `C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md`. This file records only what Apotheca itself depends on.
 
+**Running the probe (since #76).** The probe is a ForeverProbe module: `/fp apo` lists its commands, and every line goes to the `/fp` console and `ApothecaProbeDB.log`, not chat. The runs below name the commands as they were then: `/apo probe`, `/apo scan` and so on are now `/fp apo probe`, `/fp apo scan`, `/fp apo scan2`, `/fp apo scan3`, `/fp apo bar <label>`, `/fp apo prof <label>`, `/fp apo proftest`, `/fp apo applytest <itemID>`. Two are guided procedures (a panel of steps that saves each outcome):
+- `/fp steps apo scan`: the three scans the item tables are built from, each waited for, then a `/reload` (AGENTS.md, Item Data);
+- `/fp steps apo probe`: the probe out of combat, then again once combat lockdown is on, then a `/reload`.
+
+The results stay in `ApothecaProbeDB` (`SavedVariables/ApothecaProbe.lua`) as before; each procedure's record is in `ForeverProbe.lua` (`steps.records["ApothecaProbe/<name>"]`).
+
 ## Run 1: 2026-09-23, out of combat (level 15 Hunter)
 
 ### Health and power are secret even out of combat
@@ -264,13 +270,13 @@ Every API (90 names: the stubbed globals and each `C_*` call in the addon) and e
 
 ## Still to measure
 
-- **Professions (#42), still open:** the profession keys with `ActionButtonUseKeyDown` 0 (only 1 was measured; mouse clicks are measured on both). Characters with Mining, Herbalism, Alchemy, Blacksmithing, Engineering, Leatherworking at a higher rank, and a level-16 rogue (Pick Lock): `/apo prof <label>` and `/apo proftest`.
+- **Professions (#42), still open:** the profession keys with `ActionButtonUseKeyDown` 0 (only 1 was measured; mouse clicks are measured on both). Characters with Mining, Herbalism, Alchemy, Blacksmithing, Engineering, Leatherworking at a higher rank, and a level-16 rogue (Pick Lock): `/fp apo prof <label>` and `/fp apo proftest`.
 
-- **Poisons and the off hand (#24).** The main hand is measured with an oil (above). `/apo applytest <itemID>` shows four buttons:
+- **Poisons and the off hand (#24).** The main hand is measured with an oil (above). `/fp apo applytest <itemID>` shows four buttons:
   - method A (`type=item` + `target-slot`) for each hand;
   - method B (the `/use item:<id>` + `/use 16|17` macro) for each hand.
 
-  Each click prints a verdict and is kept in `ApothecaProbeDB.applyTests`. To measure, with a dual-wielding rogue and real poisons: each method on each hand, re-applying the same poison, replacing with another family (the replace popup), moving while applying, and in combat. Record which events fired.
+  Each click writes a verdict line to the `/fp` console and is kept in `ApothecaProbeDB.applyTests`. To measure, with a dual-wielding rogue and real poisons: each method on each hand, re-applying the same poison, replacing with another family (the replace popup), moving while applying, and in combat. Record which events fired.
 
 - **`C_Item.UseItemByName` on a real item** from the right-click alternate "Use X instead?" popup.
 - **Clicks in combat.** Measured out of combat only, since food can't be eaten in combat. Check once with a potion.
