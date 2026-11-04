@@ -661,7 +661,7 @@ D.POISON_FAMILIES = {
     { key = "sebacious", label = "Sebacious Poison" },
 }
 
--- Well Fed auras (from /apo scan3). XP food gives ONE aura named "Well
+-- Well Fed auras (from /fp apo scan3). XP food gives ONE aura named "Well
 -- Fed", like ordinary food, with its own spell ID: these are the XP ones
 -- ("A nutritious meal / A tasty drink has made you Well Fed").
 D.XP_WELL_FED_SPELLS = { 1248406, 1248420, 1248421, 1248422, 1248688, 1249519, 1249520, 1249521, 1249523, 1249907, 1249926, 1249927, 1294007, 1302064, 1319310 }

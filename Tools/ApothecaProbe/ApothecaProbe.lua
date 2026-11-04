@@ -1,24 +1,32 @@
 -- ============================================================
--- Apotheca - Forever probe (/apo probe)
+-- ApothecaProbe: Apotheca's developer probe, a ForeverProbe module (/fp apo)
 --
--- A throwaway measurement tool for the port (issue #3). It prints what
--- the client actually does for each API the port depends on and keeps the
--- last run in ApothecaProbeDB.lastProbe, which is written to disk at
--- logout, so the results can be read off the probe's SavedVariables file
--- (SavedVariables/ApothecaProbe.lua). Run it once out of combat and once
--- in combat.
+-- A throwaway measurement tool (issue #3 onwards): what the client
+-- actually does for each API Apotheca depends on, the client's own
+-- consumable and Well Fed data (the item tables are generated from it),
+-- the action bar layout, professions, and how a secure button applies a
+-- weapon coating. Its lines go to the /fp console and ApothecaProbeDB.log;
+-- its results stay in ApothecaProbeDB (SavedVariables/ApothecaProbe.lua),
+-- written at /reload or logout, where Tools/export_*.lua read them.
 --
--- A separate, development-only addon (Tools/ApothecaProbe, loaded after
--- Apotheca): it is never packaged, and `pwsh Tools/deploy.ps1 -Probe`
--- installs it. /apo probe, /apo scan, /apo scan2, /apo scan3,
--- /apo applytest, /apo bar, /apo prof and /apo proftest do nothing
--- without it.
+--   /fp apo                  the commands
+--   /fp steps apo scan       rebuild the item data: scan, scan2, scan3, /reload
+--   /fp steps apo probe      the bar's APIs out of combat, then in combat
+--
+-- A separate, development-only addon (Tools/ApothecaProbe, after
+-- ForeverProbe and Apotheca): never packaged; `pwsh Tools/deploy.ps1
+-- -Probe` installs it next to ForeverProbe (#76).
 -- ============================================================
 
-Apotheca = Apotheca or {}
+local ADDON, NS = ...
+local MAX_LOG = 3000
 
-local PREFIX = "|cff9966ffApotheca probe:|r "
-local log
+local Probe = ForeverProbe:Module("ApothecaProbe", { api = 1, cmd = "apo" })
+NS = NS or {}
+NS._test = NS._test or {}          -- the test seam, never on _G
+
+local function say(msg) Probe:Say(msg) end
+local log   -- the lines of the run in progress, kept by name (lastProbe, barProbe, profProbe)
 
 -- The probe keeps its results in its own SavedVariable, not in Apotheca's
 -- settings: the item scan is large, and now that saved data loads back it
@@ -37,60 +45,73 @@ local function ProbeDB()
     return ApothecaProbeDB
 end
 
-local loader = CreateFrame("Frame")
-loader:RegisterEvent("ADDON_LOADED")
-loader:SetScript("OnEvent", function(self, _, name)
-    if name == "ApothecaProbe" then
-        ProbeDB()
-        self:UnregisterEvent("ADDON_LOADED")
-    end
+-- Saved tables only at our own ADDON_LOADED: the client loads them after
+-- the files (GUIDE.md section 1).
+local boot = CreateFrame("Frame")
+Probe:RegisterEvents(boot, { "ADDON_LOADED" })
+boot:SetScript("OnEvent", function(self, _, name)
+    if name ~= ADDON then return end
+    self:UnregisterEvent("ADDON_LOADED")
+    Probe:Ready()
+    local db = ProbeDB()
+    if type(db.log) ~= "table" then db.log = {} end
+    Probe:UseLog(db.log, MAX_LOG)
+    db.loads = (db.loads or 0) + 1
+    say("loaded (" .. db.loads .. " loads). /fp apo for the commands, /fp steps apo for the procedures")
 end)
 
+-- A run's line: kept in the run's table and said.
 local function out(key, value)
     local text = tostring(value)
     log[#log + 1] = key .. " = " .. text
-    print(PREFIX .. key .. " = " .. text)
+    say(key .. " = " .. text)
 end
 
--- Describe a value without comparing it: comparing a secret throws.
+-- Every return, unquoted, a secret as <secret>, never compared.
+-- select("#") keeps trailing nils, so "returned nil" and "returned
+-- nothing" stay distinct: C_Item.GetItemInfo's cache miss is the latter.
 local function describe(...)
     local n = select("#", ...)
     if n == 0 then return "(no returns)" end
     local parts = {}
-    for i = 1, n do
-        local v = select(i, ...)
-        if issecretvalue and issecretvalue(v) then
-            parts[i] = "<secret>"
-        else
-            parts[i] = tostring(v)
-        end
-    end
+    for i = 1, n do parts[i] = Probe.Show((select(i, ...)), true) end
     return table.concat(parts, ", ")
 end
 
--- select("#") keeps trailing nils, so "returned nil" and "returned
--- nothing" stay distinct: C_Item.GetItemInfo's cache miss is the latter.
-local function report(key, ok, ...)
-    if ok then
-        out(key, describe(...))
+-- The run's "key = returns" line. Probe:Try says the ERROR line itself;
+-- the run's table gets it too, in the old format.
+local function try(key, fn)
+    local r = Probe.Pack(Probe:Try(key, fn))
+    if r[1] then
+        out(key, describe(unpack(r, 2, r.n)))
     else
-        out(key, "ERROR: " .. tostring((...)))
+        log[#log + 1] = key .. " = ERROR: " .. Probe.Show(r[2], true)
     end
 end
 
-local function try(key, fn)
-    report(key, pcall(fn))
+-- Blocked actions. The host's baseline is the one ADDON_ACTION_BLOCKED /
+-- FORBIDDEN watcher, and it logs them; the probe also needs them inside
+-- its own records (UseItemByName in /fp apo probe, an attempt's verdict
+-- in applytest and proftest). The host has no callback for that yet, so
+-- this listens on the baseline's frame. Workaround: replace it with the
+-- host's callback once ForeverProbe offers one (ForeverProbe#19).
+local blockedListeners = {}
+local function OnBlocked(fn) blockedListeners[#blockedListeners + 1] = fn end
+do
+    local taint = ForeverProbe.Baseline and ForeverProbe.Baseline.taintFrame
+    if taint and taint.HookScript then
+        taint:HookScript("OnEvent", function(_, event, ...)
+            for _, fn in ipairs(blockedListeners) do fn(event, ...) end
+        end)
+    else
+        say("ForeverProbe's taint watcher not found: blocked actions are missing from the verdicts")
+    end
 end
 
--- ADDON_ACTION_BLOCKED / FORBIDDEN are how the client reports a protected
--- call from insecure code. Listen while calling UseItemByName.
 local blockedBy
-local blockFrame = CreateFrame("Frame")
-blockFrame:SetScript("OnEvent", function(_, event, addon, func)
-    blockedBy = event .. " (" .. tostring(addon) .. ", " .. tostring(func) .. ")"
+OnBlocked(function(event, addon, func)
+    blockedBy = event .. " (" .. Probe.Show(addon, true) .. ", " .. Probe.Show(func, true) .. ")"
 end)
-pcall(blockFrame.RegisterEvent, blockFrame, "ADDON_ACTION_BLOCKED")
-pcall(blockFrame.RegisterEvent, blockFrame, "ADDON_ACTION_FORBIDDEN")
 
 local TEMPLATES = {
     { "CheckButton", "InterfaceOptionsCheckButtonTemplate", "Text" },
@@ -102,7 +123,7 @@ local TEMPLATES = {
 }
 
 -- ============================================================
--- /apo scan: the client's own consumable database (issue #4)
+-- /fp apo scan: the client's own consumable database (issue #4)
 --
 -- Wowhead's Forever database lists names, but Forever changed restore
 -- values, and a database can miss items. So walk every item ID with
@@ -150,17 +171,40 @@ local function Drain(q, step)
     return true
 end
 
+-- One scan at a time. status[name] is "running", "done" or "error: ..."
+-- (name: items, spells, wellfed), progress what the running one is at,
+-- summary[name] its last done line: the scan procedure waits on these.
+local scans = { running = nil, status = {}, summary = {}, progress = nil }
+NS._test.scans = scans
+
+local function StartScan(name)
+    if scans.running then
+        say("scan already running")
+        return false
+    end
+    scans.running, scans.status[name], scans.progress = name, "running", nil
+    return true
+end
+
+local function ScanDone(name, line)
+    scans.summary[name] = line
+    say(line)
+end
+
 -- Runs body() every frame until it returns true. An error stops the scan
 -- and says so, instead of erroring every frame with the "scan already
 -- running" guard stuck until /reload (/code-review of #20).
 local function RunScanFrames(body)
     local f = CreateFrame("Frame")
+    local name = scans.running
+    NS._test.scanFrame = f            -- a test stops it as a /reload would
     f:SetScript("OnUpdate", function(self)
         local ok, finished = pcall(body)
         if not ok or finished then
             self:SetScript("OnUpdate", nil)
-            Apotheca._scanRunning = false
-            if not ok then print(PREFIX .. "scan stopped by an error: " .. tostring(finished)) end
+            scans.running = nil
+            scans.status[name] = ok and "done" or ("error: " .. Probe.Show(finished, true))
+            if not ok then say("scan stopped by an error: " .. Probe.Show(finished, true)) end
         end
     end)
 end
@@ -179,15 +223,11 @@ local function TooltipLines(id)
     return ok and lines or nil
 end
 
-function Apotheca.RunItemScan()
-    if Apotheca._scanRunning then
-        print(PREFIX .. "scan already running")
-        return
-    end
-    Apotheca._scanRunning = true
+local function RunItemScan()
+    if not StartScan("items") then return false end
     local found, order = {}, {}
     local nextID, tips = 1, nil
-    print(PREFIX .. "scanning item IDs 1-" .. SCAN_MAX_ID .. " for consumables...")
+    say("scanning item IDs 1-" .. SCAN_MAX_ID .. " for consumables...")
 
     RunScanFrames(function()
         if not tips then
@@ -201,12 +241,14 @@ function Apotheca.RunItemScan()
                 end
             end
             nextID = last + 1
+            scans.progress = "item ID " .. math.min(nextID, SCAN_MAX_ID) .. " of " .. SCAN_MAX_ID
             if nextID > SCAN_MAX_ID then
                 tips = NewQueue(order)
-                print(PREFIX .. #order .. " consumables found; reading tooltips...")
+                say(#order .. " consumables found; reading tooltips...")
             end
             return false
         end
+        scans.progress = "tooltips " .. (tips.head - 1) .. " of " .. #tips.ids
         local done = Drain(tips, function(id, try)
             local lines = TooltipLines(id)
             if not lines and try < TIP_TRIES then
@@ -224,13 +266,14 @@ function Apotheca.RunItemScan()
         local missing = 0
         for _, e in pairs(found) do if not e.t then missing = missing + 1 end end
         ProbeDB().itemScan = { build = select(2, GetBuildInfo()), items = found }
-        print(PREFIX .. "scan done: " .. #order .. " consumables, " .. missing
+        ScanDone("items", "scan done: " .. #order .. " consumables, " .. missing
               .. " without tooltip text. /reload or log out to write the file.")
         return true
     end)
+    return true
 end
 
--- /apo scan2: second pass. Item tooltips come back without their "Use:"
+-- /fp apo scan2: second pass. Item tooltips come back without their "Use:"
 -- line until the item's SPELL is loaded, and on the first run most
 -- potions, elixirs, flasks, scrolls and bandages had none. For the
 -- healer-relevant categories, load each item's spell and read its
@@ -248,20 +291,20 @@ local function HasUseLine(lines)
     return false
 end
 
-function Apotheca.RunSpellScan()
-    if Apotheca._scanRunning then print(PREFIX .. "scan already running") return end
+local function RunSpellScan()
+    if scans.running then say("scan already running") return false end
     local scan = ProbeDB().itemScan
-    if not scan then print(PREFIX .. "run /apo scan first") return end
+    if not scan then say("run /fp apo scan first") return false end
     -- Saved data loads back since 70009, so the scan found here may be a
     -- previous build's. Adding this build's spell text to it would export
     -- two builds under one name (/code-review of #17).
     local build = select(2, GetBuildInfo())
     if tostring(scan.build) ~= tostring(build) then
-        print(PREFIX .. "the saved scan is from build " .. tostring(scan.build)
-              .. ", this client is " .. tostring(build) .. ": run /apo scan first")
-        return
+        say("the saved scan is from build " .. tostring(scan.build)
+              .. ", this client is " .. tostring(build) .. ": run /fp apo scan first")
+        return false
     end
-    Apotheca._scanRunning = true
+    StartScan("spells")
 
     local ids = {}
     for id, e in pairs(scan.items) do
@@ -273,10 +316,11 @@ function Apotheca.RunSpellScan()
         end
     end
     local count = #ids
-    print(PREFIX .. count .. " items need their spell text; loading...")
+    say(count .. " items need their spell text; loading...")
 
     local q = NewQueue(ids)
     RunScanFrames(function()
+        scans.progress = "spell text " .. (q.head - 1) .. " of " .. #q.ids
         local done = Drain(q, function(id, try)
             local e = scan.items[id]
             local okD, desc = pcall(C_Spell.GetSpellDescription, e.sp)
@@ -296,13 +340,14 @@ function Apotheca.RunSpellScan()
             local e = scan.items[id]
             if not e.d and not HasUseLine(e.t) then still = still + 1 end
         end
-        print(PREFIX .. "spell scan done: " .. count .. " items, " .. still
+        ScanDone("spells", "spell scan done: " .. count .. " items, " .. still
               .. " still without text. /reload to write the file.")
         return true
     end)
+    return true
 end
 
--- /apo scan3: the Well Fed buffs (#19). Forever's XP food ("experience
+-- /fp apo scan3: the Well Fed buffs (#19). Forever's XP food ("experience
 -- gained from kills is increased by 5%") gives ONE aura named "Well Fed",
 -- like ordinary food, and its spell ID is not the item's spell (measured:
 -- item spell 1248380 gives aura 1248422). The only language-independent
@@ -331,9 +376,8 @@ local SPELL_LOAD_FROM, SPELL_LOAD_TO = 1200000, 1400000
 local SPELL_LOAD_TRIES      = 30      -- 0.5 s apart: 13 names outlasted 10 on 70009
 local WELL_FED = "Well Fed"
 
-function Apotheca.RunWellFedScan()
-    if Apotheca._scanRunning then print(PREFIX .. "scan already running") return end
-    Apotheca._scanRunning = true
+local function RunWellFedScan()
+    if not StartScan("wellfed") then return false end
     local result = { build = select(2, GetBuildInfo()), highest = 0, scannedTo = 0, exist = 0,
                      unnamedSkipped = 0, hidden = {}, emptyDescription = 0,
                      complete = false, spells = {} }
@@ -347,7 +391,7 @@ function Apotheca.RunWellFedScan()
     end
     local function lastID() return math.max(SPELL_SCAN_MIN, result.highest + SPELL_SCAN_TAIL) end
 
-    print(PREFIX .. "Well Fed scan: walking spell IDs...")
+    say("Well Fed scan: walking spell IDs...")
     RunScanFrames(function()
         if not names then
             -- Which spells exist, and the names that are already loaded.
@@ -360,6 +404,7 @@ function Apotheca.RunWellFedScan()
                     if not named(id) then unnamed[#unnamed + 1] = id end
                 end
             end
+            scans.progress = "spell ID " .. nextID .. " of at least " .. lastID()
             if nextID <= lastID() then return false end
             result.scannedTo = nextID - 1
             if #unnamed > SPELL_LOAD_ALL_LIMIT then
@@ -371,7 +416,7 @@ function Apotheca.RunWellFedScan()
                 unnamed = keep
             end
             names = NewQueue(unnamed)
-            print(PREFIX .. result.exist .. " spells exist (highest " .. result.highest .. "); loading "
+            say(result.exist .. " spells exist (highest " .. result.highest .. "); loading "
                   .. #unnamed .. " unnamed ones" .. (result.unnamedSkipped > 0
                   and (", skipping " .. result.unnamedSkipped .. " outside " .. SPELL_LOAD_FROM
                        .. ".." .. SPELL_LOAD_TO) or "") .. "...")
@@ -380,6 +425,7 @@ function Apotheca.RunWellFedScan()
         if not descs then
             -- Names that were not loaded: request under the frame budget,
             -- retry, and list the ones that never load.
+            scans.progress = "names " .. (names.head - 1) .. " of " .. #names.ids
             if not Drain(names, function(id, try)
                 if try > 1 and named(id) then return true end
                 if try > SPELL_LOAD_TRIES then
@@ -391,7 +437,7 @@ function Apotheca.RunWellFedScan()
             end) then return false end
             table.sort(result.hidden)
             descs = NewQueue(candidates)
-            print(PREFIX .. #candidates .. " spells named " .. WELL_FED .. "; loading their descriptions...")
+            say(#candidates .. " spells named " .. WELL_FED .. "; loading their descriptions...")
             return false
         end
         -- Descriptions of the Well Fed spells.
@@ -411,7 +457,7 @@ function Apotheca.RunWellFedScan()
         end) then return false end
         result.complete = result.unnamedSkipped == 0
         ProbeDB().wellFedScan = result
-        print(PREFIX .. "Well Fed scan done (" .. (result.complete and "complete" or "INCOMPLETE")
+        ScanDone("wellfed", "Well Fed scan done (" .. (result.complete and "complete" or "INCOMPLETE")
               .. "): " .. #candidates .. " Well Fed spells, " .. result.emptyDescription
               .. " with an empty description; " .. result.exist .. " spells to " .. result.scannedTo
               .. "; names skipped " .. result.unnamedSkipped .. ", hidden " .. #result.hidden
@@ -420,10 +466,11 @@ function Apotheca.RunWellFedScan()
               .. ". /reload to write the file.")
         return true
     end)
+    return true
 end
 
 -- ============================================================
--- /apo applytest <itemID>: how a secure button applies a weapon coating
+-- /fp apo applytest <itemID>: how a secure button applies a weapon coating
 -- (poison, oil, stone) to a chosen hand (#24). Two methods, each hand:
 --   A  type=item + "target-slot" 16/17 (Blizzard's SecureTemplates reads
 --      it after the item use, upstream; not proven on Forever)
@@ -547,20 +594,44 @@ local function FinishAttempt(reason)
     db.applyTests[#db.applyTests + 1] = att
     local evs = {}
     for _, e in ipairs(att.events) do evs[#evs + 1] = e[2] end
-    print(PREFIX .. "#" .. att.n .. " " .. att.method .. " " .. SLOT_NAME[att.slot] .. ": "
+    say("#" .. att.n .. " " .. att.method .. " " .. SLOT_NAME[att.slot] .. ": "
           .. att.verdict .. " [" .. (#evs > 0 and table.concat(evs, ", ") or "no events") .. "]"
           .. (att.popup and " (replace popup)" or "")
           .. (att.targetingAfterClick == true and " (cursor after click)" or ""))
-    print(PREFIX .. "    before " .. att.before.enchant.raw)
-    print(PREFIX .. "    after  " .. att.after.enchant.raw)
+    say("    before " .. att.before.enchant.raw)
+    say("    after  " .. att.after.enchant.raw)
 end
 
+-- ADDON_ACTION_BLOCKED / FORBIDDEN reach an attempt through OnBlocked
+-- (the host's watcher), not by registering them here.
 local APPLY_EVENTS = {
     "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_FAILED",
-    "UNIT_SPELLCAST_INTERRUPTED", "UI_ERROR_MESSAGE", "ADDON_ACTION_BLOCKED",
-    "ADDON_ACTION_FORBIDDEN", "WEAPON_ENCHANT_CHANGED", "ENCHANT_SPELL_COMPLETED",
+    "UNIT_SPELLCAST_INTERRUPTED", "UI_ERROR_MESSAGE",
+    "WEAPON_ENCHANT_CHANGED", "ENCHANT_SPELL_COMPLETED",
     "UNIT_INVENTORY_CHANGED", "PLAYER_EQUIPMENT_CHANGED",
 }
+
+-- What fired during the open attempt.
+local function ApplyEvent(event, a1, a2, a3)
+    local att = applyAttempt
+    if not att then return end
+    if (event:find("^UNIT_") and a1 ~= "player") then return end
+    att.events[#att.events + 1] = { GetTime() - att.t0, event,
+        tostring(plain(a1)), tostring(plain(a2)), tostring(plain(a3)) }
+    att.lastActivity = GetTime()
+    -- A weapon swapped out and back ends with the same item IDs, so
+    -- the swap itself marks the attempt (Codex review of #25).
+    if event == "PLAYER_EQUIPMENT_CHANGED" and (a1 == 16 or a1 == 17) then
+        att.weaponChanged = true
+    end
+    -- The apply cast: no verdict while it runs.
+    if event == "UNIT_SPELLCAST_START" then att.casting = true end
+    if event == "UNIT_SPELLCAST_SUCCEEDED" or event == "UNIT_SPELLCAST_FAILED"
+            or event == "UNIT_SPELLCAST_INTERRUPTED" then
+        att.casting = false
+    end
+end
+OnBlocked(ApplyEvent)
 
 local attemptCount = 0
 
@@ -614,20 +685,20 @@ local function MakeButton(parent, method, slot, itemID, x, y)
     return b
 end
 
-function Apotheca.RunApplyTest(arg)
-    arg = arg or ""
+local function RunApplyTest(arg)
+    arg = (arg or ""):lower()
     if arg == "close" then
-        if InCombatLockdown() then print(PREFIX .. "out of combat only") return end
+        if InCombatLockdown() then say("out of combat only") return end
         if applyFrame then applyFrame:Hide() end
         FinishAttempt("closed")
         return
     end
     local itemID = tonumber(arg:match("^(%d+)"))
     if not itemID then
-        print(PREFIX .. "usage: /apo applytest <itemID>  (a poison, oil or stone in your bags), /apo applytest close")
+        say("usage: /fp apo applytest <itemID>  (a poison, oil or stone in your bags), /fp apo applytest close")
         return
     end
-    if InCombatLockdown() then print(PREFIX .. "out of combat only: the test buttons are secure frames") return end
+    if InCombatLockdown() then say("out of combat only: the test buttons are secure frames") return end
     if applyFrame then applyFrame:Hide() end
 
     local f = CreateFrame("Frame", nil, UIParent)
@@ -647,30 +718,12 @@ function Apotheca.RunApplyTest(arg)
         B16 = MakeButton(f, "B", 16, itemID, 10, -64),
         B17 = MakeButton(f, "B", 17, itemID, 140, -64),
     }
-    Apotheca._applyTestFrame = f
+    NS._test.applyFrame = f
 
     if not applyEvents then
         applyEvents = CreateFrame("Frame")
-        for _, e in ipairs(APPLY_EVENTS) do pcall(applyEvents.RegisterEvent, applyEvents, e) end
-        applyEvents:SetScript("OnEvent", function(_, event, a1, a2, a3)
-            local att = applyAttempt
-            if not att then return end
-            if (event:find("^UNIT_") and a1 ~= "player") then return end
-            att.events[#att.events + 1] = { GetTime() - att.t0, event,
-                tostring(plain(a1)), tostring(plain(a2)), tostring(plain(a3)) }
-            att.lastActivity = GetTime()
-            -- A weapon swapped out and back ends with the same item IDs, so
-            -- the swap itself marks the attempt (Codex review of #25).
-            if event == "PLAYER_EQUIPMENT_CHANGED" and (a1 == 16 or a1 == 17) then
-                att.weaponChanged = true
-            end
-            -- The apply cast: no verdict while it runs.
-            if event == "UNIT_SPELLCAST_START" then att.casting = true end
-            if event == "UNIT_SPELLCAST_SUCCEEDED" or event == "UNIT_SPELLCAST_FAILED"
-                    or event == "UNIT_SPELLCAST_INTERRUPTED" then
-                att.casting = false
-            end
-        end)
+        Probe:RegisterEvents(applyEvents, APPLY_EVENTS)
+        applyEvents:SetScript("OnEvent", function(_, event, a1, a2, a3) ApplyEvent(event, a1, a2, a3) end)
         applyEvents:SetScript("OnUpdate", function()
             local att = applyAttempt
             if not att then return end
@@ -693,11 +746,13 @@ function Apotheca.RunApplyTest(arg)
         end)
     end
     f:Show()
-    print(PREFIX .. "apply test: click A or B for a hand, one at a time; wait for the verdict line. "
-          .. "Results are kept for the SavedVariables file. /apo applytest close to hide.")
+    say("apply test: click A or B for a hand, one at a time; wait for the verdict line. "
+          .. "Results are kept for the SavedVariables file. /fp apo applytest close to hide.")
 end
 
-function Apotheca.RunProbe()
+local probeBar   -- the StatusBar the health readback is tried on
+
+local function RunProbe()
     log = {}
     local API = Apotheca.API
 
@@ -724,8 +779,8 @@ function Apotheca.RunProbe()
     -- Unit frame addons DISPLAY secret health by handing it to a widget.
     -- Does the widget hand back a plain number? If so, that is a readback.
     try("StatusBar readback of UnitHealth", function()
-        local bar = Apotheca._probeBar or CreateFrame("StatusBar", nil, UIParent)
-        Apotheca._probeBar = bar
+        local bar = probeBar or CreateFrame("StatusBar", nil, UIParent)
+        probeBar = bar
         bar:Hide()
         bar:SetMinMaxValues(0, UnitHealthMax("player"))
         bar:SetValue(UnitHealth("player"))
@@ -946,13 +1001,15 @@ function Apotheca.RunProbe()
     end)
 
     local db = ProbeDB()
+    local mode = InCombatLockdown() and "combat" or "idle"
     db.lastProbe = db.lastProbe or {}
-    db.lastProbe[InCombatLockdown() and "combat" or "idle"] = log
-    print(PREFIX .. "done. Results are also stored for the SavedVariables file on logout.")
+    db.lastProbe[mode] = log
+    say("done. Kept as lastProbe." .. mode .. " for the SavedVariables file on /reload or logout.")
+    return "lastProbe." .. mode .. ": " .. #log .. " lines"
 end
 
 -- ============================================================
--- /apo bar [label]: Action Bar 1's layout (#40)
+-- /fp apo bar [label]: Action Bar 1's layout (#40)
 --
 -- "Match Action Bar 1" needs the bar's icon size, padding, rows and
 -- orientation. Two sources: the Edit Mode layout (C_EditMode and the bar
@@ -991,10 +1048,17 @@ local function Gap(a, b)
         (bl - al - aw) * s, (ab - bb - ah) * s, aw * s, s)
 end
 
-function Apotheca.RunBarProbe(label)
-    label = (label and label ~= "") and label or "default"
+-- Labels are lowercased, as the old /apo command did, so a run keeps the
+-- key earlier runs were saved under.
+local function RunLabel(label)
+    label = label and label:lower():match("^%s*(.-)%s*$") or ""
+    return label ~= "" and label or "default"
+end
+
+local function RunBarProbe(label)
+    label = RunLabel(label)
     log = {}
-    print(PREFIX .. "Action Bar 1 layout, run '" .. label .. "'")
+    say("Action Bar 1 layout, run '" .. label .. "'")
 
     try("build", function() return select(4, GetBuildInfo()), (select(2, GetBuildInfo())) end)
     try("UIParent", function() return Geometry(UIParent) end)
@@ -1113,22 +1177,22 @@ function Apotheca.RunBarProbe(label)
     local db = ProbeDB()
     db.barProbe = db.barProbe or {}
     db.barProbe[label] = log
-    print(PREFIX .. "done. Kept as barProbe['" .. label .. "'] for the SavedVariables file on logout.")
+    say("done. Kept as barProbe['" .. label .. "'] for the SavedVariables file on logout.")
 end
 
 -- ============================================================
--- /apo prof, /apo proftest: professions (#42)
+-- /fp apo prof, /fp apo proftest: professions (#42)
 --
 -- GetProfessions() returns nil x7 on Forever and the Professions
 -- subsystem is inert (porting guide), so the profession bar will detect
 -- professions from spell IDs. This measures, for a draft catalog of
 -- Vanilla spell IDs, which ones the client knows and by which API, every
 -- entry of the spellbook and the skill list (to find spells the catalog
--- misses), and, with /apo proftest, what each spell does from a secure
+-- misses), and, with /fp apo proftest, what each spell does from a secure
 -- button by mouse and by key: window, cast, cursor, tracking, refusal.
 -- ============================================================
 
--- The draft catalog, highest rank first. Only what /apo prof confirms
+-- The draft catalog, highest rank first. Only what /fp apo prof confirms
 -- goes into ApothecaUtility.lua. noButton: measured for context only.
 local PROF_CATALOG = {
     { key = "alchemy",        ids = { 11611, 3464, 3101, 2259 } },
@@ -1150,7 +1214,7 @@ local PROF_CATALOG = {
     { key = "herbalism",      ids = { 11993, 3570, 2368, 2366 }, noButton = true },
     { key = "skinning",       ids = { 10768, 8618, 8617, 8613 }, noButton = true },
 }
-Apotheca._PROF_CATALOG = PROF_CATALOG
+NS._test.PROF_CATALOG = PROF_CATALOG
 local HEARTHSTONE = 6948
 
 -- A table's fields, sorted, secrets kept unread.
@@ -1176,10 +1240,10 @@ local function KnownRank(entry)
     end
 end
 
-function Apotheca.RunProfProbe(label)
-    label = (label and label ~= "") and label or "default"
+local function RunProfProbe(label)
+    label = RunLabel(label)
     log = {}
-    print(PREFIX .. "professions, run '" .. label .. "'")
+    say("professions, run '" .. label .. "'")
     try("build", function() return select(4, GetBuildInfo()), (select(2, GetBuildInfo())) end)
     try("class, level, combat", function()
         return select(2, UnitClass("player")), UnitLevel("player"), InCombatLockdown()
@@ -1265,7 +1329,8 @@ function Apotheca.RunProfProbe(label)
     local db = ProbeDB()
     db.profProbe = db.profProbe or {}
     db.profProbe[label] = log
-    print(PREFIX .. "done. Kept as profProbe['" .. label .. "'] for the SavedVariables file on logout.")
+    say("done. Kept as profProbe['" .. label .. "'] for the SavedVariables file on logout.")
+    return "profProbe." .. label .. ": " .. #log .. " lines"
 end
 
 -- Always on: what fires when a profession or a rank is learned or
@@ -1283,11 +1348,11 @@ local function KnownList()
 end
 
 local learnFrame = CreateFrame("Frame")
-for _, e in ipairs({ "SKILL_LINES_CHANGED", "LEARNED_SPELL_IN_SKILL_LINE", "SPELLS_CHANGED",
-                     "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD" }) do
-    pcall(learnFrame.RegisterEvent, learnFrame, e)
-end
+Probe:RegisterEvents(learnFrame, { "SKILL_LINES_CHANGED", "LEARNED_SPELL_IN_SKILL_LINE", "SPELLS_CHANGED",
+                                   "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD" })
 learnFrame:SetScript("OnEvent", function(_, event, a1, a2)
+    -- Nothing saved before our ADDON_LOADED: it would be replaced.
+    if not Probe.log then return end
     local db = ProbeDB()
     if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
         db.profLoad = db.profLoad or {}
@@ -1302,7 +1367,7 @@ learnFrame:SetScript("OnEvent", function(_, event, a1, a2)
         tostring(plain(a1)), tostring(plain(a2)), table.concat(KnownList(), ","))
 end)
 
--- /apo proftest: one secure button per known family (its rank in use)
+-- /fp apo proftest: one secure button per known family (its rank in use)
 -- and the Hearthstone, each bound to CTRL-SHIFT-<n> by an override CLICK
 -- binding. A press with the cursor off the frame is recorded as "key",
 -- a click as "mouse". Each attempt ends once things settle, and records
@@ -1313,10 +1378,10 @@ local PROF_SETTLE, PROF_QUIET, PROF_TIMEOUT = 2, 1.5, 30
 local PROF_TEST_EVENTS = {
     "UNIT_SPELLCAST_SENT", "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_SUCCEEDED",
     "UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_INTERRUPTED", "UNIT_SPELLCAST_CHANNEL_START",
-    "UNIT_SPELLCAST_CHANNEL_STOP", "UI_ERROR_MESSAGE", "ADDON_ACTION_BLOCKED",
-    "ADDON_ACTION_FORBIDDEN", "TRADE_SKILL_SHOW", "TRADE_SKILL_CLOSE", "CRAFT_SHOW",
+    "UNIT_SPELLCAST_CHANNEL_STOP", "UI_ERROR_MESSAGE",
+    "TRADE_SKILL_SHOW", "TRADE_SKILL_CLOSE", "CRAFT_SHOW",
     "CRAFT_CLOSE", "MINIMAP_UPDATE_TRACKING",
-}
+}   -- ADDON_ACTION_BLOCKED / FORBIDDEN come through OnBlocked (the host's watcher)
 local profFrame, profAttempt, profEvents
 local profCount = 0
 -- The key watcher (WatchKeys, below); FinishProfAttempt reads it.
@@ -1351,9 +1416,9 @@ local function FinishProfAttempt(reason)
         evs[#evs + 1] = e[2] .. (e[2] == "UI_ERROR_MESSAGE" and (":" .. e[4]) or "")
     end
     if att.via == "mouse" and not (keyWatch and keyWatch.pressed) then
-        print(PREFIX .. "reminder: press the CTRL-SHIFT keys too, with the cursor off the panel")
+        say("reminder: press the CTRL-SHIFT keys too, with the cursor off the panel")
     end
-    print(PREFIX .. "#" .. att.n .. " " .. att.key .. " by " .. att.via
+    say("#" .. att.n .. " " .. att.key .. " by " .. att.via
           .. (att.combat and " in combat" or "") .. (att.hidden and " (hidden)" or "")
           .. " (keydown " .. tostring(att.keyDown) .. "): "
           .. att.verdict .. " [" .. (#evs > 0 and table.concat(evs, ", ") or "no events") .. "]")
@@ -1388,7 +1453,7 @@ local function WatchKeys(byKey)
                 hidden = not (profFrame and profFrame:IsShown()), events = {},
                 verdict = "SILENT: " .. p.bind .. " never reached the button",
                 build = select(2, GetBuildInfo()) }
-            print(PREFIX .. p.key .. " by key (" .. p.bind .. "): SILENT, the button never got the press")
+            say(p.key .. " by key (" .. p.bind .. "): SILENT, the button never got the press")
         end)
     end
     keyWatch.byKey = byKey
@@ -1439,10 +1504,21 @@ local function ProfButton(parent, i, key, kind, value)
     return b
 end
 
-function Apotheca.RunProfTest(arg)
-    arg = arg or ""
+-- What fired during the open attempt.
+local function ProfEvent(event, a1, a2, a3, a4)
+    local att = profAttempt
+    if not att then return end
+    if event:find("^UNIT_") and a1 ~= "player" then return end
+    att.events[#att.events + 1] = { GetTime() - att.t0, event,
+        tostring(plain(a1)), tostring(plain(a2)), tostring(plain(a3)), tostring(plain(a4)) }
+    att.lastActivity = GetTime()
+end
+OnBlocked(ProfEvent)
+
+local function RunProfTest(arg)
+    arg = (arg or ""):lower():match("^%s*(.-)%s*$")
     if InCombatLockdown() then
-        print(PREFIX .. "out of combat only: the test buttons and their bindings are secure")
+        say("out of combat only: the test buttons and their bindings are secure")
         return
     end
     if arg == "close" then
@@ -1466,7 +1542,7 @@ function Apotheca.RunProfTest(arg)
     end
     -- Button names are global: built once, then shown again.
     if profFrame then
-        print(PREFIX .. "already built this session: /apo proftest show (after a /reload for newly learned spells)")
+        say("already built this session: /fp apo proftest show (after a /reload for newly learned spells)")
         return
     end
 
@@ -1492,7 +1568,7 @@ function Apotheca.RunProfTest(arg)
     i = i + 1
     f.buttons.hearthstone = ProfButton(f, i, "hearthstone", "item", HEARTHSTONE)
     f:SetSize(370, 40 + math.ceil(i / 2) * 26)
-    Apotheca._profTestFrame = f
+    NS._test.profFrame = f
     local byKey = {}
     for k, b in pairs(f.buttons) do
         if b.keyName then byKey[b.keyName] = k end
@@ -1501,15 +1577,8 @@ function Apotheca.RunProfTest(arg)
 
     if not profEvents then
         profEvents = CreateFrame("Frame")
-        for _, e in ipairs(PROF_TEST_EVENTS) do pcall(profEvents.RegisterEvent, profEvents, e) end
-        profEvents:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
-            local att = profAttempt
-            if not att then return end
-            if event:find("^UNIT_") and a1 ~= "player" then return end
-            att.events[#att.events + 1] = { GetTime() - att.t0, event,
-                tostring(plain(a1)), tostring(plain(a2)), tostring(plain(a3)), tostring(plain(a4)) }
-            att.lastActivity = GetTime()
-        end)
+        Probe:RegisterEvents(profEvents, PROF_TEST_EVENTS)
+        profEvents:SetScript("OnEvent", function(_, event, ...) ProfEvent(event, ...) end)
         profEvents:SetScript("OnUpdate", function()
             local att = profAttempt
             if not att then return end
@@ -1525,7 +1594,111 @@ function Apotheca.RunProfTest(arg)
         end)
     end
     f:Show()
-    print(PREFIX .. "profession test: click a button, or press its CTRL-SHIFT key with the cursor "
+    say("profession test: click a button, or press its CTRL-SHIFT key with the cursor "
           .. "OFF this frame, one at a time; wait for the verdict line. Try both ActionButtonUseKeyDown "
-          .. "settings, and in combat. /apo proftest hide|show (bindings stay while hidden), /apo proftest close.")
+          .. "settings, and in combat. /fp apo proftest hide|show (bindings stay while hidden), "
+          .. "/fp apo proftest close.")
 end
+
+-- ============================================================
+-- Commands: /fp apo <command> [args]
+-- ============================================================
+
+Probe:Command("probe", function() RunProbe() end,
+    "the APIs the bar depends on (run out of and in combat: /fp steps apo probe)")
+Probe:Command("scan", function() RunItemScan() end,
+    "every consumable in the client's item DB (the item tables' source)")
+Probe:Command("scan2", function() RunSpellScan() end, "the spell text scan's tooltips lacked")
+Probe:Command("scan3", function() RunWellFedScan() end, "every spell named Well Fed, with its description (#19)")
+Probe:Command("applytest", function(args) RunApplyTest(args) end,
+    "<itemID> | close: how a secure button coats a chosen hand (#24)")
+Probe:Command("bar", function(args) RunBarProbe(args) end, "[label]: the action bars' layout (#40)")
+Probe:Command("prof", function(args) RunProfProbe(args) end, "[label]: the profession spells known (#42)")
+Probe:Command("proftest", function(args) RunProfTest(args) end,
+    "[hide | show | close]: profession spells from secure buttons, by mouse and key (#42)")
+Probe:Command("clear", function() Probe:ClearLog(); say("log cleared") end, "empty the saved log")
+
+-- ============================================================
+-- Procedures: /fp steps apo <name>
+-- ============================================================
+
+-- A scan's run step: an error keeps the step, for Retry or Skip.
+local function StartOrFail(start, what)
+    return function()
+        if not start() then error(what .. " did not start: see the console") end
+        return "started"
+    end
+end
+
+-- A scan's wait step: done only once that scan finished in this session.
+-- A failed check does not stop a procedure, so the wait itself must never
+-- complete without it (Codex review of #77):
+-- - nil: a /reload during the scan. ForeverProbe resumes the procedure at
+--   this step, but the scan's state is per session and it no longer runs:
+--   start it again (once; a refusal becomes an error below);
+-- - an error: stay, until the owner goes Back and runs it again.
+local function WaitFor(name, start)
+    return function()
+        local s = scans.status[name]
+        if s == "done" then return true, scans.summary[name] end
+        if s == "running" then return false, scans.progress or "starting" end
+        if s == nil then
+            if scans.running then return false, "waiting for the " .. scans.running .. " scan to end" end
+            if start() then
+                say("STEP the " .. name .. " scan was interrupted (a /reload): started again")
+                return false, "started again after a /reload"
+            end
+            scans.status[name] = "error: could not start it again"
+            s = scans.status[name]
+        end
+        return false, s .. ": press Back, then Run, to scan again"
+    end
+end
+
+local function ScanCheck(name)
+    return function() return scans.status[name] == "done", scans.summary[name] or scans.status[name] end
+end
+
+-- The item data comes from these three scans (AGENTS.md, Item Data). They
+-- are written to disk only at /reload or logout, so the last step is one.
+Probe:Steps("scan", {
+    rev = 2,   -- 2: a wait never completes without its scan (Codex review of #77)
+    title = "Rebuild the item data: consumables and Well Fed",
+    { text = "Out of combat, on an English (enUS) client: the Well Fed scan compares spell names in "
+          .. "English. Press Run to scan every item ID for consumables.",
+      button = "Scan items", run = StartOrFail(RunItemScan, "the item scan"),
+      check = function() return not InCombatLockdown(), "out of combat" end },
+    { text = "Scanning the items and reading their tooltips. This takes a few minutes; you can keep "
+          .. "playing.", wait = WaitFor("items", RunItemScan), check = ScanCheck("items") },
+    { text = "Loading the spell text the tooltips lacked.", auto = true,
+      run = StartOrFail(RunSpellScan, "the spell scan") },
+    { text = "Loading spell text.", wait = WaitFor("spells", RunSpellScan), check = ScanCheck("spells") },
+    { text = "Walking every spell ID for the Well Fed auras.", auto = true,
+      run = StartOrFail(RunWellFedScan, "the Well Fed scan") },
+    { text = "Scanning spells. This is the longest part.", wait = WaitFor("wellfed", RunWellFedScan),
+      check = function()
+          local wf = ProbeDB().wellFedScan
+          return scans.status.wellfed == "done" and wf and wf.complete == true,
+              scans.summary.wellfed or scans.status.wellfed
+      end },
+    { text = "Press Reload now (or type /reload) to write ApothecaProbe.lua. The session exports it "
+          .. "from there.", reload = true },
+})
+
+-- The bar's APIs, once out of combat and once in combat (secrets differ).
+Probe:Steps("probe", {
+    title = "The bar's APIs, out of combat and in combat",
+    { text = "Out of combat, with some consumables on the bar. Press Run.", button = "Run the probe",
+      run = RunProbe, check = function() return not InCombatLockdown(), "out of combat" end },
+    -- Not an event step on PLAYER_REGEN_DISABLED: it fires just before
+    -- lockdown starts (AGENTS.md, Drag Anchor), so a run from it would
+    -- read as out of combat. The wait runs it once lockdown is on.
+    { text = "Enter combat (attack a training dummy or a low-level mob). The probe runs again once "
+          .. "you are in combat.",
+      wait = function()
+          if not InCombatLockdown() then return false, "waiting for combat" end
+          return true, RunProbe()
+      end,
+      check = function() return ProbeDB().lastProbe.combat ~= nil, "lastProbe.combat" end },
+    { text = "Leave combat, then press Reload now (or type /reload) to write the results.", reload = true },
+})

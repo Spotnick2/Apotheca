@@ -349,7 +349,7 @@ end
 -- Using items from insecure code
 --
 -- The UseItemByName global is gone. C_Item.UseItemByName exists but is
--- probably protected; /apo probe measures it. Returns false when the
+-- probably protected; /fp apo probe measures it. Returns false when the
 -- call is missing or raised an error.
 -- ------------------------------------------------------------
 
@@ -458,7 +458,7 @@ end
 -- ------------------------------------------------------------
 
 -- The action bars by Edit Mode number: the bar frame and its first button.
--- All eight are measured on 70291 under Retail's names (/apo bar,
+-- All eight are measured on 70291 under Retail's names (/fp apo bar,
 -- docs/FOREVER-PROBE.md).
 API.ACTION_BARS = {
     { bar = "MainActionBar",       button = "ActionButton1" },
@@ -473,7 +473,7 @@ API.ACTION_BARS = {
 
 -- Action bar n's icon size and padding, in UIParent units: { size,
 -- padding }, or nil if the client doesn't say. Measured on 70291 for bar 1
--- (docs/FOREVER-PROBE.md, /apo bar): its GetSettingValue returns plain
+-- (docs/FOREVER-PROBE.md, /fp apo bar): its GetSettingValue returns plain
 -- values (icon size in percent, padding in pixels) for presets and custom
 -- layouts alike, including a change not yet saved while Edit Mode is open.
 -- The stored layout encodes icon size as a step instead, so it is not read.

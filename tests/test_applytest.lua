@@ -1,4 +1,4 @@
--- #24 phase 1: /apo applytest, the dev probe that measures how a secure
+-- #24 phase 1: /fp apo applytest, the dev probe that measures how a secure
 -- button applies a weapon coating to a chosen hand.
 
 dofile("tests/wow_stubs.lua")
@@ -9,19 +9,19 @@ WoW.equipped = { [16] = 2169, [17] = 2209 }     -- dual wielding
 WoW.AddItem(0, 1, 6947, 10, "Instant Poison")
 H.loadAddon({ probe = true })
 
-local function slash(s) WoW.messages = {} ; SlashCmdList["APOTHECA"](s) end
+local slash = H.fp
 local function last() return ApothecaProbeDB.applyTests[#ApothecaProbeDB.applyTests] end
 
 slash("applytest")
-H.eq(H.messagesMatching("usage"), 1, "no item: the usage line")
+H.eq(H.probeMatching("usage"), 1, "no item: the usage line")
 
 WoW.enterCombat()
 slash("applytest 6947")
-H.eq(H.messagesMatching("out of combat only"), 1, "in combat: refused, the buttons are secure frames")
+H.eq(H.probeMatching("out of combat only"), 1, "in combat: refused, the buttons are secure frames")
 WoW.leaveCombat()
 
 slash("applytest 6947")
-local f = Apotheca._applyTestFrame
+local f = H.probe.applyFrame
 H.check(f and f.buttons, "out of combat: the test buttons are shown")
 local A16, A17, B16, B17 = f.buttons.A16, f.buttons.A17, f.buttons.B16, f.buttons.B17
 H.eq(A16:GetAttribute("type"), "item", "method A is an item button")
@@ -40,7 +40,7 @@ local function click(btn, apply, events)
     btn:GetScript("PostClick")(btn, "LeftButton", true)
     btn:GetScript("PreClick")(btn, "LeftButton", false)
     btn:GetScript("PostClick")(btn, "LeftButton", false)
-    WoW.messages = {}
+    ForeverProbe.lines = {}
     for _ = 1, 8 do WoW.tick(1) end
     return last()
 end
@@ -51,7 +51,7 @@ local r = click(A16, function() WoW.enchants[16] = { true, 1800000, 40, 323 } en
 H.eq(r.verdict:match("^applied") , "applied", "a new coating on the main hand: applied")
 H.eq(r.method .. r.slot, "A16", "recorded as method A, main hand")
 H.eq(#r.events, 2, "with the events that fired in between")
-H.eq(H.messagesMatching("#1 A main hand: applied"), 1, "and a verdict line in chat")
+H.eq(H.probeMatching("#1 A main hand: applied"), 1, "and a verdict line in the console")
 
 -- The other hand changed: wrong hand.
 r = click(A17, function() WoW.enchants[16] = { true, 1800000 + 60000, 40, 323 } end)
@@ -196,4 +196,5 @@ WoW.equipped[17] = 2209
 slash("applytest close")
 H.check(not f:IsShown(), "close hides the buttons")
 
+H.eq(H.messagesMatching("."), 0, "the probe wrote nothing to chat")
 H.done("test_applytest")

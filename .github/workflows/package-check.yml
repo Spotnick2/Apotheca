@@ -44,7 +44,12 @@ jobs:
             --expect-present 13446 13444 9421 19013 19060 227813 232433 4604 8008 2888 6947 7964 12643 18262 > /dev/null
           git diff --exit-code --ignore-cr-at-eol ApothecaItems.lua
 
+      # The probe tests (test_probe, test_applytest, test_profprobe) need
+      # ForeverProbe, which is private and local: they run in tests/run.ps1
+      # only, and say SKIPPED here (ForeverProbe's docs/GUIDE.md, section 8).
       - name: Unit tests
+        env:
+          FOREVERPROBE_OPTIONAL: "1"
         run: |
           for f in tests/test_*.lua; do
             echo "-- $f"

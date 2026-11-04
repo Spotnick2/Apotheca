@@ -6,11 +6,11 @@ Vanilla, and adds items no Vanilla list has. So the item tables are not
 written by hand: they are generated from what the client reports.
 
 Input:  docs/forever-consumables-<build>.tsv, exported from an in-game
-        `/apo scan` + `/apo scan2` run (ApothecaProbe.lua) with
+        `/fp apo scan` + `/fp apo scan2` run (ApothecaProbe.lua) with
         Tools/export_scan.lua. Columns: id, subClassID, subType, name,
         spellID, spellName, tooltip ("line | line | ...").
         docs/forever-wellfed-<build>.tsv, next to it: every spell named
-        "Well Fed" (`/apo scan3`, Tools/export_wellfed.lua), for XP food.
+        "Well Fed" (`/fp apo scan3`, Tools/export_wellfed.lua), for XP food.
 Output: ApothecaItems.lua (Apotheca.DATA), loaded before Apotheca.lua.
 
 Usage:
@@ -79,7 +79,7 @@ def load(path):
         lines = [x.strip() for x in tip.split(' | ')]
         use = ' '.join(x for x in lines if x.startswith('Use:'))
         if not use:
-            # /apo scan2 appends the spell description when the tooltip had
+            # /fp apo scan2 appends the spell description when the tooltip had
             # no Use: line; it carries the same text.
             m = re.search(r'\|\| DESC: (.*)$', tip)
             if m:
@@ -492,7 +492,7 @@ def load_wellfed(path):
         for i, line in enumerate(f):
             line = line.rstrip('\n')
             if i == 0 and not line.startswith('# COMPLETE'):
-                sys.exit('%s is not a COMPLETE /apo scan3 export: %s' % (path, line))
+                sys.exit('%s is not a COMPLETE /fp apo scan3 export: %s' % (path, line))
             if line.startswith('#') or not line:
                 continue
             sid, _, desc = line.partition('\t')
@@ -754,7 +754,7 @@ def emit(out, build_id, src):
         w('    { key = "%s", label = "%s" },' % (k, out['POISON_LABELS'][k]))
     w('}')
     w('')
-    w('-- Well Fed auras (from /apo scan3). XP food gives ONE aura named "Well')
+    w('-- Well Fed auras (from /fp apo scan3). XP food gives ONE aura named "Well')
     w('-- Fed", like ordinary food, with its own spell ID: these are the XP ones')
     w('-- ("A nutritious meal / A tasty drink has made you Well Fed").')
     w('D.XP_WELL_FED_SPELLS = { %s }' % ', '.join(str(x) for x in out['XP_WELL_FED_SPELLS']))
@@ -850,7 +850,7 @@ if __name__ == '__main__':
     # The Well Fed scan of the same build, next to the consumables scan.
     wellfed_src = src.replace('forever-consumables-', 'forever-wellfed-')
     if wellfed_src == src or not os.path.exists(wellfed_src):
-        sys.exit('no Well Fed scan next to %s (expected %s): run /apo scan3 and Tools/export_wellfed.lua'
+        sys.exit('no Well Fed scan next to %s (expected %s): run /fp apo scan3 and Tools/export_wellfed.lua'
                  % (src, wellfed_src))
     wellfed = load_wellfed(wellfed_src)
     out['XP_FOOD'] = xp_food(rows)

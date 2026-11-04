@@ -17,9 +17,12 @@
     install with no record, from before this script, is compared against the
     repo instead. -Force overwrites anyway.
 
-    -Probe also installs the development-only probe addon (Tools/ApothecaProbe:
-    /apo probe, /apo scan, /apo scan2) as its own AddOns folder. It is never
-    packaged for players.
+    -Probe also installs the development-only probe (Tools/ApothecaProbe, a
+    ForeverProbe module: /fp apo) as its own AddOns folder, after deploying its
+    host, ForeverProbe, from $env:FOREVERPROBE or ..\ForeverProbe (ForeverProbe's
+    docs/GUIDE.md, section 6). If the host's deploy refuses, the probe is not
+    touched. -ProbeOnly deploys the host and the probe, not Apotheca. Neither
+    is ever packaged for players.
 
     A file this script installed earlier that the TOC no longer lists (the
     probe used to live inside Apotheca) is removed, but only if it is
@@ -28,6 +31,7 @@
     Usage:
         pwsh Tools/deploy.ps1
         pwsh Tools/deploy.ps1 -Probe
+        pwsh Tools/deploy.ps1 -ProbeOnly
         pwsh Tools/deploy.ps1 -Force
         pwsh Tools/deploy.ps1 -AddOnsPath "D:\...\_forever_\Interface\AddOns"
 #>
@@ -35,7 +39,8 @@
 param(
     [string]$AddOnsPath = "C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns",
     [switch]$Force,
-    [switch]$Probe
+    [switch]$Probe,
+    [switch]$ProbeOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,6 +51,24 @@ if (-not (Test-Path $AddOnsPath)) {
     Write-Error "AddOns path not found: $AddOnsPath"
     exit 1
 }
+
+$ForeverProbe = if ($env:FOREVERPROBE) { $env:FOREVERPROBE } else { Join-Path (Split-Path -Parent $RepoRoot) "ForeverProbe" }
+
+# The probe and its host: ForeverProbe first, then Tools\ApothecaProbe's TOC and Lua.
+function Deploy-Probe {
+    if (-not (Test-Path -LiteralPath (Join-Path $ForeverProbe "Tools\deploy.ps1"))) {
+        Write-Error "ForeverProbe checkout not found at $ForeverProbe (or set `$env:FOREVERPROBE)"; exit 1
+    }
+    & pwsh -NoProfile -File (Join-Path $ForeverProbe "Tools\deploy.ps1") -AddOnsPath $AddOnsPath
+    if ($LASTEXITCODE -ne 0) { Write-Error "ForeverProbe deploy refused; ApothecaProbe was not touched"; exit 1 }
+    $probeSrc  = Join-Path $RepoRoot "Tools\ApothecaProbe"
+    $probeDest = Join-Path $AddOnsPath "ApothecaProbe"
+    New-Item -ItemType Directory -Force $probeDest | Out-Null
+    Copy-Item (Join-Path $probeSrc "*.toc"), (Join-Path $probeSrc "*.lua") $probeDest -Force
+    Write-Host "Deployed the dev-only ApothecaProbe module to $probeDest"
+}
+
+if ($ProbeOnly) { Deploy-Probe; exit 0 }
 
 # Lua files, in TOC order: every non-comment, non-blank line.
 $luaFiles = @(Get-Content $TocPath |
@@ -121,10 +144,4 @@ $shipped | ForEach-Object { "$_ $(Get-Hash (Join-Path $dest $_))" } | Set-Conten
 
 Write-Host "Deployed Apotheca ($($luaFiles.Count) Lua files and Bindings.xml) to $dest"
 
-if ($Probe) {
-    $probeSrc  = Join-Path $RepoRoot "Tools\ApothecaProbe"
-    $probeDest = Join-Path $AddOnsPath "ApothecaProbe"
-    New-Item -ItemType Directory -Force $probeDest | Out-Null
-    Copy-Item (Join-Path $probeSrc "*") $probeDest -Force
-    Write-Host "Deployed the dev-only ApothecaProbe addon to $probeDest"
-}
+if ($Probe) { Deploy-Probe }

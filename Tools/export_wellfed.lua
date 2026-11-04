@@ -1,4 +1,4 @@
--- export_wellfed.lua - turn an /apo scan3 SavedVariables file into a TSV of
+-- export_wellfed.lua - turn an /fp apo scan3 SavedVariables file into a TSV of
 -- every spell named "Well Fed" (#19): the source for telling XP Well Fed
 -- auras from ordinary ones.
 --
@@ -13,9 +13,9 @@
 -- this file does not classify: see docs/FOREVER-PROBE.md.
 dofile(arg[1])
 local scan = ApothecaProbeDB and ApothecaProbeDB.wellFedScan
-assert(scan, "no wellFedScan in " .. arg[1] .. " - run /apo scan3, then /reload")
+assert(scan, "no wellFedScan in " .. arg[1] .. " - run /fp apo scan3, then /reload")
 if type(scan.hidden) ~= "table" or type(scan.scannedTo) ~= "number" then
-    error("this wellFedScan was saved by an older probe - run /apo scan3 again, then /reload", 0)
+    error("this wellFedScan was saved by an older probe - run /fp apo scan3 again, then /reload", 0)
 end
 local ids = {}
 for id in pairs(scan.spells) do ids[#ids + 1] = id end
