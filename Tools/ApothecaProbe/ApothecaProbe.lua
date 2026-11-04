@@ -197,6 +197,7 @@ end
 local function RunScanFrames(body)
     local f = CreateFrame("Frame")
     local name = scans.running
+    NS._test.scanFrame = f            -- a test stops it as a /reload would
     f:SetScript("OnUpdate", function(self)
         local ok, finished = pcall(body)
         if not ok or finished then
@@ -1629,12 +1630,28 @@ local function StartOrFail(start, what)
     end
 end
 
--- A scan's wait step: done once the scan is no longer running.
-local function WaitFor(name)
+-- A scan's wait step: done only once that scan finished in this session.
+-- A failed check does not stop a procedure, so the wait itself must never
+-- complete without it (Codex review of #77):
+-- - nil: a /reload during the scan. ForeverProbe resumes the procedure at
+--   this step, but the scan's state is per session and it no longer runs:
+--   start it again (once; a refusal becomes an error below);
+-- - an error: stay, until the owner goes Back and runs it again.
+local function WaitFor(name, start)
     return function()
         local s = scans.status[name]
+        if s == "done" then return true, scans.summary[name] end
         if s == "running" then return false, scans.progress or "starting" end
-        return true, s
+        if s == nil then
+            if scans.running then return false, "waiting for the " .. scans.running .. " scan to end" end
+            if start() then
+                say("STEP the " .. name .. " scan was interrupted (a /reload): started again")
+                return false, "started again after a /reload"
+            end
+            scans.status[name] = "error: could not start it again"
+            s = scans.status[name]
+        end
+        return false, s .. ": press Back, then Run, to scan again"
     end
 end
 
@@ -1645,19 +1662,20 @@ end
 -- The item data comes from these three scans (AGENTS.md, Item Data). They
 -- are written to disk only at /reload or logout, so the last step is one.
 Probe:Steps("scan", {
+    rev = 2,   -- 2: a wait never completes without its scan (Codex review of #77)
     title = "Rebuild the item data: consumables and Well Fed",
     { text = "Out of combat, on an English (enUS) client: the Well Fed scan compares spell names in "
           .. "English. Press Run to scan every item ID for consumables.",
       button = "Scan items", run = StartOrFail(RunItemScan, "the item scan"),
       check = function() return not InCombatLockdown(), "out of combat" end },
     { text = "Scanning the items and reading their tooltips. This takes a few minutes; you can keep "
-          .. "playing.", wait = WaitFor("items"), check = ScanCheck("items") },
+          .. "playing.", wait = WaitFor("items", RunItemScan), check = ScanCheck("items") },
     { text = "Loading the spell text the tooltips lacked.", auto = true,
       run = StartOrFail(RunSpellScan, "the spell scan") },
-    { text = "Loading spell text.", wait = WaitFor("spells"), check = ScanCheck("spells") },
+    { text = "Loading spell text.", wait = WaitFor("spells", RunSpellScan), check = ScanCheck("spells") },
     { text = "Walking every spell ID for the Well Fed auras.", auto = true,
       run = StartOrFail(RunWellFedScan, "the Well Fed scan") },
-    { text = "Scanning spells. This is the longest part.", wait = WaitFor("wellfed"),
+    { text = "Scanning spells. This is the longest part.", wait = WaitFor("wellfed", RunWellFedScan),
       check = function()
           local wf = ProbeDB().wellFedScan
           return scans.status.wellfed == "done" and wf and wf.complete == true,

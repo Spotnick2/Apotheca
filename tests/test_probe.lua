@@ -169,6 +169,54 @@ FP.run = FP.db.baseline.loadCount
 Steps.Resume()
 H.eq(record("scan").status, "done", "after the /reload the procedure is done")
 
+-- A /reload during a scan (Codex review of #77): ForeverProbe resumes the
+-- procedure at the wait step, but the scan's state was per session and its
+-- frame is gone. The wait must not complete on that: an older same-build
+-- scan saved earlier would be carried into scan2, scan3 and the export.
+local stale = { build = select(2, GetBuildInfo()), items = {}, stale = true }
+ApothecaProbeDB.itemScan = stale
+-- What a /reload does to the probe: the running scan stops, the session's
+-- scan state starts empty, and ForeverProbe resumes the procedure at login.
+local function reloadMidScan()
+    H.probe.scanFrame:SetScript("OnUpdate", nil)
+    for k in pairs(H.probe.scans.status) do H.probe.scans.status[k] = nil end
+    H.probe.scans.running, H.probe.scans.progress = nil, nil
+    FP.db.baseline.loadCount = FP.db.baseline.loadCount + 1
+    FP.run = FP.db.baseline.loadCount
+    Steps.Resume()
+end
+SlashCmdList.FOREVERPROBE("steps apo scan")
+Steps.Run()                                       -- 1: the item scan starts
+WoW.tick(1)
+H.eq(H.probe.scans.status.items, "running", "the item scan is running")
+reloadMidScan()
+H.eq(record("scan").at, 2, "after the /reload the procedure is back at the item scan's wait")
+for _ = 1, 3 do WoW.tick(1) end
+H.eq(record("scan").at, 2, "and does not go on without the scan")
+H.eq(H.probe.scans.running, "items", "the interrupted scan is started again")
+H.eq(H.probeMatching("interrupted %(a /reload%): started again"), 1, "and says so")
+for _ = 1, 4000 do WoW.tick(1) if record("scan").at >= 7 then break end end
+H.eq(record("scan").at, 7, "the restarted scans run through to the /reload step")
+H.check(not ApothecaProbeDB.itemScan.stale, "with this session's item scan, never the stale one")
+H.eq(record("scan").results[2].check, "PASS", "and the item scan's check passes")
+Steps.Stop("test")
+
+-- A scan stopped by an error: its wait stays until it is run again.
+SlashCmdList.FOREVERPROBE("steps apo scan")
+Steps.Run()
+WoW.tick(1)
+H.eq(H.probe.scans.status.items, "running", "the item scan is running")
+H.probe.scanFrame:SetScript("OnUpdate", nil)
+H.probe.scans.running, H.probe.scans.status.items = nil, "error: boom"
+for _ = 1, 3 do WoW.tick(1) end
+H.eq(record("scan").at, 2, "an errored scan does not complete its wait")
+Steps.Back()                                      -- 1: run the item scan again
+Steps.Run()
+for _ = 1, 4000 do WoW.tick(1) if record("scan").at >= 7 then break end end
+H.eq(record("scan").at, 7, "run again, the procedure goes on")
+H.eq(record("scan").results[2].check, "PASS", "and the item scan's check passes")
+Steps.Stop("test")
+
 -- A scan that cannot start keeps its step, for Retry or Skip.
 ApothecaProbeDB.itemScan = nil
 SlashCmdList.FOREVERPROBE("steps apo scan")
