@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.8.0] - 2026-11-05
+
+### Added
+- **Glass Action Bars.** With [Glass Action Bars](https://www.curseforge.com/wow/addons/glass-action-bars) installed, Apotheca's buttons (both bars) wear its glass: the same theme, hover and click feedback as your action bars, following its settings. Without it, Apotheca looks as it always has.
+  - You can dock the bar beside one of your action bars on Glass Action Bars' **Dock** options page. It then places the bar, and can match that bar's button size and spacing. Apotheca keeps its own rows and direction unless you also tick "Match the bar's rows and direction" there.
+  - Undock it and the bar goes back where you had it. While docked, Alt-drag doesn't move it.
+
+### Changed
+- **The options are pages, not tabs.** Apotheca in Esc > Options > AddOns holds the general settings, and Consumables, Profession Bar, Button Order and Profile are its sub-pages (click the **+** next to Apotheca). `/apo` still opens them.
+- Every options page now has a scrollbar when it's longer than the window. The mouse wheel still scrolls too.
+
+### Fixed
+- The options were blank the first time you opened them in a session, and appeared only on the second opening.
+
 ## [2.7.0] - 2026-10-14
 
 ### Added
