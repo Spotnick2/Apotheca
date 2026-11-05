@@ -12,7 +12,7 @@ What it offers follows your role: Tank, Healer or Damage. Apotheca reads it from
 
 ## Settings
 
-Your settings are saved per profile (global or per character), and your role choices are saved per character. The first WoW: Forever beta builds didn't load addon settings back at all. That was a client bug, fixed in build 1.60.1.70009.
+`/apo` opens them: Apotheca in Esc > Options > AddOns, with Consumables, Profession Bar, Button Order and Profile as its sub-pages. Your settings are saved per profile (global or per character), and your role choices are saved per character. The first WoW: Forever beta builds didn't load addon settings back at all. That was a client bug, fixed in build 1.60.1.70009.
 
 ## What it offers
 
