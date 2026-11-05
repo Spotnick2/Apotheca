@@ -42,7 +42,7 @@ Every button has its own key binding too (Options > Keybindings > Apotheca): the
 
 ## Profession bar
 
-An optional second bar (off by default: `/apo utility`, or the Profession Bar tab) that builds itself from the character's professions, so you don't set up the same action bar on every character:
+An optional second bar (off by default: `/apo utility`, or the Profession Bar options page) that builds itself from the character's professions, so you don't set up the same action bar on every character:
 
 - Cooking, First Aid and Fishing, and your professions' windows (Alchemy, Blacksmithing, Enchanting, Engineering, Leatherworking, Tailoring, Skinning, Mining, Herbalism, Smelting, Poisons). On Forever the gathering professions have windows too (Camping equipment).
 - Their actions: Disenchant, Find Herbs, Find Minerals, Pick Lock, Bait and Tackle.

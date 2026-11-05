@@ -1,6 +1,6 @@
 -- ============================================================
--- Apotheca_Options.lua  —  Configuration Panel (Tabbed)
--- Panel frame is registered at PLAYER_LOGIN.
+-- Apotheca_Options.lua  —  Configuration Panel (a page and its sub-pages)
+-- The pages are registered at PLAYER_LOGIN.
 -- Widget content is built LAZILY on first OnShow.
 -- ============================================================
 
@@ -38,106 +38,93 @@ function Apotheca.RefreshOptions()
     for _, fn in ipairs(refreshCallbacks) do pcall(fn) end
 end
 
-function Apotheca.CreateOptionsPanel()
-    local panel = CreateFrame("Frame", "ApothecaOptionsPanel", UIParent)
-    panel.name  = "Apotheca"
+-- The pages (#80): the main one in Esc > Options > AddOns, then its
+-- sub-pages under its +/-, in this order.
+local CONTENT_W = 540
+local PAGE_DEFS = {
+    { key = "general",     label = "Apotheca"       },
+    { key = "consumables", label = "Consumables"    },
+    { key = "utility",     label = "Profession Bar" },
+    { key = "buttonorder", label = "Button Order"   },
+    { key = "profile",     label = "Profile"        },
+}
+
+-- One page: its title, and a scroll frame with the client's scrollbar
+-- (GlassActionBars' Options.scrollArea). Without the template's bar, the
+-- mouse wheel still scrolls it. The bar shows only when there is something
+-- to scroll. Returns the page and the content frame its widgets go in.
+local function CreatePage(def)
+    local page = CreateFrame("Frame", "ApothecaOptions_" .. def.key, UIParent)
+    page.name = def.label
     -- A frame is created shown: Settings showing it the first time would
     -- fire no OnShow, so nothing would be built until the second visit (#72;
     -- porting guide, "An Options page with sub-pages and an About page").
-    panel:Hide()
-    Apotheca.optionsPanel = panel
-    local built = false
-    panel:SetScript("OnShow", function(self)
-        if not built then
-            built = true
-            Apotheca.BuildOptionsPanelContent(self)
-        end
-        Apotheca.RefreshOptions()
-    end)
-    if Settings and Settings.RegisterCanvasLayoutCategory then
-        local cat = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
-        Settings.RegisterAddOnCategory(cat)
-        panel._category = cat
-    elseif InterfaceOptions_AddCategory then
-        InterfaceOptions_AddCategory(panel)
-    end
-end
-
-function Apotheca.BuildOptionsPanelContent(panel)
-    local CONTENT_W = 540
-    local PAD       = 20
-    local TAB_H     = 26
-    local TAB_DEFS = {
-        { key = "general",     label = "General"      },
-        { key = "consumables", label = "Consumables"  },
-        { key = "utility",     label = "Profession Bar" },
-        { key = "buttonorder", label = "Button Order" },
-        { key = "profile",     label = "Profile"      },
-    }
-    local tabFrames, tabButtons, activeTab = {}, {}, nil
-
-    local tabStrip = CreateFrame("Frame", nil, panel)
-    tabStrip:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -8)
-    tabStrip:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -8)
-    tabStrip:SetHeight(TAB_H + 4)
-
-    local function SwitchTab(key)
-        if activeTab == key then return end
-        activeTab = key
-        for _, def in ipairs(TAB_DEFS) do
-            local k = def.key
-            if tabFrames[k] then
-                if k == key then tabFrames[k]:GetParent():Show()
-                else tabFrames[k]:GetParent():Hide() end
-            end
-            if tabButtons[k] then
-                if k == key then
-                    tabButtons[k]:SetNormalFontObject(GameFontHighlight)
-                    tabButtons[k]._bg:SetColorTexture(0.15, 0.15, 0.30, 1)
-                else
-                    tabButtons[k]:SetNormalFontObject(GameFontNormal)
-                    tabButtons[k]._bg:SetColorTexture(0.08, 0.08, 0.18, 0.8)
-                end
-            end
-        end
-    end
-
-    local tabX = 0
-    for _, def in ipairs(TAB_DEFS) do
-        local tb = CreateFrame("Button", nil, tabStrip)
-        tb:SetHeight(TAB_H)
-        tb:SetPoint("TOPLEFT", tabStrip, "TOPLEFT", tabX, 0)
-        tb:SetNormalFontObject(GameFontNormal)
-        tb:SetHighlightFontObject(GameFontHighlight)
-        tb:SetText(def.label)
-        local w = tb:GetFontString():GetStringWidth() + 24
-        tb:SetWidth(w)
-        local bg = tb:CreateTexture(nil, "BACKGROUND")
-        bg:SetAllPoints()
-        bg:SetColorTexture(0.08, 0.08, 0.18, 0.8)
-        tb._bg = bg
-        tb:SetScript("OnClick", function() SwitchTab(def.key) end)
-        tabButtons[def.key] = tb
-        tabX = tabX + w + 2
-    end
-
-    for _, def in ipairs(TAB_DEFS) do
-        local sf = CreateFrame("ScrollFrame", "ApothecaScroll_" .. def.key, panel)
-        sf:SetPoint("TOPLEFT", tabStrip, "BOTTOMLEFT", -4, -4)
-        sf:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -4, 4)
-        sf:Hide()
-        local c = CreateFrame("Frame", "ApothecaContent_" .. def.key, sf)
-        c:SetWidth(CONTENT_W)
-        c:SetHeight(400)
-        sf:SetScrollChild(c)
+    page:Hide()
+    local title = page:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    title:SetPoint("TOPLEFT", page, "TOPLEFT", 16, -16)
+    title:SetText(def.label)
+    local sf = CreateFrame("ScrollFrame", "ApothecaScroll_" .. def.key, page, "UIPanelScrollFrameTemplate")
+    sf:SetPoint("TOPLEFT", title, "BOTTOMLEFT", -12, -8)
+    sf:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", -26, 8)
+    local c = CreateFrame("Frame", "ApothecaContent_" .. def.key, sf)
+    c:SetWidth(CONTENT_W)
+    c:SetHeight(400)
+    sf:SetScrollChild(c)
+    if sf.ScrollBar then
+        sf:HookScript("OnScrollRangeChanged", function(self, _, yrange)
+            self.ScrollBar:SetShown((yrange or self:GetVerticalScrollRange() or 0) > 0)
+        end)
+    else
         sf:EnableMouseWheel(true)
         sf:SetScript("OnMouseWheel", function(self, delta)
             local cur = self:GetVerticalScroll()
             local mx  = self:GetVerticalScrollRange()
             self:SetVerticalScroll(math.max(0, math.min(mx, cur - delta * 24)))
         end)
-        tabFrames[def.key] = c
     end
+    return page, c
+end
+
+-- Every page is made at PLAYER_LOGIN (empty frames, cheap); the widgets
+-- of all of them are built on the first showing of any one, since a
+-- sub-page can be opened before the main page.
+function Apotheca.CreateOptionsPanel()
+    local pages, contents = {}, {}
+    local built = false
+    for _, def in ipairs(PAGE_DEFS) do
+        local page, c = CreatePage(def)
+        pages[#pages + 1], contents[def.key] = page, c
+        page:SetScript("OnShow", function()
+            if not built then
+                built = true
+                Apotheca.BuildOptionsPanelContent(contents)
+            end
+            Apotheca.RefreshOptions()
+        end)
+    end
+    local panel = pages[1]
+    Apotheca.optionsPanel, Apotheca.optionsPages = panel, pages
+    if Settings and Settings.RegisterCanvasLayoutCategory then
+        local cat = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
+        Settings.RegisterAddOnCategory(cat)
+        panel._category = cat
+        -- Right after the main page, in order (porting guide).
+        if Settings.RegisterCanvasLayoutSubcategory then
+            for i = 2, #pages do
+                local ok, err = pcall(Settings.RegisterCanvasLayoutSubcategory, cat, pages[i], pages[i].name)
+                if not ok then
+                    print("|cff9966ffApotheca:|r couldn't add the " .. pages[i].name
+                        .. " options page: " .. tostring(err))
+                end
+            end
+        end
+    elseif InterfaceOptions_AddCategory then
+        InterfaceOptions_AddCategory(panel)
+    end
+end
+
+function Apotheca.BuildOptionsPanelContent(pageContents)
+    local PAD       = 20
 
     -- widget state
     local curContent, curH = nil, 0
@@ -193,7 +180,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
     end
 
     -- Every widget updates the main bar after a change, unless given its
-    -- own `update` (the profession bar's tab: it rebuilds that bar only).
+    -- own `update` (the Profession Bar page: it rebuilds that bar only).
     local function Checkbox(labelText, getter, setter, indent, update)
         local cb = CreateFrame("CheckButton", nil, curContent, "InterfaceOptionsCheckButtonTemplate")
         cb:SetPoint("TOPLEFT", curContent, "TOPLEFT", PAD + (indent or 0), Y())
@@ -383,7 +370,7 @@ function Apotheca.BuildOptionsPanelContent(panel)
             local scale = container:GetEffectiveScale()
             local inside = x / scale >= left and x / scale <= left + width
             -- A scrolled list reaches past the scroll frame: only the part
-            -- in view counts, so a drop over the tabs or below the panel
+            -- in view counts, so a drop over the title or below the panel
             -- is away from the list.
             local content = container:GetParent()
             local sf = content and content:GetParent()
@@ -501,9 +488,9 @@ function Apotheca.BuildOptionsPanelContent(panel)
     end
 
     -- ════════════════════════════════════════════════════════════
-    -- TAB 1: GENERAL
+    -- PAGE 1: GENERAL
     -- ════════════════════════════════════════════════════════════
-    SetTarget(tabFrames["general"])
+    SetTarget(pageContents["general"])
 
     SectionHeader("General")
     Checkbox("Enable Apotheca",
@@ -679,9 +666,9 @@ function Apotheca.BuildOptionsPanelContent(panel)
     FinalizeTarget()
 
     -- ════════════════════════════════════════════════════════════
-    -- TAB 2: CONSUMABLES
+    -- PAGE 2: CONSUMABLES
     -- ════════════════════════════════════════════════════════════
-    SetTarget(tabFrames["consumables"])
+    SetTarget(pageContents["consumables"])
 
     SectionHeader("Buff Food")
     Checkbox("Enable Buff Food button",
@@ -888,9 +875,9 @@ function Apotheca.BuildOptionsPanelContent(panel)
     FinalizeTarget()
 
     -- ════════════════════════════════════════════════════════════
-    -- TAB: PROFESSION BAR (#42, ApothecaUtility.lua)
+    -- PAGE: PROFESSION BAR (#42, ApothecaUtility.lua)
     -- ════════════════════════════════════════════════════════════
-    SetTarget(tabFrames["utility"])
+    SetTarget(pageContents["utility"])
     local U = Apotheca.Utility
     local function USet(v, ...)
         DBSet(v, "utility", ...)
@@ -1053,9 +1040,9 @@ function Apotheca.BuildOptionsPanelContent(panel)
     FinalizeTarget()
 
     -- ════════════════════════════════════════════════════════════
-    -- TAB 3: BUTTON ORDER
+    -- PAGE 3: BUTTON ORDER
     -- ════════════════════════════════════════════════════════════
-    SetTarget(tabFrames["buttonorder"])
+    SetTarget(pageContents["buttonorder"])
 
     SectionHeader("Button Order")
     SmallLabel("Drag a row, or use the arrows, to set the order of the buttons on the bar.")
@@ -1155,9 +1142,9 @@ function Apotheca.BuildOptionsPanelContent(panel)
     FinalizeTarget()
 
     -- ════════════════════════════════════════════════════════════
-    -- TAB 4: PROFILE & DEBUG
+    -- PAGE 4: PROFILE & DEBUG
     -- ════════════════════════════════════════════════════════════
-    SetTarget(tabFrames["profile"])
+    SetTarget(pageContents["profile"])
 
     SectionHeader("Profile")
     local charKey = Apotheca.GetCharProfileKey and Apotheca.GetCharProfileKey() or ""
@@ -1183,7 +1170,4 @@ function Apotheca.BuildOptionsPanelContent(panel)
         function() return DBGet("debug") == true end,
         function(v) Apotheca.SetDebug(v) end)
     FinalizeTarget()
-
-    -- activate first tab
-    SwitchTab("general")
 end

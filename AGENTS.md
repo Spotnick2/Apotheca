@@ -16,7 +16,7 @@ ApothecaCompat.lua     — Apotheca.API: every moved or removed API; loads first
 ApothecaItems.lua      — GENERATED item data (Apotheca.DATA); see Item Data
 Apotheca.lua           — Main addon: all logic, item data, frame creation, events
 ApothecaUtility.lua    — The profession bar (#42): its own frame, secure buttons and events
-Apotheca_Options.lua   — In-game options panel: tabbed UI, DB read/write helpers
+Apotheca_Options.lua   — In-game options: a page and four sub-pages in Esc > Options > AddOns, DB read/write helpers
 Bindings.xml           — Key bindings (main bar and profession bar); loaded by name, NOT listed in the TOC
 Tools/ApothecaProbe/   — DEV-ONLY ForeverProbe module (never packaged): /fp apo probe, scan, scan2, scan3, applytest, bar, prof, proftest; /fp steps apo scan | probe; `deploy.ps1 -Probe`
 .pkgmeta               — BigWigs packager config (release packaging only, not used locally)
@@ -235,7 +235,7 @@ On a new Forever build, the login note tells players the build differs from `Apo
 
 - **Color prefix for addon chat**: `"|cff9966ffApotheca:|r "` (purple)
 - **Fallback icon**: `"Interface\\Icons\\INV_Misc_QuestionMark"`
-- **Options panel**: Built lazily on first `OnShow` in `Apotheca_Options.lua`. DB helpers `DBGet(...)` and `DBSet(value, ...)` accept vararg key paths into the active profile. Reorderable lists (Button Order, the Profession Bar's Actions) make each row once and reuse it on refresh (frames are never freed); `EnableRowDrag` adds drag and drop (#54), with the arrows kept. `Checkbox`, `Slider` and `Dropdown` take an optional `update` (default: the main bar's `UpdateAllButtons`).
+- **Options panel**: `Apotheca_Options.lua`. The main page (General) and its sub-pages (Consumables, Profession Bar, Button Order, Profile; `PAGE_DEFS`, registered with `Settings.RegisterCanvasLayoutSubcategory`, #80) each scroll in a `UIPanelScrollFrameTemplate`. Every page is hidden at creation, and the first `OnShow` of any of them builds them all. DB helpers `DBGet(...)` and `DBSet(value, ...)` accept vararg key paths into the active profile. Reorderable lists (Button Order, the Profession Bar's Actions) make each row once and reuse it on refresh (frames are never freed); `EnableRowDrag` adds drag and drop (#54), with the arrows kept. `Checkbox`, `Slider` and `Dropdown` take an optional `update` (default: the main bar's `UpdateAllButtons`).
 - **No libraries**: Do not introduce LibStub, Ace3, or any other library dependencies.
 - **Buff checks** go through `ReadAuras` / `AurasHave` in `Apotheca.lua`: read the auras once, match by spell ID or by the spell's localized name (cached only once found: `GetSpellName` answers nil until the spell loads). Never add an English-name-only check.
 - **Roles**, not classes, decide what the bar offers: see Roles under Item Data. `CLASS_ROLES` holds each class's default role, its preference among several ticked roles, and its damage profile.
