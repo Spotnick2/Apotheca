@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.9.0] - 2026-11-06
+
+### Added
+- **Comprehend Scroll on the profession bar.** Mages who know it get a button for it, with its own key binding under Apotheca in the game's Key Bindings.
+- **Windstone.** On Zephras Isle, Windstone is offered on the Food and Drink buttons: it restores a little health and mana at once. It's ranked against the food and drink you carry, so it shows when it beats your food, or when you carry no other drink. While it cools down, the buttons offer your next food or drink. Anywhere else it isn't offered, since it can't be used there.
+
+### Changed
+- Apotheca is now checked against client build 1.60.1.70790, so the "this client build is different" note no longer appears at login on it.
+
 ## [2.8.0] - 2026-11-05
 
 ### Added
