@@ -36,6 +36,8 @@ Every value comes from the WoW: Forever client itself, not from a Vanilla databa
 
 Battleground-only items (PvP draughts, Warsong Gulch, Arathi Basin, Alterac Valley and Darkspear Islands rations and bandages) are offered only inside their battleground. Darkspear Islands is new in Forever, and its items are recognised on English clients only for now.
 
+Windstone, which restores a little health and mana at once, is offered on the Food and Drink buttons on Zephras Isle only, where it can be used. It is ranked against the food and drink you carry, so it shows when it beats your food, or when you carry no other drink. While it cools down, the buttons offer your next food or drink.
+
 Buffs are recognised on every client language.
 
 Every button has its own key binding too (Options > Keybindings > Apotheca): the Mana Potion key always uses your best mana potion, whatever it is. A key does nothing while its button isn't on the bar, and keeps working if you hide the bar with the Visibility setting.
