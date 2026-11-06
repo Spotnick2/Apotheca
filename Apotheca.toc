@@ -1,6 +1,6 @@
 ## Interface: 16001
 ## Title: Apotheca Forever
-## Notes: Smart consumable action bars for healers that automatically select the best potions, runes, and recovery items.
+## Notes: Smart consumable bar: the best potion, food, drink, elixir, scroll and oil in your bags, for your role.
 ## Category-enUS: User Interface
 ## Category-deDE: Benutzerinterface
 ## Category-esES: Interfaz de usuario

@@ -2,7 +2,7 @@
 
 ## What This Repository Is
 
-**Apotheca** is a World of Warcraft addon targeting **WoW: Forever 1.60.1** (interface `16001`): Vanilla content running on Blizzard's Retail (Mainline) API. It displays a smart consumable action bar for healers that automatically scans bags and presents the best available potions, food, drink, buff food, scrolls, weapon oils, elixirs/flasks, and bandages as clickable buttons. There is no build system and no compiler: it is pure Lua executed by the game client, with an offline Lua 5.1 test suite in `tests/`.
+**Apotheca** is a World of Warcraft addon targeting **WoW: Forever 1.60.1** (interface `16001`): Vanilla content running on Blizzard's Retail (Mainline) API. It displays a smart consumable action bar that follows the player's role (Tank, Healer or Damage), automatically scans bags and presents the best available potions, food, drink, buff food, scrolls, weapon oils, elixirs/flasks, and bandages as clickable buttons. There is no build system and no compiler: it is pure Lua executed by the game client, with an offline Lua 5.1 test suite in `tests/`.
 
 **TBC Classic Anniversary is no longer supported.** v1.0.5 was the final TBC release; it stays on CurseForge for Anniversary players, and the code is archived on the `tbc-anniversary` branch / `v1.0.5` tag. Do not add flavor branching for it.
 
