@@ -533,19 +533,21 @@ for _, oil in ipairs(DATA.OILS) do
     list[#list + 1] = { id = oil.id, level = oil.level or 1 }
 end
 
--- Battleground-only items: "pvp" means any battleground, otherwise
--- { map = instance map ID, name = enUS name }.
+-- Items usable only in one place: "pvp" means any battleground,
+-- { map = instance map ID, name = enUS name } one battleground, and
+-- { continent = map ID } an outdoor zone (Windstone, Zephras Isle, #85).
 local ZONE_RESTRICTED_ITEMS = DATA.ZONE_RESTRICTED_ITEMS
 
--- True unless the item is battleground-only and we are somewhere else.
--- GetInstanceInfo returns the CONTINENT outdoors on this client, so the
--- gate is instanceType first. The map ID works on every client language;
--- the enUS name is only the fallback for a battleground whose ID is not
--- measured yet (Darkspear Islands).
+-- True unless the item is usable only somewhere else. GetInstanceInfo
+-- returns the CONTINENT outdoors on this client: an outdoor zone's item is
+-- gated by that map ID, a battleground's by instanceType first. The map ID
+-- works on every client language; the enUS name is only the fallback for a
+-- battleground whose ID is not measured yet (Darkspear Islands).
 function Apotheca.IsItemUsableHere(itemID)
     local where = ZONE_RESTRICTED_ITEMS[itemID]
     if not where then return true end
     local name, instanceType, _, _, _, _, _, mapID = GetInstanceInfo()
+    if type(where) == "table" and where.continent then return mapID == where.continent end
     if instanceType ~= "pvp" then return false end
     if where == "pvp" then return true end
     if where.map then return mapID == where.map end
@@ -945,19 +947,42 @@ function Apotheca.FindBestItem(list, bagMap)
     return nil, 0, nil
 end
 
+-- Ask for a full update at time `t` (the earliest asked wins): an item
+-- skipped for its own cooldown is re-picked once ready. The out-of-combat
+-- poll and BAG_UPDATE_COOLDOWN request it; UpdateAllButtonsBody clears it.
+local function RecheckAt(t)
+    if t and (not Apotheca._recheckAt or t < Apotheca._recheckAt) then
+        Apotheca._recheckAt = t
+    end
+end
+
+-- Food or drink with its own cooldown (Windstone, #85): while it cools
+-- down the next food or drink is offered, or it would hold the button for
+-- the whole cooldown (Codex review of #85). Returns when it is ready, or
+-- nil when it is ready or the cooldown is unreadable (offered as usual).
+local function OwnCooldownEnds(entry)
+    if not entry.ownCooldown then return nil end
+    local cooling, endsAt = Apotheca.API.ItemOnCooldown(entry.id)
+    if cooling then return endsAt end
+    return nil
+end
+
 -- Returns: primaryID, primaryCount, primaryTex, alternateID, alternateCount, alternateTex, restoresMana
 function Apotheca.FindBestFood(bagMap, missingHP)
     missingHP = missingHP or 0
 
     -- Find the best conjured and best non-conjured food in bags.
-    local bestConj, bestNonConj = nil, nil
+    local bestConj, bestNonConj, cooling = nil, nil, nil
     for _, entry in ipairs(FOOD_ITEMS) do
         local count = bagMap[entry.id]
         if count and count > 0 then
             local e = { id = entry.id, healthValue = entry.healthValue,
                         count = count, conjured = entry.conjured or false,
-                        restoresMana = entry.restoresMana or false }
-            if e.conjured then
+                        restoresMana = entry.restoresMana or false,
+                        readyAt = OwnCooldownEnds(entry) }
+            if e.readyAt then
+                if not cooling or e.healthValue > cooling.healthValue then cooling = e end
+            elseif e.conjured then
                 if not bestConj or e.healthValue > bestConj.healthValue then
                     bestConj = e
                 end
@@ -967,6 +992,14 @@ function Apotheca.FindBestFood(bagMap, missingHP)
                 end
             end
         end
+    end
+
+    -- Only food cooling down: offer it anyway (its swipe shows when), as
+    -- the mana gem does. Otherwise re-pick it once it is ready.
+    if not bestConj and not bestNonConj and cooling then
+        if cooling.conjured then bestConj = cooling else bestNonConj = cooling end
+    elseif cooling then
+        RecheckAt(cooling.readyAt)
     end
 
     if not bestConj and not bestNonConj then return nil, 0, nil, nil, 0, nil, false end
@@ -996,14 +1029,17 @@ end
 -- Returns: primaryID, primaryCount, primaryTex, alternateID, alternateCount, alternateTex
 function Apotheca.FindBestDrink(bagMap)
     -- Find the best conjured and best non-conjured drink in bags.
-    local bestConj, bestNonConj = nil, nil
+    local bestConj, bestNonConj, cooling = nil, nil, nil
     for _, entry in ipairs(DRINK_ITEMS) do
         local count = bagMap[entry.id]
         if count and count > 0 then
             local e = { id = entry.id, manaValue = entry.manaValue,
                         count = count, conjured = entry.conjured or false,
-                        restoresHealth = entry.restoresHealth or false }
-            if e.conjured then
+                        restoresHealth = entry.restoresHealth or false,
+                        readyAt = OwnCooldownEnds(entry) }
+            if e.readyAt then
+                if not cooling or e.manaValue > cooling.manaValue then cooling = e end
+            elseif e.conjured then
                 if not bestConj or e.manaValue > bestConj.manaValue then
                     bestConj = e
                 end
@@ -1013,6 +1049,13 @@ function Apotheca.FindBestDrink(bagMap)
                 end
             end
         end
+    end
+
+    -- As for food: a drink cooling down is offered only when there is no other.
+    if not bestConj and not bestNonConj and cooling then
+        if cooling.conjured then bestConj = cooling else bestNonConj = cooling end
+    elseif cooling then
+        RecheckAt(cooling.readyAt)
     end
 
     if not bestConj and not bestNonConj then return nil, 0, nil, nil, 0, nil end
@@ -3091,6 +3134,9 @@ end
 function UpdateAllButtonsBody()
 
     local db = DB()
+    -- Each finder that skips an item for its own cooldown asks again
+    -- (RecheckAt: the mana gem, Windstone).
+    Apotheca._recheckAt = nil
 
     if db.enabled == false then
         ApothecaFrame:Hide()
@@ -3217,9 +3263,10 @@ function UpdateAllButtonsBody()
     local gemID, gemCnt, gemTex
     -- When a stronger gem was skipped for its cooldown, re-pick once it is
     -- ready (the slow out-of-combat poll requests the update).
-    Apotheca._recheckAt = nil
     if gemOn then
-        gemID, gemCnt, gemTex, Apotheca._recheckAt = Apotheca.FindBestReadyItem(DATA.MANA_GEMS, bagMap)
+        local gemReadyAt
+        gemID, gemCnt, gemTex, gemReadyAt = Apotheca.FindBestReadyItem(DATA.MANA_GEMS, bagMap)
+        RecheckAt(gemReadyAt)
     end
 
     -- ── Buff food ────────────────────────────────────────────────
@@ -3716,7 +3763,7 @@ eventFrame:SetScript("OnUpdate", function(self, elapsed)
                 and LayoutSignature(Apotheca.LayoutSettings()) ~= Apotheca._layoutSig then
                 RequestUpdate()
             end
-            -- A stronger item skipped for its cooldown (mana gem) is ready:
+            -- An item skipped for its cooldown (mana gem, Windstone) is ready:
             -- re-pick it. Only out of combat, where the button may change.
             if Apotheca._recheckAt and GetTime() >= Apotheca._recheckAt then
                 Apotheca._recheckAt = nil

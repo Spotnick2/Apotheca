@@ -41,7 +41,7 @@ jobs:
           # Instant Poison, and the stones (sharpening, weight, Elemental).
           python3 Tools/build_item_tables.py docs/forever-consumables-70009.tsv \
             --expect-skipped 11951 1072 282018 8243 8008 238641 202316 23122 \
-            --expect-present 13446 13444 9421 19013 19060 227813 232433 4604 8008 2888 6947 7964 12643 18262 > /dev/null
+            --expect-present 13446 13444 9421 19013 19060 227813 232433 4604 8008 2888 6947 7964 12643 18262 255663 > /dev/null
           git diff --exit-code --ignore-cr-at-eol ApothecaItems.lua
 
       # The probe tests (test_probe, test_applytest, test_profprobe) need
