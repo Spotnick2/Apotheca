@@ -9,7 +9,7 @@
 --
 -- Measured facts behind these adapters:
 --   C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md
---   C:\Projects\WoW\References\Forever\api\forever-api-1.60.1.70338.md
+--   C:\Projects\WoW\References\Forever\api\forever-api-1.60.1.70790.md
 -- ============================================================
 
 Apotheca = Apotheca or {}
@@ -17,8 +17,10 @@ local API = {}
 Apotheca.API = API
 
 -- The client build these adapters were measured against. On any other
--- build players get a one-line note at login (see Apotheca.lua).
-API.MEASURED_ON_BUILD = 70009
+-- build players get a one-line note at login (see Apotheca.lua). 70790:
+-- the API dump checked and the owner's play since launch, no probe run
+-- (docs/FOREVER-PROBE.md, #88).
+API.MEASURED_ON_BUILD = 70790
 
 -- The last client build on which SavedVariables were written but never
 -- read back. Build 70009 fixed it (confirmed with a full exit and relaunch,

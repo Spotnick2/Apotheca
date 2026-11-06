@@ -145,7 +145,7 @@ H.check(H.messagesMatching("no saved settings were loaded") == 1,
 
 -- On a build where the client loads settings (70009 and later), a missing
 -- file is just a first install: no "not loaded" line.
-WoW.build, WoW.messages = "70009", {}
+WoW.build, WoW.messages = "70790", {}
 WoW.fire("PLAYER_LOGIN")
 H.eq(H.messagesMatching("no saved settings were loaded"), 0,
     "on the measured, fixed build, a first install prints no settings warning")
@@ -164,6 +164,6 @@ WoW.messages = {}
 WoW.fire("PLAYER_LOGIN")
 H.eq(H.messagesMatching("no saved settings were loaded"), 0,
     "loaded settings print no warning, even on an unmeasured build")
-WoW.build = "70009"
+WoW.build = "70790"
 
 H.done("test_forever")
