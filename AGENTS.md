@@ -6,7 +6,7 @@
 
 **TBC Classic Anniversary is no longer supported.** v1.0.5 was the final TBC release; it stays on CurseForge for Anniversary players, and the code is archived on the `tbc-anniversary` branch / `v1.0.5` tag. Do not add flavor branching for it.
 
-Read `C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md` before touching an unfamiliar API, and `docs/FOREVER-PROBE.md` for what was measured in game for this addon. The full declared API surface is `C:\Projects\WoW\References\Forever\api\forever-api-1.60.1.70338.md`.
+Read `C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md` before touching an unfamiliar API, and `docs/FOREVER-PROBE.md` for what was measured in game for this addon. The full declared API surface is `C:\Projects\WoW\References\Forever\api\forever-api-<version>.<build>.md`: take the highest build (1.60.1.70790 when last checked).
 
 ## Repository Layout
 

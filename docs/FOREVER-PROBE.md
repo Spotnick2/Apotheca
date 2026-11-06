@@ -268,6 +268,13 @@ Geometry in UIParent units (`ActionButton1` stays 45 x 45; the icon size is its 
 
 Every API (90 names: the stubbed globals and each `C_*` call in the addon) and every event Apotheca uses is present in `forever-api-1.60.1.70338.md`, as it was in 70009; nothing was removed. Interface is still 16001. No behaviour was re-measured on this build, so `MEASURED_ON_BUILD` stays 70009.
 
+## Build 1.60.1.70790 (client built Nov 3), 2026-11-06
+
+- **API dump** `forever-api-1.60.1.70790.md`, diffed against 70338: documented functions +24 -7, events +8 -2, widget methods unchanged. None of it touches Apotheca. The removals are gamepad targeting, the Forever experience preset and SD/HD toggle (re-signatured), mail transfer info and title icons (re-signatured). `PLAYER_LEVEL_UP` gained a trailing `spiritDelta`, which Apotheca ignores.
+- Every stubbed global (48), every `C_*` call in the addon (18) and every event it registers (34) is in the 70790 dump. Interface is still 16001.
+- **No probe run.** The owner has played with Apotheca on this build since launch with nothing wrong, and judged that enough: `MEASURED_ON_BUILD` is bumped to **70790** on that evidence and the API check (#88). The secret-value, aura and click-edge findings above were last measured on 70009.
+- The item data is still generated from the 70009 consumable scan. Items Blizzard added or changed since then are not in it until a re-scan (`/fp steps apo scan`).
+
 ## Still to measure
 
 - **Professions (#42), still open:** the profession keys with `ActionButtonUseKeyDown` 0 (only 1 was measured; mouse clicks are measured on both). Characters with Mining, Herbalism, Alchemy, Blacksmithing, Engineering, Leatherworking at a higher rank, and a level-16 rogue (Pick Lock): `/fp apo prof <label>` and `/fp apo proftest`.

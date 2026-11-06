@@ -94,7 +94,7 @@ function WoW.IsSecret(v) return getmetatable(v) == secretMT end
 function WoW.reset()
     WoW.time         = 10000
     WoW.inCombat     = false
-    WoW.build        = "70009"
+    WoW.build        = "70790"
     WoW.class        = "PRIEST"
     WoW.instanceName, WoW.instanceType, WoW.instanceMap = "Kalimdor", "none", 1
     WoW.health, WoW.healthMax = 1000, 1000
