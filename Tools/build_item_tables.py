@@ -122,9 +122,39 @@ def restriction(r):
 
 
 def outdoor_locked(r):
-    """Usable only in an outdoor zone (e.g. Windstone, Skywall): cannot be gated
-    by instance, so such items are left out."""
+    """Usable only in an outdoor zone. Left out unless outdoor_zone() knows
+    the zone."""
     return re.search(r'cannot be used outside of|only (?:be )?usable in (?!side)', r['use'], re.I)
+
+
+# An outdoor zone a tooltip names -> the continent map ID its item's spell
+# requires. Outdoors GetInstanceInfo() returns the continent, so that ID is
+# the gate. Windstone (#85): "cannot be used outside of Skywall", but its
+# spell (1259231) requires area group 8845, whose one member is area 16593,
+# Zephras Isle, the whole of map 2991 (SpellCastingRequirements,
+# AreaGroupMember, AreaTable; wago.tools 1.60.1.70790).
+OUTDOOR_ZONES = {'Skywall': 2991}
+
+
+def outdoor_zone(r):
+    """("outdoor", continent map ID, tooltip zone) for an item usable only in
+    a zone OUTDOOR_ZONES knows, else None."""
+    m = re.search(r'cannot be used outside of ([^.]+)\.', r['use'], re.I)
+    if m and m.group(1).strip() in OUTDOOR_ZONES:
+        name = m.group(1).strip()
+        return ('outdoor', OUTDOOR_ZONES[name], name)
+    return None
+
+
+def zone_hybrid(r):
+    """An instant restore of BOTH health and mana, with its own cooldown,
+    usable only in a known outdoor zone (Windstone, #85). Not a potion (it
+    does not share the potion cooldown), so it goes on the Food and Drink
+    buttons, gated to its zone, ranked by its average like any food."""
+    if kind(r) != 'other-restore' or not outdoor_zone(r):
+        return False
+    h, mn = potion_values(r['use'])
+    return bool(h and mn)
 
 
 # ------------------------------------------------------------------
@@ -299,6 +329,8 @@ def build(rows):
             if gm: gems.append((-gm, r['id'], r['name'], gm))
             skipped.append((r['id'], r['name'], 'mage mana gem: its own button, not a potion'))
             continue
+        if zone_hybrid(r):
+            continue   # on the Food and Drink buttons instead (#85)
         if kind(r) == 'other-restore':
             skipped.append((r['id'], r['name'], 'restores instantly but is not a potion (own cooldown)'))
             continue
@@ -342,11 +374,12 @@ def build(rows):
         if kind(r) == 'feast':
             skipped.append((r['id'], r['name'], 'feast: placed for the group, not eaten from the bag'))
             continue
-        if kind(r) != 'food':
+        hybrid = zone_hybrid(r)
+        if kind(r) != 'food' and not hybrid:
             if r['sub'] == SUB_FOOD and not r['quest']:
                 skipped.append((r['id'], r['name'], 'Food & Drink with no Use text in the scan'))
             continue
-        h, mn = food_values(u)
+        h, mn = potion_values(u) if hybrid else food_values(u)
         if not h and not mn:
             # Say why, so a future scan's report can be reviewed.
             if re.search(r'Restores [\d,]+ to [\d,]+ (?:health|mana)', u):
@@ -357,7 +390,7 @@ def build(rows):
             continue
         buffy = re.search(r'well fed|will also increase|Also increases|become refreshed', u, re.I)
         stats = parse_stats(u) if buffy else {}
-        z = restriction(r)
+        z = restriction(r) or outdoor_zone(r)
         if z: zone[r['id']] = z
         if stats:
             for k, v in stats.items():
@@ -808,14 +841,18 @@ def emit(out, build_id, src):
     w('}')
     w('')
 
-    w('-- Items usable only in battlegrounds. "pvp" = any battleground; otherwise')
-    w('-- { map = instance map ID (8th return of GetInstanceInfo), name = enUS name }.')
-    w('-- map nil = not measured yet: the name is the only (enUS-only) match.')
+    w('-- Items usable only in one place. "pvp" = any battleground;')
+    w('-- { map = instance map ID (8th return of GetInstanceInfo), name = enUS name }')
+    w('-- for one battleground (map nil = not measured yet: the enUS name only);')
+    w('-- { continent = map ID, name = tooltip zone } for an outdoor zone: outdoors')
+    w('-- GetInstanceInfo returns the continent.')
     w('D.ZONE_RESTRICTED_ITEMS = {')
     for k in sorted(out['ZONE_RESTRICTED_ITEMS']):
         z = out['ZONE_RESTRICTED_ITEMS'][k]
         if z == 'pvp':
             w('    [%d] = "pvp",' % k)
+        elif z[0] == 'outdoor':
+            w('    [%d] = { continent = %d, name = "%s" },' % (k, z[1], z[2]))
         else:
             w('    [%d] = { map = %s, name = "%s" },' % (k, z[0] if z[0] else 'nil', z[1]))
     w('}')

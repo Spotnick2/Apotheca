@@ -117,6 +117,29 @@ WoW.instanceName = "Bassin Arathi"   -- a French client
 H.eq(Apotheca.IsItemUsableHere(20065), true, "the gate uses the map ID, so it works on a localized client")
 WoW.instanceName, WoW.instanceType, WoW.instanceMap = "Kalimdor", "none", 1
 
+-- Windstone (#85): usable only on Zephras Isle (map 2991, outdoors), and
+-- offered on BOTH Food and Drink there, ranked by its average like food.
+H.eq(Apotheca.IsItemUsableHere(255663), false, "Windstone is not usable on Kalimdor")
+WoW.instanceName, WoW.instanceType, WoW.instanceMap = "Zephras Isle", "none", 2991
+H.eq(Apotheca.IsItemUsableHere(255663), true, "Windstone is usable on Zephras Isle")
+H.eq(Apotheca.IsItemUsableHere(17348), false, "a battleground draught is still not usable there")
+WoW.AddItem(2, 1, 255663, 5, "Windstone")
+WoW.AddItem(2, 2, 117, 5, "Tough Jerky")
+local zmap = Apotheca.BuildBagMap()
+H.eq(zmap[255663], 5, "on Zephras Isle, Windstone is in the usable bag map")
+local fid, _, _, _, _, _, fmana = Apotheca.FindBestFood(zmap)
+H.eq(fid, 255663, "the Food button offers Windstone (60) over Tough Jerky (58)")
+H.eq(fmana, true, "  as food that also restores mana")
+local did, _, _, _, _, _, dhealth = Apotheca.FindBestDrink(zmap)
+H.eq(did, 255663, "the Drink button offers Windstone with no other drink")
+H.eq(dhealth, true, "  as drink that also restores health")
+WoW.instanceName, WoW.instanceType, WoW.instanceMap = "Kalimdor", "none", 1
+zmap = Apotheca.BuildBagMap()
+H.eq(zmap[255663], nil, "elsewhere, Windstone is not in the usable bag map")
+H.eq((Apotheca.FindBestFood(zmap)), 117, "  so the Food button offers Tough Jerky")
+H.eq((Apotheca.FindBestDrink(zmap)), nil, "  and the Drink button nothing")
+WoW.bags[2] = nil
+
 -- The gate applies to EVERY finder, not only potions: it is in the bag map.
 WoW.AddItem(2, 1, 19060, 3, "Warsong Gulch Enriched Ration")
 WoW.AddItem(2, 2, 8766, 3, "Morning Glory Dew")

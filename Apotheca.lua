@@ -533,19 +533,21 @@ for _, oil in ipairs(DATA.OILS) do
     list[#list + 1] = { id = oil.id, level = oil.level or 1 }
 end
 
--- Battleground-only items: "pvp" means any battleground, otherwise
--- { map = instance map ID, name = enUS name }.
+-- Items usable only in one place: "pvp" means any battleground,
+-- { map = instance map ID, name = enUS name } one battleground, and
+-- { continent = map ID } an outdoor zone (Windstone, Zephras Isle, #85).
 local ZONE_RESTRICTED_ITEMS = DATA.ZONE_RESTRICTED_ITEMS
 
--- True unless the item is battleground-only and we are somewhere else.
--- GetInstanceInfo returns the CONTINENT outdoors on this client, so the
--- gate is instanceType first. The map ID works on every client language;
--- the enUS name is only the fallback for a battleground whose ID is not
--- measured yet (Darkspear Islands).
+-- True unless the item is usable only somewhere else. GetInstanceInfo
+-- returns the CONTINENT outdoors on this client: an outdoor zone's item is
+-- gated by that map ID, a battleground's by instanceType first. The map ID
+-- works on every client language; the enUS name is only the fallback for a
+-- battleground whose ID is not measured yet (Darkspear Islands).
 function Apotheca.IsItemUsableHere(itemID)
     local where = ZONE_RESTRICTED_ITEMS[itemID]
     if not where then return true end
     local name, instanceType, _, _, _, _, _, mapID = GetInstanceInfo()
+    if type(where) == "table" and where.continent then return mapID == where.continent end
     if instanceType ~= "pvp" then return false end
     if where == "pvp" then return true end
     if where.map then return mapID == where.map end

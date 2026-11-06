@@ -158,6 +158,7 @@ D.DRINK_ITEMS = {
     { id = 5350  , manaValue = 145  , conjured = true },  -- Conjured Water
     { id = 159   , manaValue = 145   },  -- Refreshing Spring Water
     { id = 252031, manaValue = 145   },  -- Crisp Spring Water
+    { id = 255663, manaValue = 40   , restoresHealth = true },  -- Windstone
 }
 
 -- Plain food (no Well Fed), strongest first.
@@ -283,6 +284,7 @@ D.FOOD_ITEMS = {
     { id = 252030, healthValue = 234   },  -- Pungent Skycheddar
     { id = 252032, healthValue = 234   },  -- Red Delicious Stormapple
     { id = 278117, healthValue = 234   },  -- Hard Boiled Eggs
+    { id = 255663, healthValue = 60   , restoresMana = true },  -- Windstone
     { id = 5349  , healthValue = 58   , conjured = true },  -- Conjured Muffin
     { id = 117   , healthValue = 58    },  -- Tough Jerky
     { id = 961   , healthValue = 58    },  -- Healing Herb
@@ -857,9 +859,11 @@ D.OILS = {
     { id = 20745 , kind = "mana",  level = 20, stats = { healing = 10, mp5 = 5 } },  -- Minor Mana Oil
 }
 
--- Items usable only in battlegrounds. "pvp" = any battleground; otherwise
--- { map = instance map ID (8th return of GetInstanceInfo), name = enUS name }.
--- map nil = not measured yet: the name is the only (enUS-only) match.
+-- Items usable only in one place. "pvp" = any battleground;
+-- { map = instance map ID (8th return of GetInstanceInfo), name = enUS name }
+-- for one battleground (map nil = not measured yet: the enUS name only);
+-- { continent = map ID, name = tooltip zone } for an outdoor zone: outdoors
+-- GetInstanceInfo returns the continent.
 D.ZONE_RESTRICTED_ITEMS = {
     [17348] = "pvp",
     [17349] = "pvp",
@@ -890,6 +894,7 @@ D.ZONE_RESTRICTED_ITEMS = {
     [20237] = { map = 529, name = "Arathi Basin" },
     [20243] = { map = 529, name = "Arathi Basin" },
     [20244] = { map = 529, name = "Arathi Basin" },
+    [255663] = { continent = 2991, name = "Skywall" },
     [272053] = { map = nil, name = "Darkspear Islands" },
     [272054] = { map = nil, name = "Darkspear Islands" },
     [272055] = { map = nil, name = "Darkspear Islands" },
