@@ -52,4 +52,5 @@
 	<Binding name="CLICK ApothecaUtil_findherbs:LeftButton" category="Apotheca"/>
 	<Binding name="CLICK ApothecaUtil_findminerals:LeftButton" category="Apotheca"/>
 	<Binding name="CLICK ApothecaUtil_picklock:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaUtil_comprehend:LeftButton" category="Apotheca"/>
 </Bindings>

@@ -46,6 +46,7 @@ An optional second bar (off by default: `/apo utility`, or the Profession Bar op
 
 - Cooking, First Aid and Fishing, and your professions' windows (Alchemy, Blacksmithing, Enchanting, Engineering, Leatherworking, Tailoring, Skinning, Mining, Herbalism, Smelting, Poisons). On Forever the gathering professions have windows too (Camping equipment).
 - Their actions: Disenchant, Find Herbs, Find Minerals, Pick Lock, Bait and Tackle.
+- A mage's Comprehend Scroll.
 - Your Hearthstone.
 
 Each action has its own key binding (Options > Keybindings > Apotheca). The key follows the action, so Disenchant on F9 is Disenchant on every character, wherever its button is. Tick what the bar may show and set the order in the options; it has its own position, layout and lock, and can match one of your action bars like the main bar.

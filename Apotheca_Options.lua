@@ -888,7 +888,7 @@ function Apotheca.BuildOptionsPanelContent(pageContents)
     SectionHeader("Profession Bar")
     SmallLabel("A second bar that builds itself from this character's professions: "
         .. "Cooking, First Aid, Fishing, your professions' windows, Disenchant, Smelting, "
-        .. "Find Herbs, Find Minerals, Pick Lock and your Hearthstone. Hold Alt to drag it.")
+        .. "Find Herbs, Find Minerals, Pick Lock, Comprehend Scroll and your Hearthstone. Hold Alt to drag it.")
     Gap(4)
     Checkbox("Show the profession bar  |cff888888(/apo utility)|r",
         function() return DBGet("utility", "enabled") == true end,
