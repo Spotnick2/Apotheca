@@ -58,6 +58,18 @@ function API.ItemCooldown(itemID)
     return C_Container.GetItemCooldown(itemID)
 end
 
+-- Whether an item is on a cooldown longer than a global cooldown: true and
+-- the time it ends, false when it is ready, nil when the client doesn't say
+-- (a secret in combat, a refused call). Secrets are tested before any
+-- comparison (taint.log).
+function API.ItemOnCooldown(itemID)
+    local ok, start, dur = pcall(C_Container.GetItemCooldown, itemID)
+    if not ok or secret(start) or secret(dur) then return nil end
+    if type(start) ~= "number" or type(dur) ~= "number" then return nil end
+    if dur > 1.5 then return true, start + dur end
+    return false
+end
+
 -- ------------------------------------------------------------
 -- Spells (#42, the profession bar)
 -- ------------------------------------------------------------

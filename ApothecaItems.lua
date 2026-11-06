@@ -158,7 +158,7 @@ D.DRINK_ITEMS = {
     { id = 5350  , manaValue = 145  , conjured = true },  -- Conjured Water
     { id = 159   , manaValue = 145   },  -- Refreshing Spring Water
     { id = 252031, manaValue = 145   },  -- Crisp Spring Water
-    { id = 255663, manaValue = 40   , restoresHealth = true },  -- Windstone
+    { id = 255663, manaValue = 40   , restoresHealth = true, ownCooldown = true },  -- Windstone
 }
 
 -- Plain food (no Well Fed), strongest first.
@@ -284,7 +284,7 @@ D.FOOD_ITEMS = {
     { id = 252030, healthValue = 234   },  -- Pungent Skycheddar
     { id = 252032, healthValue = 234   },  -- Red Delicious Stormapple
     { id = 278117, healthValue = 234   },  -- Hard Boiled Eggs
-    { id = 255663, healthValue = 60   , restoresMana = true },  -- Windstone
+    { id = 255663, healthValue = 60   , restoresMana = true, ownCooldown = true },  -- Windstone
     { id = 5349  , healthValue = 58   , conjured = true },  -- Conjured Muffin
     { id = 117   , healthValue = 58    },  -- Tough Jerky
     { id = 961   , healthValue = 58    },  -- Healing Herb

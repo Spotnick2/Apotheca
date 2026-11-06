@@ -404,10 +404,12 @@ def build(rows):
         # Rockscale Cod restores 841, Goldthorn Tea 1292 mana.
         # Food restoring both competes on BOTH buttons. It must not collapse
         # them into one: a low-level item would hide a high-level drink.
+        # The hybrid has its own cooldown: the addon offers the next food or
+        # drink while it cools down (Codex review of #85).
         if h:
-            food.append((-h, 0 if r['conjured'] else 1, r['id'], r['name'], h, r['conjured'], mn))
+            food.append((-h, 0 if r['conjured'] else 1, r['id'], r['name'], h, r['conjured'], mn, hybrid))
         if mn:
-            drink.append((-mn, 0 if r['conjured'] else 1, r['id'], r['name'], mn, r['conjured'], h))
+            drink.append((-mn, 0 if r['conjured'] else 1, r['id'], r['name'], mn, r['conjured'], h, hybrid))
     out['FOOD_ITEMS'] = sorted(food)
     out['DRINK_ITEMS'] = sorted(drink)
     out['CONJURED_ITEMS'] = []
@@ -729,14 +731,16 @@ def emit(out, build_id, src):
     w('D.CONJURED_ITEMS = {}')
     w('')
     id_list('DRINK_ITEMS', out['DRINK_ITEMS'],
-            lambda t: '    { id = %-6d, manaValue = %-5d%s%s },  -- %s' % (
+            lambda t: '    { id = %-6d, manaValue = %-5d%s%s%s },  -- %s' % (
                 t[2], t[4], ', conjured = true' if t[5] else '',
-                ', restoresHealth = true' if t[6] else '', t[3]),
+                ', restoresHealth = true' if t[6] else '',
+                ', ownCooldown = true' if t[7] else '', t[3]),
             'Plain drinks (no Well Fed), strongest first. Conjured = the tooltip says "Conjured Item".')
     id_list('FOOD_ITEMS', out['FOOD_ITEMS'],
-            lambda t: '    { id = %-6d, healthValue = %-5d%s%s },  -- %s' % (
+            lambda t: '    { id = %-6d, healthValue = %-5d%s%s%s },  -- %s' % (
                 t[2], t[4], ', conjured = true' if t[5] else '',
-                ', restoresMana = true' if t[6] else '', t[3]),
+                ', restoresMana = true' if t[6] else '',
+                ', ownCooldown = true' if t[7] else '', t[3]),
             'Plain food (no Well Fed), strongest first.')
 
     w('-- Well Fed food and drink, by the stat the buff grants. value = stat amount.')
