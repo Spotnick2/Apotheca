@@ -95,6 +95,18 @@ H.eq(keys(U.Collect()), "hearthstone,cooking,firstaid,fishing,enchanting,tailori
     "Skinning (Journeyman, measured) after the crafting professions")
 WoW.knownSpells[8617] = nil
 
+-- Comprehend Scroll (#84): a mage's spell, so it shows only where known.
+WoW.knownSpells[1296017] = true
+U.Refresh() ; tick()
+H.eq(attr("comprehend", "type"), "spell", "Comprehend Scroll known: a spell button")
+H.eq(attr("comprehend", "spell"), 1296017, "  its spell")
+H.eq(keys(U.Collect()), "hearthstone,cooking,firstaid,fishing,enchanting,tailoring,disenchant,comprehend",
+    "  after the other actions")
+WoW.knownSpells[1296017] = nil
+U.Refresh() ; tick()
+H.eq(attr("comprehend", "type"), nil, "not known (not a mage): no action")
+H.check(not U.buttons.comprehend:IsShown(), "  and no button")
+
 -- Two ranks known: the higher one.
 WoW.knownSpells[3274] = true
 H.eq(U.KnownSpell(U.BY_KEY.firstaid), 3274, "two ranks known: the higher")

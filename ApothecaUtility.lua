@@ -55,6 +55,7 @@ local ACTIONS = {
     { key = "findherbs",      label = "Find Herbs",      spells = { 2383 } },
     { key = "findminerals",   label = "Find Minerals",   spells = { 2580 } },
     { key = "picklock",       label = "Pick Lock",       spells = { 1804 } },
+    { key = "comprehend",     label = "Comprehend Scroll", spells = { 1296017 } },   -- #84, a mage's (trainer, level 6)
 }
 Utility.ACTIONS = ACTIONS
 local BY_KEY = {}
