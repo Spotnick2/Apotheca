@@ -779,6 +779,15 @@ function Apotheca.BuildOptionsPanelContent(pageContents)
     Checkbox("Enable Mana Gem button  |cff888888(mages)|r",
         function() return DBGet("manaGem", "enabled") ~= false end,
         function(v) DBSet(v, "manaGem", "enabled") end)
+    Checkbox("Enable Mage Scrolls button  |cff888888(mages: a wheel of your class scrolls)|r",
+        function() return DBGet("mageScrolls", "enabled") ~= false end,
+        function(v) DBSet(v, "mageScrolls", "enabled") end)
+    Checkbox("Glow Mage Scrolls when imbue or familiar is missing  |cff888888(ready check)|r",
+        function() return DBGet("mageScrolls", "glowOnMissingBuff") ~= false end,
+        function(v) DBSet(v, "mageScrolls", "glowOnMissingBuff") end)
+    SmallLabel("|cff888888Click the button (or tap its key) to open the wheel, then click a scroll.\n"
+        .. "Or hold the key and release over a scroll. Esc closes it. Imbues show\n"
+        .. "only for the weapon in your main hand.|r")
     Checkbox("Glow scrolls when buff is missing  |cff888888(ready check)|r",
         function() return DBGet("scrolls", "glowOnMissingBuff") ~= false end,
         function(v) DBSet(v, "scrolls", "glowOnMissingBuff") end)

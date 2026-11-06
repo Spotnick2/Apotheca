@@ -5,6 +5,7 @@
 	     its key does nothing. -->
 	<Binding name="CLICK ApothecaButton_mana:LeftButton" category="Apotheca"/>
 	<Binding name="CLICK ApothecaButton_managem:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_magescrolls:LeftButton" category="Apotheca"/>
 	<Binding name="CLICK ApothecaButton_health:LeftButton" category="Apotheca"/>
 	<Binding name="CLICK ApothecaButton_healthstone:LeftButton" category="Apotheca"/>
 	<Binding name="CLICK ApothecaButton_rune:LeftButton" category="Apotheca"/>

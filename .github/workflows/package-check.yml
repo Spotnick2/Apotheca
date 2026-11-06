@@ -40,8 +40,8 @@ jobs:
           # Mana Ruby on its own mana gem button, Beer Basted Boar Ribs (XP food)
           # Instant Poison, and the stones (sharpening, weight, Elemental).
           python3 Tools/build_item_tables.py docs/forever-consumables-70009.tsv \
-            --expect-skipped 11951 1072 282018 8243 8008 238641 202316 23122 \
-            --expect-present 13446 13444 9421 19013 19060 227813 232433 4604 8008 2888 6947 7964 12643 18262 255663 > /dev/null
+            --expect-skipped 11951 1072 282018 8243 8008 238641 202316 23122 217496 213549 \
+            --expect-present 13446 13444 9421 19013 19060 227813 232433 4604 8008 2888 6947 7964 12643 18262 255663 275067 213564 277493 217495 > /dev/null
           git diff --exit-code --ignore-cr-at-eol ApothecaItems.lua
 
       # The tests' scaffolding (WowTestKit) at the commit tests/kit.pin names,

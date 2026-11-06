@@ -1702,3 +1702,198 @@ Probe:Steps("probe", {
       check = function() return ProbeDB().lastProbe.combat ~= nil, "lastProbe.combat" end },
     { text = "Leave combat, then press Reload now (or type /reload) to write the results.", reload = true },
 })
+
+-- ============================================================
+-- The Mage Scrolls wheel (#94): /fp steps apo wheel
+-- ============================================================
+-- What the wheel depends on and has not been measured: an imbue scroll on
+-- the main hand through target-slot (or the cursor), the familiar's aura
+-- (the glow), the Esc override, hold-and-release and tap on both
+-- ActionButtonUseKeyDown settings, and the wheel in combat.
+
+local WHEEL_ACTION = "CLICK ApothecaButton_magescrolls:LeftButton"
+local wheel = { blocked = {} }   -- this session's baselines and findings
+OnBlocked(function(event, addon, func)
+    if wheel.watching then
+        wheel.blocked[#wheel.blocked + 1] = event .. " " .. Probe.Show(addon, true) .. " " .. Probe.Show(func, true)
+    end
+end)
+
+local function WheelOpen()
+    local r = Apotheca and Apotheca.Wheel and Apotheca.Wheel.ring
+    return r ~= nil and r:IsShown() == true
+end
+
+local function EscAction()
+    local ok, a = pcall(GetBindingAction, "ESCAPE", true)
+    return ok and a or nil
+end
+
+-- Every mage scroll held, counted: a drop means one was used.
+local function ScrollTotal()
+    local n = 0
+    for _, e in ipairs(Apotheca.DATA.MAGE_SCROLLS or {}) do
+        local ok, c = pcall(C_Item.GetItemCount, e.id)
+        if ok and type(c) == "number" and not (issecretvalue and issecretvalue(c)) then n = n + c end
+    end
+    return n
+end
+
+local function AuraIDs()
+    local ids = {}
+    local ok = pcall(function()
+        local i = 1
+        while true do
+            local a = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+            if not a then break end
+            ids[a.spellId] = tostring(a.name)
+            i = i + 1
+        end
+    end)
+    return ok and ids or nil
+end
+
+local function MainHandEnchant()
+    local ok, has, _, _, id = pcall(GetWeaponEnchantInfo)
+    if not ok then return "refused" end
+    return Probe.Show(has, true) .. " enchant " .. Probe.Show(id, true)
+end
+
+local function WheelState()
+    local s = Apotheca.Wheel.screen
+    local names = {}
+    for _, b in ipairs(Apotheca.Wheel.slots) do
+        if b:IsShown() and b.itemID then names[#names + 1] = Apotheca.API.ItemInfo(b.itemID) or b.itemID end
+    end
+    local _, sub = Apotheca.API.HandWeapon(16)
+    return {
+        enabled = s:GetAttribute("enabled"), count = s:GetAttribute("count"),
+        scrolls = table.concat(names, ", "), key = GetBindingKey(WHEEL_ACTION),
+        keyDown = C_CVar.GetCVar("ActionButtonUseKeyDown"), weaponSub = sub,
+        imbueFor = Apotheca.ImbueWeapon(), mainHand = MainHandEnchant(),
+    }
+end
+
+-- An auto step: remember the scroll count (and the auras) now.
+local function Baseline()
+    wheel.total, wheel.auras, wheel.seenOpen, wheel.targeting = ScrollTotal(), AuraIDs(), false, false
+    wheel.watching = true
+    return "scrolls " .. wheel.total
+end
+
+-- A wait: a scroll was used since the baseline (the count dropped).
+local function WaitUsed(needCombat)
+    return function()
+        if WheelOpen() then wheel.seenOpen = true end
+        if needCombat and not InCombatLockdown() then return false, "waiting for combat" end
+        local now = ScrollTotal()
+        if now < (wheel.total or now) then
+            return true, "used one (" .. wheel.total .. " -> " .. now .. "), wheel seen open: "
+                .. tostring(wheel.seenOpen) .. ", in combat: " .. tostring(InCombatLockdown())
+        end
+        return false, "waiting for a scroll to be used"
+    end
+end
+
+local function OneUsed() return ScrollTotal() == (wheel.total or 0) - 1, "exactly one used" end
+
+Probe:Command("wheel", function()
+    if not (Apotheca and Apotheca.Wheel) then say("Apotheca's wheel is not loaded"); return end
+    for k, v in pairs(WheelState()) do say("wheel " .. k .. " = " .. Probe.Show(v, true)) end
+end, "the Mage Scrolls wheel's state (#94)")
+
+local CLOSE_ACTION = "CLICK ApothecaWheelClose:LeftButton"
+Probe:Steps("wheel", {
+    title = "The Mage Scrolls wheel (#94)",
+    { text = "On a mage, out of combat, carrying a few mage scrolls: a familiar, an imbue for the weapon "
+          .. "in your main hand, and Minor Evocation or Cryoblast. Bind a key to Apotheca > Mage "
+          .. "Scrolls (Key Bindings). Press Run.", button = "Read the wheel",
+      run = function() return WheelState() end,
+      check = function()
+          local s = WheelState()
+          return s.enabled == true and (s.count or 0) > 0 and s.key ~= nil,
+              "enabled " .. tostring(s.enabled) .. ", " .. tostring(s.count) .. " scrolls, key " .. tostring(s.key)
+      end },
+    { text = "Click the Mage Scrolls button on the bar and let go without moving: the wheel opens "
+          .. "around the cursor and stays open.", screenshot = "wheel open",
+      wait = function()
+          if not WheelOpen() then return false, "waiting for the wheel" end
+          return true, "open; Esc is now " .. Probe.Show(EscAction(), true)
+      end,
+      check = function() return EscAction() == CLOSE_ACTION, Probe.Show(EscAction(), true) end },
+    { text = "Does it look right: the scrolls' icons in a ring on a dark disc, the name of the one under "
+          .. "the cursor below it, a highlight that follows the cursor?", ask = true },
+    { text = "Press Esc: the wheel closes (and the game menu does not open).",
+      wait = function()
+          if WheelOpen() then return false, "waiting for Esc" end
+          return true, "closed; Esc is now " .. Probe.Show(EscAction(), true)
+      end,
+      check = function() return EscAction() ~= CLOSE_ACTION, Probe.Show(EscAction(), true) end },
+    { text = "Did the game menu stay closed?", ask = true },
+    { text = "Remembering your buffs.", auto = true, run = Baseline },
+    { text = "Open the wheel (click the button) and click a FAMILIAR scroll (Rat, Frog or Cat).",
+      wait = function()
+          local now = AuraIDs()
+          if not now or not wheel.auras then return false, "auras unreadable" end
+          local new = {}
+          for id, name in pairs(now) do
+              if not wheel.auras[id] then new[#new + 1] = name .. "#" .. id end
+          end
+          if #new == 0 then return false, "waiting for a new buff" end
+          return true, "new buffs: " .. table.concat(new, "; ")
+      end, timeout = 120,
+      check = function() return Apotheca.HasFamiliar() == true, "Apotheca.HasFamiliar() sees it" end },
+    { text = "Remembering the main hand.", auto = true,
+      run = function() Baseline(); return MainHandEnchant() end },
+    { text = "Hold the wheel's key, move the cursor toward an IMBUE scroll, and let go of the key. "
+          .. "If a targeting cursor appears, click your weapon.",
+      wait = function()
+          if WheelOpen() then wheel.seenOpen = true end
+          local ok, t = pcall(SpellIsTargeting)
+          if ok and t then wheel.targeting = true end
+          if Apotheca.API.HandCoated(16) ~= true or ScrollTotal() >= (wheel.total or 0) then
+              return false, "waiting for the imbue"
+          end
+          return true, "imbued: " .. MainHandEnchant() .. "; targeting cursor seen: " .. tostring(wheel.targeting)
+              .. "; wheel seen open: " .. tostring(wheel.seenOpen)
+      end, timeout = 120,
+      check = function() return wheel.targeting == false, "no targeting cursor: target-slot applied it" end },
+    { text = "Remembering your scrolls.", auto = true, run = Baseline },
+    { text = "Tap the key (press and let go at once): the wheel opens and stays open. Tap it again: it "
+          .. "closes. Nothing is used.",
+      wait = function()
+          if WheelOpen() then wheel.seenOpen = true; return false, "open: tap again" end
+          if not wheel.seenOpen then return false, "waiting for the wheel" end
+          return true, "opened and closed; scrolls " .. ScrollTotal()
+      end, timeout = 120,
+      check = function() return ScrollTotal() == wheel.total, "nothing used" end },
+    { text = "Now the other 'cast on key down' setting (ActionButtonUseKeyDown). Press Run to flip it; "
+          .. "a later step puts it back.", button = "Flip it",
+      run = function()
+          wheel.keyDown = C_CVar.GetCVar("ActionButtonUseKeyDown")
+          C_CVar.SetCVar("ActionButtonUseKeyDown", wheel.keyDown == "1" and "0" or "1")
+          return "was " .. tostring(wheel.keyDown) .. ", now " .. tostring(C_CVar.GetCVar("ActionButtonUseKeyDown"))
+      end },
+    { text = "Remembering your scrolls.", auto = true, run = Baseline },
+    { text = "Hold the key, move toward any scroll and let go: it is used once.",
+      wait = WaitUsed(false), timeout = 120, check = OneUsed },
+    { text = "Remembering your scrolls.", auto = true, run = Baseline },
+    { text = "Click the button, then click a scroll on the wheel: it is used once.",
+      wait = WaitUsed(false), timeout = 120, check = OneUsed },
+    { text = "Putting 'cast on key down' back.", auto = true,
+      run = function()
+          if wheel.keyDown then C_CVar.SetCVar("ActionButtonUseKeyDown", wheel.keyDown) end
+          return "now " .. tostring(C_CVar.GetCVar("ActionButtonUseKeyDown"))
+      end },
+    { text = "Remembering your scrolls.", auto = true, run = Baseline },
+    { text = "Enter combat (a training dummy or a low-level mob). Hold the key and let go over Minor "
+          .. "Evocation or Cryoblast (any scroll will do).", wait = WaitUsed(true), timeout = 300,
+      check = OneUsed },
+    { text = "Remembering your scrolls.", auto = true, run = Baseline },
+    { text = "Still in combat: click the button, then click a scroll.", wait = WaitUsed(true), timeout = 300,
+      check = function()
+          return #wheel.blocked == 0, #wheel.blocked == 0 and "nothing blocked" or table.concat(wheel.blocked, "; ")
+      end },
+    { text = "Did you see any red error, or 'Interface action failed because of an AddOn'?", ask = true },
+    { text = "Leave combat, then press Reload now (or type /reload) to write the results.", reload = true },
+})

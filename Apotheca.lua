@@ -95,6 +95,11 @@ local PROFILE_DEFAULTS = {
     manaGem = {
         enabled = true,
     },
+    -- Mage scrolls (#94): the bar button that opens the wheel.
+    mageScrolls = {
+        enabled           = true,
+        glowOnMissingBuff = true,
+    },
     weaponOil = {
         enabled           = true,
         glowOnMissingBuff = true,
@@ -396,6 +401,8 @@ local function ApplyItemCooldown(cooldown, itemID)
         cooldown:SetCooldown(st, dur)
     end)
 end
+-- Shared with the Mage Scrolls wheel (ApothecaWheel.lua).
+Apotheca.ApplyItemCooldown = ApplyItemCooldown
 local function GetItemInfo(itemID)         return Apotheca.API.ItemInfo(itemID) end
 
 -- ============================================================
@@ -816,6 +823,15 @@ local MANAGEM_BUTTON_CONFIG = {
     key = "managem", label = "Mana Gem", restores = "mana", classOnly = "MAGE",
     emptyIcon = "Interface\\Icons\\INV_Misc_Gem_Stone_01",
     emptyTooltip = "No mana gem in bags",
+}
+
+-- Mage scrolls (#94): one button that opens the wheel of every mage scroll
+-- held (ApothecaWheel.lua). It never carries an item of its own: the wheel's
+-- snippet arms it for one click when a scroll is picked by key release.
+local MAGESCROLLS_BUTTON_CONFIG = {
+    key = "magescrolls", label = "Mage Scrolls", classOnly = "MAGE", wheel = true,
+    emptyIcon = "Interface\Icons\INV_Scroll_03",
+    emptyTooltip = "No mage scroll in bags",
 }
 
 -- Rogue poisons (#24, experimental): one button per hand. targetSlot makes
@@ -1533,6 +1549,46 @@ end
 -- Which stone a weapon takes, by weapon subclass: an explicit list, not
 -- measured in game. Fist weapons get only the "any" stone (Elemental)
 -- until tested; any other subclass gets nothing.
+-- ── Mage scrolls (#94) ──────────────────────────────────────────
+-- What an imbue scroll is for, by the main hand's weapon subclass: 10
+-- staff, 15 dagger, 7 / 8 one- and two-handed sword.
+local IMBUE_WEAPON = { [10] = "staff", [15] = "dagger", [7] = "sword", [8] = "sword" }
+
+-- The weapon kind in the main hand an imbue can go on, or nil.
+function Apotheca.ImbueWeapon()
+    local id, sub = Apotheca.API.HandWeapon(16)
+    return id and IMBUE_WEAPON[sub] or nil
+end
+
+local FAMILIAR_SPELLS = {}
+for _, e in ipairs(DATA.MAGE_SCROLLS or {}) do
+    if e.kind == "familiar" then FAMILIAR_SPELLS[#FAMILIAR_SPELLS + 1] = e.spell end
+end
+
+-- Every mage scroll held that the player can use now, in the wheel's order:
+-- { { id, count, tex, entry }, ... }. An imbue only for the weapon in the
+-- main hand; a scroll the client says is unusable (level) is left out,
+-- unknown is kept.
+function Apotheca.FindMageScrolls(bagMap)
+    local out = {}
+    local weapon = Apotheca.ImbueWeapon()
+    for _, e in ipairs(DATA.MAGE_SCROLLS or {}) do
+        local n = bagMap[e.id]
+        if n and n > 0 and (e.kind ~= "imbue" or e.weapon == weapon)
+                and Apotheca.API.ItemUsable(e.id) ~= false then
+            out[#out + 1] = { id = e.id, count = n, tex = GetCachedTexture(e.id), entry = e }
+        end
+    end
+    return out
+end
+
+-- Is a familiar out? true / false, or nil when the auras are unreadable.
+-- Matched by the scrolls' own spell IDs and their names: the familiar's
+-- aura is not measured yet (#94).
+function Apotheca.HasFamiliar(auras)
+    return AurasHave(auras or ReadAuras("HELPFUL"), FAMILIAR_SPELLS)
+end
+
 local STONE_KIND = {
     [0] = "sharp", [1] = "sharp", [6] = "sharp", [7] = "sharp", [8] = "sharp", [15] = "sharp",
     [4] = "blunt", [5] = "blunt", [10] = "blunt",
@@ -2136,6 +2192,27 @@ local function UpdateWeaponOilGlow()
     end
 end
 
+-- Mage Scrolls (#94), at a ready check: the wheel holds an imbue for the
+-- main hand and the hand is confirmed bare, or a familiar scroll and no
+-- familiar is confirmed out. Unknown never glows.
+local function UpdateMageScrollGlow()
+    local btn = Apotheca.buttons["magescrolls"]
+    if not btn then return end
+    local s = DB().mageScrolls
+    local want = false
+    if readyCheckActive and not (s and s.glowOnMissingBuff == false) and btn:IsShown()
+            and not InCombatLockdown() then
+        local imbue, familiar = false, false
+        for _, r in ipairs(btn.scrolls or {}) do
+            if r.entry.kind == "imbue" then imbue = true end
+            if r.entry.kind == "familiar" then familiar = true end
+        end
+        want = (imbue and Apotheca.API.HandCoated(16) == false)
+            or (familiar and Apotheca.HasFamiliar() == false)
+    end
+    if want then ShowGlow(btn) else HideGlow(btn) end
+end
+
 -- Lightweight bandage debuff check called from UNIT_AURA.
 -- Toggles the button without a full UpdateAllButtons pass.
 local function UpdateBandageUsability()
@@ -2640,6 +2717,7 @@ do
     local cfg = MANAGEM_BUTTON_CONFIG
     Apotheca.buttons[cfg.key] = CreateApothecaButton(cfg)
 end
+Apotheca.buttons["magescrolls"] = CreateApothecaButton(MAGESCROLLS_BUTTON_CONFIG)
 Apotheca.buttons["bufffood"]    = CreateApothecaButton(BUFFFOOD_BUTTON_CONFIG)
 Apotheca.buttons["xpfood"]      = CreateApothecaButton(XPFOOD_BUTTON_CONFIG)
 Apotheca.buttons["weaponoil"]   = CreateApothecaButton(WEAPONOIL_BUTTON_CONFIG)
@@ -2848,7 +2926,7 @@ end
 -- ============================================================
 
 Apotheca.DEFAULT_BUTTON_ORDER = {
-    "mana", "managem", "health", "healthstone", "rune",
+    "mana", "managem", "magescrolls", "health", "healthstone", "rune",
     "recovery", "food", "conjfood", "drink", "conjdrink",
     "flask", "battle", "guardian",
     "bufffood", "xpfood",
@@ -2867,7 +2945,7 @@ end
 -- Each button's name in the options (Button Order) and in Key Bindings.
 Apotheca.BUTTON_LABELS = {
     mana = "Mana Potion", health = "Health Potion", healthstone = "Healthstone",
-    rune = "Rune (mana)", managem = "Mana Gem",
+    rune = "Rune (mana)", managem = "Mana Gem", magescrolls = "Mage Scrolls",
     recovery = "Recovery (Conjured)", food = "Food", drink = "Drink",
     conjfood = "Conjured Food", conjdrink = "Conjured Drink",
     flask = "Flask", battle = "Elixir", guardian = "Elixir 2",
@@ -2969,6 +3047,7 @@ local function RefreshLayout(recoveryMode, elixirMode, staticFlags, scrollFlags)
         end
     end
     if scrollFlags and scrollFlags.managem then shouldShow["managem"] = true end
+    if scrollFlags and scrollFlags.magescrolls then shouldShow["magescrolls"] = true end
     if scrollFlags and scrollFlags.oil        then shouldShow["weaponoil"]        = true end
     for key, r in pairs(scrollFlags and scrollFlags.poisons or {}) do
         if r.show then shouldShow[key] = true end
@@ -3015,6 +3094,8 @@ end
 -- APPLY ITEM TO BUTTON
 -- ============================================================
 
+local ApplyMageScrolls
+
 local function ApplyItemToButton(btn, itemID, count, texture)
     local db = DB()
     if db.debug and itemID ~= btn.itemID then
@@ -3046,6 +3127,24 @@ local function ApplyItemToButton(btn, itemID, count, texture)
     end
 end
 
+-- The Mage Scrolls button (#94) shows the wheel's first scroll and never
+-- holds an item itself (btn.itemID stays nil, so no other path arms it);
+-- the wheel (ApothecaWheel.lua) takes the list. `active`: the button is on
+-- the bar, so its key may open the wheel.
+function ApplyMageScrolls(list, active)
+    local btn = Apotheca.buttons["magescrolls"]
+    btn.scrolls = list
+    btn.countText:SetText("")
+    btn.cooldown:SetCooldown(0, 0)
+    local first = list[1]
+    btn.icon:SetTexture(first and (first.tex or FALLBACK_ICON) or btn.cfg.emptyIcon)
+    btn.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    btn.icon:SetDesaturated(first == nil)
+    btn.icon:Show()
+    btn.emptyBg:SetAlpha(first and 0 or 0.6)
+    if Apotheca.Wheel then Apotheca.Wheel.SetContents(list, active and first ~= nil, DB().debug) end
+end
+
 -- ============================================================
 -- COMBAT-SAFE VISUAL REFRESH
 -- ============================================================
@@ -3072,6 +3171,7 @@ function Apotheca.RefreshButtonVisuals(countsToo)
             end
         end
     end
+    if Apotheca.Wheel then Apotheca.Wheel.RefreshVisuals(countsToo and bagMap or nil) end
 end
 
 -- ============================================================
@@ -3300,6 +3400,11 @@ function UpdateAllButtonsBody()
         RecheckAt(gemReadyAt)
     end
 
+    -- ── Mage scrolls (#94): the wheel's contents ─────────────────
+    local _, myClass = UnitClass("player")
+    local wheelOn = not (db.mageScrolls and db.mageScrolls.enabled == false) and myClass == "MAGE"
+    local mageScrolls = wheelOn and Apotheca.FindMageScrolls(bagMap) or {}
+
     -- ── Buff food ────────────────────────────────────────────────
     local buffFoodID, buffFoodCnt, buffFoodTex
     if db.buffFood and db.buffFood.enabled then
@@ -3370,6 +3475,7 @@ function UpdateAllButtonsBody()
         food        = (buffFoodID ~= nil)          or (db.buffFood and db.buffFood.enabled and showEmpty),
         scrolls     = scrollRes,
         managem     = gemOn and (gemID ~= nil or showEmpty),
+        magescrolls = wheelOn and (#mageScrolls > 0 or showEmpty),
         xpfood      = xpOn and (xpID ~= nil or showEmpty),
         conjfood    = rec.conjFoodID ~= nil,
         conjdrink   = rec.conjDrinkID ~= nil,
@@ -3420,6 +3526,9 @@ function UpdateAllButtonsBody()
     if flags.xpfood then
         ApplyItemToButton(Apotheca.buttons["xpfood"], xpID, xpCnt, xpTex)
     end
+    -- The wheel is filled even when its button is not on the bar: then it
+    -- is disarmed (its key does nothing), as every inactive button is.
+    ApplyMageScrolls(flags.magescrolls and mageScrolls or {}, flags.magescrolls)
     -- Applied even when hidden (a stone took the main hand), so no stale
     -- item or target stays on the button.
     if flags.oil then
@@ -3550,6 +3659,7 @@ function UpdateAllButtonsBody()
     UpdateElixirGlow(elixRes)
     UpdateScrollGlow()
     UpdateWeaponOilGlow()
+    UpdateMageScrollGlow()
     Apotheca._lastElixRes = elixRes
 
     -- The after-combat reminder starts here, AFTER the bar was rebuilt for
@@ -3738,6 +3848,7 @@ function Apotheca.ConnectGlassActionBars()
     end
     for _, btn in pairs(Apotheca.buttons) do Apotheca.WearGlass(btn) end
     for _, btn in pairs(Apotheca.Utility.buttons) do Apotheca.WearGlass(btn) end
+    if Apotheca.Wheel then Apotheca.Wheel.WearGlass() end
 end
 
 -- ============================================================
@@ -3930,6 +4041,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
             UpdateElixirGlow(Apotheca._lastElixRes)
             UpdateScrollGlow()
             UpdateWeaponOilGlow()
+            UpdateMageScrollGlow()
             UpdateXPFoodGlow()
             UpdateBandageUsability()
             -- A slot whose buff was running offers nothing; when the buff
@@ -3949,6 +4061,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
             UpdateElixirGlow(Apotheca._lastElixRes)
             UpdateScrollGlow()
             UpdateWeaponOilGlow()
+            UpdateMageScrollGlow()
             UpdateXPFoodGlow()
             UpdateCoatingGlow()
         end
@@ -3959,6 +4072,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         UpdateElixirGlow(nil)
         UpdateScrollGlow()
         UpdateWeaponOilGlow()
+        UpdateMageScrollGlow()
         UpdateXPFoodGlow()
         UpdateCoatingGlow()
 
@@ -3967,6 +4081,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         UpdateElixirGlow(nil)
         UpdateScrollGlow()
         UpdateWeaponOilGlow()
+        UpdateMageScrollGlow()
         -- Hide outright, like the other glows: at this event lockdown may not
         -- be engaged yet, so a recompute could still show it for the fight.
         remindPending, remindUntil = false, 0
