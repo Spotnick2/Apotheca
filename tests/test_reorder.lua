@@ -36,11 +36,21 @@ end
 
 WoW.cursorX = 610
 
+-- In game a row is dragged on its open page: show the row's page and every
+-- frame above it, so the drag's OnUpdate runs (only a visible frame's does).
+local function openPageOf(row)
+    local f = row
+    while f do
+        if not f:IsShown() then f:Show() end
+        f = f:GetParent()
+    end
+end
+
 -- Lift a row, move the cursor to `slot` (rows `step` apart below 500), drop.
 local function drag(row, slot, step)
     row._scripts.OnDragStart(row)
     WoW.cursorY = 500 - (slot - 1) * step - 5
-    WoW.tick(0.05)
+    WoW.step(0.05)
     local lineShown = row:GetParent()._dropLine and row:GetParent()._dropLine:IsShown()
     row._scripts.OnDragStop(row)
     return lineShown
@@ -48,33 +58,34 @@ end
 
 -- Profession Bar: rows 24 high, 2 apart.
 local US = 26
-H.eq(U.Order()[1], "hearthstone", "default order first")
+eq(U.Order()[1], "hearthstone", "default order first")
 local de = utilityRow("Disenchant")
-H.check(de, "the Disenchant row is draggable")
+check(de, "the Disenchant row is draggable")
+openPageOf(de)
 local line = drag(de, 1, US)
-H.check(line, "a gold line marks where it will land")
-H.eq(db.utility.order[1], "disenchant", "dropped first: saved")
-H.eq(U.Order()[1], "disenchant", "and the bar's order follows")
-H.eq(U.Order()[2], "hearthstone", "the others move down")
-H.eq(de:GetAlpha() or 1, 1, "the row is opaque again")
+check(line, "a gold line marks where it will land")
+eq(db.utility.order[1], "disenchant", "dropped first: saved")
+eq(U.Order()[1], "disenchant", "and the bar's order follows")
+eq(U.Order()[2], "hearthstone", "the others move down")
+eq(de:GetAlpha() or 1, 1, "the row is opaque again")
 
 -- Down: from 1 to 3.
 drag(de, 3, US)
-H.eq(table.concat({ U.Order()[1], U.Order()[2], U.Order()[3] }, ","), "hearthstone,cooking,disenchant",
+eq(table.concat({ U.Order()[1], U.Order()[2], U.Order()[3] }, ","), "hearthstone,cooking,disenchant",
     "moved down two places")
 
 -- Dropped where it was: nothing saved.
 local before = table.concat(db.utility.order, ",")
-H.check(not drag(de, 3, US), "no line over its own place")
-H.eq(table.concat(db.utility.order, ","), before, "dropped in place: the order is unchanged")
+check(not drag(de, 3, US), "no line over its own place")
+eq(table.concat(db.utility.order, ","), before, "dropped in place: the order is unchanged")
 
 -- The panel closed mid-drag: the row goes back, nothing saved.
 de._scripts.OnDragStart(de)
 WoW.cursorY = 495
-WoW.tick(0.05)
+WoW.step(0.05)
 de._scripts.OnHide(de)
-H.eq(table.concat(db.utility.order, ","), before, "closed mid-drag: nothing moved")
-H.eq(de._scripts.OnUpdate, nil, "and it stops following the cursor")
+eq(table.concat(db.utility.order, ","), before, "closed mid-drag: nothing moved")
+eq(de._scripts.OnUpdate, nil, "and it stops following the cursor")
 
 -- Pressing the label lifts the row: the tick box covers it.
 local cb
@@ -83,27 +94,27 @@ for _, f in ipairs(H.framesWithTemplate("InterfaceOptionsCheckButtonTemplate")) 
 end
 cb._scripts.OnDragStart(cb)
 WoW.cursorY = 500 - 5
-WoW.tick(0.05)
+WoW.step(0.05)
 local deLine = de:GetParent()._dropLine
-H.check((deLine:GetFrameLevel() or 0) > (de:GetFrameLevel() or 0), "the line is drawn over the lifted row")
+check((deLine:GetFrameLevel() or 0) > (de:GetFrameLevel() or 0), "the line is drawn over the lifted row")
 cb._scripts.OnDragStop(cb)
-H.eq(U.Order()[1], "disenchant", "dragged by its label: moved first")
+eq(U.Order()[1], "disenchant", "dragged by its label: moved first")
 
 -- Let go away from the list: nothing moves.
 local function dropAt(row, x, y)
     row._scripts.OnDragStart(row)
     WoW.cursorX, WoW.cursorY = x, y
-    WoW.tick(0.05)
+    WoW.step(0.05)
     local shown = row:GetParent()._dropLine:IsShown()
     row._scripts.OnDragStop(row)
     WoW.cursorX = 610
     return shown
 end
 before = table.concat(db.utility.order, ",")
-H.check(not dropAt(de, 100, 495), "no line beside the list")
-H.eq(table.concat(db.utility.order, ","), before, "dropped beside the list: unchanged")
+check(not dropAt(de, 100, 495), "no line beside the list")
+eq(table.concat(db.utility.order, ","), before, "dropped beside the list: unchanged")
 dropAt(de, 610, -2000)
-H.eq(table.concat(db.utility.order, ","), before, "dropped far below it: unchanged")
+eq(table.concat(db.utility.order, ","), before, "dropped far below it: unchanged")
 
 -- Scrolled: the list's top is above the view (scroll frame 500 to 200).
 -- Over the tabs above it or below the panel, level with rows out of view,
@@ -111,9 +122,9 @@ H.eq(table.concat(db.utility.order, ","), before, "dropped far below it: unchang
 local uList = de:GetParent()
 uList._top = 700
 dropAt(de, 610, 550)
-H.eq(table.concat(db.utility.order, ","), before, "scrolled, dropped above the view: unchanged")
+eq(table.concat(db.utility.order, ","), before, "scrolled, dropped above the view: unchanged")
 dropAt(de, 610, 190)
-H.eq(table.concat(db.utility.order, ","), before, "scrolled, dropped below the view: unchanged")
+eq(table.concat(db.utility.order, ","), before, "scrolled, dropped below the view: unchanged")
 uList._top = nil
 
 -- A refresh during the drag: the row is found again at the drop.
@@ -121,10 +132,10 @@ de._scripts.OnDragStart(de)
 db.utility.order = { "hearthstone", "cooking", "firstaid", "disenchant" }
 Apotheca.RefreshOptions()
 WoW.cursorY = 500 - 5
-WoW.tick(0.05)
+WoW.step(0.05)
 de._scripts.OnDragStop(de)
-H.eq(U.Order()[1], "disenchant", "refreshed mid-drag: the dragged row still moves")
-H.eq(U.Order()[2], "hearthstone", "and only it")
+eq(U.Order()[1], "disenchant", "refreshed mid-drag: the dragged row still moves")
+eq(U.Order()[2], "hearthstone", "and only it")
 
 -- Auto-scroll waits until the cursor has moved: a row lifted beside the
 -- edge doesn't run away.
@@ -132,11 +143,11 @@ local sf = de:GetParent():GetParent():GetParent()
 sf._bottom, sf._vrange, sf._vscroll = 470, 200, 0
 WoW.cursorY = 480
 de._scripts.OnDragStart(de)
-WoW.tick(0.05)
-H.eq(sf:GetVerticalScroll(), 0, "lifted near the bottom edge: no scroll yet")
+WoW.step(0.05)
+eq(sf:GetVerticalScroll(), 0, "lifted near the bottom edge: no scroll yet")
 WoW.cursorY = 455
-WoW.tick(0.05)
-H.check(sf:GetVerticalScroll() > 0, "moved toward the edge: it scrolls")
+WoW.step(0.05)
+check(sf:GetVerticalScroll() > 0, "moved toward the edge: it scrolls")
 de._scripts.OnHide(de)
 sf._bottom, sf._vrange, sf._vscroll = nil, nil, nil
 
@@ -144,29 +155,30 @@ sf._bottom, sf._vrange, sf._vscroll = nil, nil, nil
 local function arrows(row)
     local out = {}
     for _, f in ipairs(WoW.frames) do
-        if f:GetParent() == row and f._kind == "Button" then out[#out + 1] = f end
+        if f:GetParent() == row and f._type == "Button" then out[#out + 1] = f end
     end
     return out
 end
 local down = arrows(de)[2]
 down._scripts.OnClick(down)
-H.eq(U.Order()[2], "disenchant", "the down arrow moves it one place")
+eq(U.Order()[2], "disenchant", "the down arrow moves it one place")
 
 -- Main Button Order: rows 22 high, 2 apart.
 local MS = 24
 local order = Apotheca.GetButtonOrder()
 local lastKey = order[#order]
-H.eq(lastKey, "bandage", "Bandage is last by default")
+eq(lastKey, "bandage", "Bandage is last by default")
 local bandage = orderRow("Bandage")
-H.check(bandage, "the Bandage row is draggable")
+check(bandage, "the Bandage row is draggable")
+openPageOf(bandage)
 drag(bandage, 1, MS)
-H.eq(db.buttonOrder[1], "bandage", "dropped first: saved")
-H.eq(Apotheca.GetButtonOrder()[1], "bandage", "and the bar's order follows")
+eq(db.buttonOrder[1], "bandage", "dropped first: saved")
+eq(Apotheca.GetButtonOrder()[1], "bandage", "and the bar's order follows")
 local number
 for _, fs in ipairs(WoW.fontStrings) do
     if fs:GetParent() == bandage and type(fs._text) == "string" and fs._text:match("^%d+%.$") then number = fs._text end
 end
-H.eq(number, "1.", "its number follows")
+eq(number, "1.", "its number follows")
 
 -- A refresh during a Button Order drag doesn't drop it.
 local mana = orderRow("Mana Potion")
@@ -177,22 +189,22 @@ function mana:Hide()
 end
 mana._scripts.OnDragStart(mana)
 Apotheca.RefreshOptions()
-H.check(mana._scripts.OnUpdate ~= nil, "a refresh keeps the drag going")
+check(mana._scripts.OnUpdate ~= nil, "a refresh keeps the drag going")
 WoW.cursorY = 500 - 5
-WoW.tick(0.05)
+WoW.step(0.05)
 mana._scripts.OnDragStop(mana)
-H.eq(db.buttonOrder[1], "mana", "and the drop lands")
+eq(db.buttonOrder[1], "mana", "and the drop lands")
 
 -- Rows are made once: refreshing the panel reuses them.
 local n = countLabel("Bandage")
 Apotheca.RefreshOptions()
 Apotheca.RefreshOptions()
-H.eq(countLabel("Bandage"), n, "no new Button Order rows on refresh")
+eq(countLabel("Bandage"), n, "no new Button Order rows on refresh")
 
 -- Reset puts the default order back, with the same rows.
 db.buttonOrder = nil
 Apotheca.RefreshOptions()
-H.eq(Apotheca.GetButtonOrder()[#Apotheca.GetButtonOrder()], "bandage", "reset: Bandage last again")
-H.eq(countLabel("Bandage"), n, "with the same row")
+eq(Apotheca.GetButtonOrder()[#Apotheca.GetButtonOrder()], "bandage", "reset: Bandage last again")
+eq(countLabel("Bandage"), n, "with the same row")
 
-H.done("test_reorder")
+done("test_reorder")

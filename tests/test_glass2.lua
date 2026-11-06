@@ -28,7 +28,7 @@ function GAB.SkinButton(button)
 end
 -- One dock pass, as Dock.lua's: out of combat only.
 local function pass(geom)
-    assert(not WoW.inCombat, "the dock never runs in combat")
+    assert(not WoW.combat, "the dock never runs in combat")
     if not client.hosted then client.def.OnHosted(true) end
     client.inLayout = true
     client.def.Layout(geom)
@@ -43,11 +43,11 @@ rawset(_G, "GlassActionBars", GAB)
 H.loadAddon()
 local db = ApothecaDB.profiles[ApothecaDB.activeProfile]
 
-H.check(client, "registered on version 2")
-H.check(GAB.skinned[Apotheca.buttons.mana], "skinned on version 2")
-H.eq(type(client.def.default), "table", "a default is given")
-H.eq(client.def.default.matchRows, false, "its own rows unless the player matches them (owner)")
-H.eq(client.def.default.bar, nil, "not docked until the player docks it")
+check(client, "registered on version 2")
+check(GAB.skinned[Apotheca.buttons.mana], "skinned on version 2")
+eq(type(client.def.default), "table", "a default is given")
+eq(client.def.default.matchRows, false, "its own rows unless the player matches them (owner)")
+eq(client.def.default.bar, nil, "not docked until the player docks it")
 
 db.rows, db.orientation, db.iconSize, db.iconPadding = 2, "HORIZONTAL", 36, 3
 Apotheca.UpdateAllButtons()
@@ -55,24 +55,24 @@ local shown = {}
 for _, key in ipairs(Apotheca.GetButtonOrder()) do
     if Apotheca.buttons[key]:IsShown() then shown[#shown + 1] = key end
 end
-H.check(#shown >= 4, "several buttons on the bar")
+check(#shown >= 4, "several buttons on the bar")
 local first = Apotheca.buttons[shown[1]]
 local function grid(size, pad, cols, rows)
     return cols * size + (cols - 1) * pad, rows * size + (rows - 1) * pad
 end
 local function frameIs(what, w, h)
-    H.eq(ApothecaFrame:GetWidth(), w, what .. ": width")
-    H.eq(ApothecaFrame:GetHeight(), h, what .. ": height")
+    eq(ApothecaFrame:GetWidth(), w, what .. ": width")
+    eq(ApothecaFrame:GetHeight(), h, what .. ": height")
 end
 
 -- Size and spacing only (the default): Apotheca's two rows.
 pass({ size = 40, padding = 5 })
 local layout, matched = Apotheca.LayoutSettings()
-H.check(matched, "size matched")
-H.eq(layout.rows, 2, "own rows")
-H.eq(layout.orientation, "HORIZONTAL", "own orientation")
-H.check(not layout.dockRows, "the rows aren't the dock's")
-H.eq(first:GetWidth(), 40, "the bar's size")
+check(matched, "size matched")
+eq(layout.rows, 2, "own rows")
+eq(layout.orientation, "HORIZONTAL", "own orientation")
+check(not layout.dockRows, "the rows aren't the dock's")
+eq(first:GetWidth(), 40, "the bar's size")
 local cols = math.ceil(#shown / 2)
 frameIs("two rows of the bar's size", grid(40, 5, cols, 2))
 
@@ -93,61 +93,61 @@ local function noteSaying(text)
     end
 end
 local rowsSlider = sliderLabelled("Rows")
-H.check(rowsSlider, "the Rows slider exists")
-H.check(noteSaying("Docked by Glass Action Bars: 40.0 px icons, 5.0 px apart.|r"), "note: size only")
-H.check(rowsSlider:IsEnabled(), "rows are Apotheca's: the slider works")
-H.check(not sliderLabelled("Icon Size"):IsEnabled(), "the size is the dock's: greyed out")
+check(rowsSlider, "the Rows slider exists")
+check(noteSaying("Docked by Glass Action Bars: 40.0 px icons, 5.0 px apart.|r"), "note: size only")
+check(rowsSlider:IsEnabled(), "rows are Apotheca's: the slider works")
+check(not sliderLabelled("Icon Size"):IsEnabled(), "the size is the dock's: greyed out")
 
 -- Both matched: the bar's rows and direction.
 local before = GAB.requests
 pass({ size = 40, padding = 5, rows = 1, orientation = 0 })
 layout, matched = Apotheca.LayoutSettings()
-H.check(matched and layout.dockRows, "both matched")
-H.eq(layout.rows, 1, "the bar's rows")
+check(matched and layout.dockRows, "both matched")
+eq(layout.rows, 1, "the bar's rows")
 frameIs("one row of the bar's size", grid(40, 5, #shown, 1))
-H.eq(GAB.requests, before, "no request from inside Layout")
-H.check(noteSaying("40.0 px icons, 5.0 px apart; the bar's rows and direction."), "note: both")
-H.check(not rowsSlider:IsEnabled(), "the rows are the dock's: greyed out")
-H.eq(db.rows, 2, "the own rows are kept for later")
+eq(GAB.requests, before, "no request from inside Layout")
+check(noteSaying("40.0 px icons, 5.0 px apart; the bar's rows and direction."), "note: both")
+check(not rowsSlider:IsEnabled(), "the rows are the dock's: greyed out")
+eq(db.rows, 2, "the own rows are kept for later")
 
 -- Rows only, on a vertical bar: rows are columns there, as Apotheca's own.
 pass({ rows = 2, orientation = 1 })
 layout, matched = Apotheca.LayoutSettings()
-H.check(not matched, "size not matched")
-H.eq(layout.orientation, "VERTICAL", "the bar's direction")
-H.eq(layout.iconSize, 36, "own size")
+check(not matched, "size not matched")
+eq(layout.orientation, "VERTICAL", "the bar's direction")
+eq(layout.iconSize, 36, "own size")
 frameIs("two columns of the own size", grid(36, 3, 2, math.ceil(#shown / 2)))
-H.check(noteSaying("Docked by Glass Action Bars: the bar's rows and direction.|r"), "note: rows only")
-H.check(sliderLabelled("Icon Size"):IsEnabled(), "the size is Apotheca's again")
+check(noteSaying("Docked by Glass Action Bars: the bar's rows and direction.|r"), "note: rows only")
+check(sliderLabelled("Icon Size"):IsEnabled(), "the size is Apotheca's again")
 
 -- Nothing matched: all Apotheca's own.
 pass(nil)
 layout, matched = Apotheca.LayoutSettings()
-H.check(not matched and not layout.dockRows, "nothing matched")
-H.eq(layout.orientation, "HORIZONTAL", "own orientation back")
+check(not matched and not layout.dockRows, "nothing matched")
+eq(layout.orientation, "HORIZONTAL", "own orientation back")
 frameIs("the own grid", grid(36, 3, cols, 2))
-H.check(noteSaying("Docked by Glass Action Bars, which places the bar."), "note: nothing matched")
-H.check(rowsSlider:IsEnabled(), "rows slider back")
+check(noteSaying("Docked by Glass Action Bars, which places the bar."), "note: nothing matched")
+check(rowsSlider:IsEnabled(), "rows slider back")
 
 -- The dock starting or stopping to decide rows equal to the bar's own:
 -- the same grid, but the options follow, with no explicit refresh (Codex
 -- on #71). Every note and slider above follows the layout the same way.
 pass({ size = 40, padding = 5 })
-H.check(rowsSlider:IsEnabled(), "own rows: the slider works")
+check(rowsSlider:IsEnabled(), "own rows: the slider works")
 local sig = Apotheca._layoutSig
 pass({ size = 40, padding = 5, rows = 2, orientation = 0 })
 frameIs("the same grid", grid(40, 5, cols, 2))
-H.check(Apotheca._layoutSig ~= sig, "whose rows they are is part of the layout")
-H.check(not rowsSlider:IsEnabled(), "the dock's rows, equal to the own: greyed out")
-H.check(noteSaying("5.0 px apart; the bar's rows and direction."), "  and the note says so")
+check(Apotheca._layoutSig ~= sig, "whose rows they are is part of the layout")
+check(not rowsSlider:IsEnabled(), "the dock's rows, equal to the own: greyed out")
+check(noteSaying("5.0 px apart; the bar's rows and direction."), "  and the note says so")
 pass({ size = 40, padding = 5 })
-H.check(rowsSlider:IsEnabled(), "given back at the same grid: the slider works again")
-H.check(noteSaying("Docked by Glass Action Bars: 40.0 px icons, 5.0 px apart.|r"), "  and the note follows")
+check(rowsSlider:IsEnabled(), "given back at the same grid: the slider works again")
+check(noteSaying("Docked by Glass Action Bars: 40.0 px icons, 5.0 px apart.|r"), "  and the note follows")
 
 -- A rows value that makes no sense is ignored, not laid out.
 pass({ size = 40, padding = 5, rows = 0, orientation = 0 })
-H.check(not Apotheca.LayoutSettings().dockRows, "zero rows ignored")
+check(not Apotheca.LayoutSettings().dockRows, "zero rows ignored")
 pass({ size = 40, padding = 5, rows = 2, orientation = 7 })
-H.check(not Apotheca.LayoutSettings().dockRows, "an unknown direction ignored")
+check(not Apotheca.LayoutSettings().dockRows, "an unknown direction ignored")
 
-H.done("test_glass2")
+done("test_glass2")

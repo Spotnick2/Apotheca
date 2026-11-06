@@ -1,53 +1,21 @@
 ------------------------------------------------------------
--- harness.lua: assertions and addon loading for the tests.
+-- harness.lua: addon loading for the tests (the assertions are WowTestKit's).
 --
 --     dofile("tests/wow_stubs.lua")
 --     local H = dofile("tests/harness.lua")
 --     H.loadAddon()
---     H.check(cond, "message")
---     H.done("test_name")
+--     check(cond, "message")        -- WowTestKit's check / eq / done
+--     done("test_name")
 ------------------------------------------------------------
 
 local H = {}
-local passed, failed = 0, 0
 
-function H.check(cond, msg)
-    if cond then
-        passed = passed + 1
-    else
-        failed = failed + 1
-        io.stderr:write("FAIL: " .. tostring(msg) .. "\n")
-    end
-end
+-- check / eq / done are WowTestKit's (globals).
 
-function H.eq(actual, expected, msg)
-    H.check(actual == expected, (msg or "") .. " (expected " .. tostring(expected)
-            .. ", got " .. tostring(actual) .. ")")
-end
-
-function H.done(name)
-    -- Every blocked secret operation is a taint.log line in game, even
-    -- when a pcall catches it (wow_stubs.lua counts them).
-    local stubs = rawget(_G, "WoW")
-    if stubs and stubs.secretBlocked then
-        H.eq(stubs.secretBlocked, 0, "no arithmetic or comparison was attempted on a secret")
-    end
-    if failed > 0 then
-        io.stderr:write(name .. ": " .. failed .. " failed, " .. passed .. " passed\n")
-        os.exit(1)
-    end
-    io.write(name .. ": " .. passed .. " tests passed\n")
-end
-
--- The files the TOC lists, in load order.
-function H.tocFiles()
-    local files = {}
-    for line in io.lines("Apotheca.toc") do
-        line = line:gsub("\r", "")
-        if line ~= "" and not line:match("^#") then files[#files + 1] = line end
-    end
-    return files
-end
+TOC = "Apotheca.toc"
+-- Every file line of the TOC, and its Lua files, in load order.
+function H.tocLines() return Kit.tocLines(TOC) end
+function H.tocFiles() return Kit.tocFiles(TOC) end
 
 -- ForeverProbe, the probe's host (GUIDE.md section 8, as GlassChat's
 -- harness): $FOREVERPROBE, else ../ForeverProbe. It is private and lives
@@ -99,8 +67,8 @@ function H.loadAddon(opts)
     end
     WoW.fire("PLAYER_LOGIN")
     WoW.fire("PLAYER_ENTERING_WORLD")
-    WoW.tick(1)
-    WoW.tick(1)
+    WoW.step(1)
+    WoW.step(1)
     return Apotheca
 end
 
@@ -115,14 +83,14 @@ end
 
 function H.messagesMatching(pattern)
     local n = 0
-    for _, m in ipairs(WoW.messages) do if m:find(pattern) then n = n + 1 end end
+    for _, m in ipairs(WoW.chat) do if m:find(pattern) then n = n + 1 end end
     return n
 end
 
 -- The probe's commands: /fp apo <cmd>. Chat and the console's session
 -- lines start empty, so a test reads what this command said.
 function H.fp(cmd)
-    WoW.messages = {}
+    WoW.chat = {}
     ForeverProbe.lines = {}
     SlashCmdList.FOREVERPROBE("apo " .. cmd)
 end

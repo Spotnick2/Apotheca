@@ -20,7 +20,7 @@ Apotheca_Options.lua   — In-game options: a page and four sub-pages in Esc > O
 Bindings.xml           — Key bindings (main bar and profession bar); loaded by name, NOT listed in the TOC
 Tools/ApothecaProbe/   — DEV-ONLY ForeverProbe module (never packaged): /fp apo probe, scan, scan2, scan3, applytest, bar, prof, proftest; /fp steps apo scan | probe; `deploy.ps1 -Probe`
 .pkgmeta               — BigWigs packager config (release packaging only, not used locally)
-tests/                 — Lua 5.1 unit tests against a strict-globals stub; tests/run.ps1
+tests/                 — Lua 5.1 unit tests on WowTestKit (tests/kit.pin) with Apotheca's stub; tests/run.ps1
 Tools/deploy.ps1       — deploy to the local Forever AddOns folder
 Tools/*.py, *.lua      — scan export, item-table generator, consumables reference
 docs/FOREVER-PROBE.md  — in-game measurements this addon depends on
@@ -143,7 +143,7 @@ With Glass Action Bars (GAB) installed (`## OptionalDeps`), Apotheca is a tenant
 - **Named key bindings.** One `CLICK ApothecaUtil_<key>:LeftButton` per action in `Bindings.xml`, with `category="Apotheca"` and no header (porting guide). The `BINDING_NAME_*` labels are set at file load (localized at login). Every button exists from load. **A binding acts on a hidden button** (measured), so an action that is off, unavailable or on a disabled bar has its `type`/`spell`/`item` attributes cleared, not just hidden.
 - **Combat.** `Utility.Reconcile()` only marks `pending` in combat; `PLAYER_REGEN_ENABLED` rebuilds from the current state. The bar has no hide-in-combat option (no working mechanism). Its drag makes **no** `StartMoving`/`StopMovingOrSizing` call in lockdown: an interrupted drag sets `dragStopPending` and finishes at `PLAYER_REGEN_ENABLED` before the rebuild. Spell cooldowns are secret in combat: they go straight to `SetCooldown`.
 - **Shared with the main bar:** `Apotheca.StyleButton`, `Apotheca.GridLayout`, `Apotheca.LayoutSettings(settings)` (so `matchBar` works for both) and `Apotheca.LayoutSignature`. `Utility.Refresh()` asks for a rebuild on the next frame; `SetProfile` calls it.
-- `tests/wow_stubs.lua` has `WoW.strictLockdown`: a protected frame (a secure button or its parent) changed in combat fails the test.
+- `tests/wow_stubs.lua` has `WoW.strictLockdown`: a protected frame (a secure button or its parent) changed in combat fails the test at the call (without it, the change is refused and listed in `WoW.blocked`).
 - `Tools/deploy.ps1` and the package-check zip test ship `Bindings.xml` alongside the TOC's files.
 
 ### Key bindings for the main bar (#49)
@@ -162,10 +162,11 @@ There is **no local build step**. The addon runs directly in the WoW client.
 
 1. **Lua syntax check** — the only validation available outside the game:
    ```
-   pwsh tests/run.ps1    # luac -p on every TOC file, then the strict-globals unit tests
+   pwsh tests/run.ps1    # luac -p on every TOC file and the probe, then the unit tests (WowTestKit)
    ```
    The probe's tests (`test_probe`, `test_applytest`, `test_profprobe`) load ForeverProbe from `..\ForeverProbe` (or `$env:FOREVERPROBE`). It is private, so CI sets `FOREVERPROBE_OPTIONAL=1` and they print SKIPPED there: run `tests/run.ps1` before any PR that touches the probe (#76).
-   `tests/wow_stubs.lua` fails the run on the read of any global it does not stub: it is the list of APIs verified present on this client. Stub a new global only after confirming it in the API dump, and list removed names in `KNOWN_ABSENT`. Known gap: Lua 5.1 cannot make `secret == x` or a truth test throw, so review those by hand.
+   The test scaffolding is WowTestKit (`C:\Projects\WoW\WowTestKit`; its README is the reference) at the commit and client build `tests\kit.pin` names. `tests\run.ps1` puts that commit in `%LOCALAPPDATA%\WowTestKit\<sha>` and hands off to the kit's runner; CI fetches it with `tests\fetch_kit.sh`. `tests\kit.lua`, `kit.ps1` and `fetch_kit.sh` are the kit's bootstrap copies: never edit them here. A kit need is an issue on the kit, worked around in `tests\wow_stubs.lua` with a `-- WowTestKit #N:` comment meanwhile. `tests\run.ps1 -KitDev` runs against the `..\WowTestKit` working copy instead of the pin.
+   The assertions (`check`, `eq`, `done`) are the kit's globals. `tests/wow_stubs.lua` holds only Apotheca's own client APIs on top of the kit, and ends with `Kit.strict({...})`: reading any global nobody stubbed fails the run, so the stub is the list of APIs verified present on this client. Stub a new global only after confirming it in the API dump, and list a name that may read nil (a removed API, a SavedVariable, a frame before it exists) in `Kit.strict`. The kit also checks every registered event name, and `test_methods` every widget method the addon calls (`Kit.checkMethods`), against the pinned build. Combat is `WoW.enterCombat()` / `WoW.leaveCombat()` (`WoW.combat`); a protected frame changed in combat is refused and listed in `WoW.blocked`. `WoW.step(n)` moves the clock `n` seconds and runs every visible frame's `OnUpdate`. Known gap: Lua 5.1 cannot make `secret == x` or a truth test throw, so review those by hand.
 2. **In-game testing**: deploy to the client's AddOns folder and log in. Use `/apo debug` to enable debug mode (items are not consumed on click).
 3. **Checklist for any change**:
    - New settings must be added to `PROFILE_DEFAULTS` with a default value.
@@ -229,7 +230,7 @@ On a new Forever build, the login note tells players the build differs from `Apo
 1. `/apidump` → `C:/Projects/WoW/References/Forever/api/forever-api-<version>.<build>.md` (see the porting guide).
 2. `pwsh Tools/deploy.ps1 -Probe`, then `/fp steps apo probe` (the probe out of combat, then in combat). Update `docs/FOREVER-PROBE.md`.
 3. Re-scan the consumables and the Well Fed spells (`/fp steps apo scan`; the Well Fed export goes next to the consumables TSV), and regenerate: see Item Data. The generator refuses an INCOMPLETE Well Fed scan, and fails if an XP food's stat has no XP Well Fed aura or the measured one (1248422) is missing. Write the new `forever-consumables-<version>.<build>.md` to `References\Forever\consumables` and diff it against the previous build.
-4. Bump `MEASURED_ON_BUILD`, and `WoW.build` in `tests/wow_stubs.lua`. Bumping without re-measuring silences the only reminder that the notes are stale.
+4. Bump `MEASURED_ON_BUILD`, `WoW.build` in `tests/wow_stubs.lua`, and `build=` in `tests/kit.pin` (once WowTestKit has that build's data: the forever-api-dump skill's step 4). Bumping without re-measuring silences the only reminder that the notes are stale.
 
 ## Key Conventions
 

@@ -39,48 +39,48 @@ H.loadAddon({ savedDB = {
 } })
 
 local prio = ApothecaDB.profiles.Global.buffFoodPriority
-H.eq(prio.PRIEST, nil, "the old priest default is dropped, so the role profile decides")
-H.eq(prio.PALADIN, nil, "the old paladin default too")
-H.eq(prio.SHAMAN, nil, "a priority naming a stat Forever food lacks is dropped")
-H.eq(prio.DRUID, nil, "the per-class key is gone: priorities are per role since #9")
-H.eq(prio.HEALER and prio.HEALER[1], "spirit", "the druid's custom order moved to its role, HEALER")
-H.eq(prio.CASTER and prio.CASTER[1], "intellect", "the mage's custom order moved to CASTER")
-H.eq(ApothecaDB.profiles.Global.showOnlyHealingSpec, nil, "the old healer-only flag (always true by default) is dropped")
-H.eq(ApothecaDB.profiles.Global.onlyWhenHealer, false, "its replacement defaults to off")
-H.eq(Apotheca.GetStatPriority()[1], "spirit", "a priest (healer role) gets the healer role's saved order")
-H.eq(ApothecaDB.profiles["Realm-Alt"].buffFoodPriority.PRIEST, nil, "an inactive profile is cleaned as well")
+eq(prio.PRIEST, nil, "the old priest default is dropped, so the role profile decides")
+eq(prio.PALADIN, nil, "the old paladin default too")
+eq(prio.SHAMAN, nil, "a priority naming a stat Forever food lacks is dropped")
+eq(prio.DRUID, nil, "the per-class key is gone: priorities are per role since #9")
+eq(prio.HEALER and prio.HEALER[1], "spirit", "the druid's custom order moved to its role, HEALER")
+eq(prio.CASTER and prio.CASTER[1], "intellect", "the mage's custom order moved to CASTER")
+eq(ApothecaDB.profiles.Global.showOnlyHealingSpec, nil, "the old healer-only flag (always true by default) is dropped")
+eq(ApothecaDB.profiles.Global.onlyWhenHealer, false, "its replacement defaults to off")
+eq(Apotheca.GetStatPriority()[1], "spirit", "a priest (healer role) gets the healer role's saved order")
+eq(ApothecaDB.profiles["Realm-Alt"].buffFoodPriority.PRIEST, nil, "an inactive profile is cleaned as well")
 
 -- preventWaste = false must become DO_NOTHING, not the "BLOCK" default that
 -- ApplyDefaults fills in first (Codex review of #17).
-H.eq(ApothecaDB.profiles.Global.preventWasteMode, "DO_NOTHING", "preventWaste = false becomes Do nothing")
-H.eq(ApothecaDB.profiles.Global.preventWaste, nil, "and the old key is gone")
-H.eq(ApothecaDB.profiles["Realm-Frugal"].preventWasteMode, "DO_NOTHING",
+eq(ApothecaDB.profiles.Global.preventWasteMode, "DO_NOTHING", "preventWaste = false becomes Do nothing")
+eq(ApothecaDB.profiles.Global.preventWaste, nil, "and the old key is gone")
+eq(ApothecaDB.profiles["Realm-Frugal"].preventWasteMode, "DO_NOTHING",
     "even where an older version already wrote the BLOCK default next to it")
 -- A mode other than the BLOCK default can only be the player's choice
 -- (/code-review of #17).
-H.eq(ApothecaDB.profiles["Realm-Asker"].preventWasteMode, "ASK",
+eq(ApothecaDB.profiles["Realm-Asker"].preventWasteMode, "ASK",
     "a mode chosen later (Ask) is kept, not reset by the stale v1.0.0 boolean")
-H.eq(ApothecaDB.profiles["Realm-Calm"].preventWasteMode, "DO_NOTHING", "and so is Do nothing")
-H.eq(ApothecaDB.profiles["Realm-Asker"].preventWaste, nil, "the stale boolean is removed there too")
-H.eq(ApothecaDB.profiles["Realm-Old"].preventWasteMode, "BLOCK", "the old default, true, stays Block")
-H.eq(ApothecaDB.profiles["Realm-Wizard"].weaponOil.kind, "MANA_FIRST",
+eq(ApothecaDB.profiles["Realm-Calm"].preventWasteMode, "DO_NOTHING", "and so is Do nothing")
+eq(ApothecaDB.profiles["Realm-Asker"].preventWaste, nil, "the stale boolean is removed there too")
+eq(ApothecaDB.profiles["Realm-Old"].preventWasteMode, "BLOCK", "the old default, true, stays Block")
+eq(ApothecaDB.profiles["Realm-Wizard"].weaponOil.kind, "MANA_FIRST",
     "a ticked Include Wizard Oils becomes Mana oil first, as it behaved")
-H.eq(ApothecaDB.profiles["Realm-Plain"].weaponOil.kind, nil,
+eq(ApothecaDB.profiles["Realm-Plain"].weaponOil.kind, nil,
     "an unticked one (the old default) leaves the new default, by role, to apply")
-H.eq(ApothecaDB.profiles["Realm-Wizard"].weaponOil.includeWizardOils, nil, "the old key is gone")
-H.eq(ApothecaDB.profiles["Realm-Chosen"].weaponOil.kind, "WIZARD_FIRST",
+eq(ApothecaDB.profiles["Realm-Wizard"].weaponOil.includeWizardOils, nil, "the old key is gone")
+eq(ApothecaDB.profiles["Realm-Chosen"].weaponOil.kind, "WIZARD_FIRST",
     "a kind already chosen is not replaced by a leftover ticked checkbox")
 -- The active profile: ApplyDefaults filled AUTO first; the choice wins.
-H.eq(ApothecaDB.profiles.Global.weaponOil.kind, "MANA_FIRST",
+eq(ApothecaDB.profiles.Global.weaponOil.kind, "MANA_FIRST",
     "on the active profile too, over the AUTO ApplyDefaults filled in first")
 -- Switching later fills the default without touching a migrated choice.
 Apotheca.SetProfile("Realm-Plain")
-H.eq(ApothecaDB.profiles["Realm-Plain"].weaponOil.kind, "AUTO", "switching to the unticked profile: by role")
+eq(ApothecaDB.profiles["Realm-Plain"].weaponOil.kind, "AUTO", "switching to the unticked profile: by role")
 Apotheca.SetProfile("Realm-Wizard")
-H.eq(ApothecaDB.profiles["Realm-Wizard"].weaponOil.kind, "MANA_FIRST", "switching to the ticked one: still Mana oil first")
+eq(ApothecaDB.profiles["Realm-Wizard"].weaponOil.kind, "MANA_FIRST", "switching to the ticked one: still Mana oil first")
 Apotheca.SetProfile("Global")
 local ord = ApothecaDB.profiles["Realm-Ordered"].buttonOrder
-H.eq(table.concat(ord, ","), "bandage,bufffood,xpfood,mana,weaponoil,poisonmh,poisonoh,stonemh,stoneoh",
+eq(table.concat(ord, ","), "bandage,bufffood,xpfood,mana,weaponoil,poisonmh,poisonoh,stonemh,stoneoh",
     "a saved order gets XP Food next to Buff Food, the poisons after Weapon Oil, then the stones")
 
 -- The flat (pre-profile) database route.
@@ -88,16 +88,16 @@ local flat = { preventWaste = false, buffFoodPriority = { PRIEST = { "healing", 
 rawset(_G, "ApothecaDB", flat)
 WoW.fire("ADDON_LOADED", "Apotheca")
 local g = ApothecaDB.profiles and ApothecaDB.profiles.Global
-H.check(g ~= nil, "a flat database is migrated into profiles")
-H.eq(g and g.buffFoodPriority and g.buffFoodPriority.PRIEST, nil, "and its old priority is cleaned on that route too")
-H.eq(g and g.preventWasteMode, "DO_NOTHING", "a flat database's preventWaste = false becomes Do nothing too")
+check(g ~= nil, "a flat database is migrated into profiles")
+eq(g and g.buffFoodPriority and g.buffFoodPriority.PRIEST, nil, "and its old priority is cleaned on that route too")
+eq(g and g.preventWasteMode, "DO_NOTHING", "a flat database's preventWaste = false becomes Do nothing too")
 
 -- A malformed saved priority must not escape InitDB's guard: the database
 -- resets instead of throwing out of ADDON_LOADED.
 rawset(_G, "ApothecaDB", { activeProfile = "Global",
     profiles = { Global = { buffFoodPriority = { PRIEST = { false, 3 } } } } })
 local okLoad = pcall(WoW.fire, "ADDON_LOADED", "Apotheca")
-H.check(okLoad, "a malformed buffFoodPriority does not throw out of ADDON_LOADED")
-H.eq(ApothecaDB.profiles.Global.buffFoodPriority.PRIEST, nil, "and it is dropped")
+check(okLoad, "a malformed buffFoodPriority does not throw out of ADDON_LOADED")
+eq(ApothecaDB.profiles.Global.buffFoodPriority.PRIEST, nil, "and it is dropped")
 
-H.done("test_migration")
+done("test_migration")

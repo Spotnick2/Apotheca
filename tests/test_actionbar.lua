@@ -20,11 +20,11 @@ local function shownButton()
 end
 
 -- Off by default: the bar's own settings.
-H.eq(db.matchBar, 0, "off by default")
+eq(db.matchBar, 0, "off by default")
 Apotheca.UpdateAllButtons()
 local btn = shownButton()
-H.check(btn, "a button is shown")
-H.eq(btn:GetWidth(), 36, "own icon size while off")
+check(btn, "a button is shown")
+eq(btn:GetWidth(), 36, "own icon size while off")
 
 -- On: Action Bar 1 at 120%, padding 6, 2 rows, vertical (measured: a
 -- 54 px button 7.2 px apart).
@@ -32,79 +32,79 @@ WoW.actionBar = { [0] = 1, [1] = 2, [2] = 12, [3] = 120, [4] = 6 }
 db.rows = 3
 db.matchBar = 1
 local layout, matched = Apotheca.LayoutSettings()
-H.check(matched, "matched while on and readable")
-H.eq(layout.orientation, "HORIZONTAL", "orientation stays the bar's own")
-H.eq(layout.rows, 3, "rows stay the bar's own")
-H.check(math.abs(layout.iconSize - 54) < 1e-9, "icon size 45 x 120% = 54")
-H.check(math.abs(layout.iconPadding - 7.2) < 1e-9, "padding scales with the icon size: 6 x 1.2")
+check(matched, "matched while on and readable")
+eq(layout.orientation, "HORIZONTAL", "orientation stays the bar's own")
+eq(layout.rows, 3, "rows stay the bar's own")
+check(math.abs(layout.iconSize - 54) < 1e-9, "icon size 45 x 120% = 54")
+check(math.abs(layout.iconPadding - 7.2) < 1e-9, "padding scales with the icon size: 6 x 1.2")
 Apotheca.UpdateAllButtons()
-H.check(math.abs(btn:GetWidth() - 54) < 1e-9, "buttons take Action Bar 1's size")
-H.eq(db.iconSize, 36, "the bar's own size is kept for switching off")
+check(math.abs(btn:GetWidth() - 54) < 1e-9, "buttons take Action Bar 1's size")
+eq(db.iconSize, 36, "the bar's own size is kept for switching off")
 
 -- A change made in Edit Mode fires nothing: the out-of-combat poll sees it.
 WoW.actionBar = { [0] = 0, [1] = 1, [2] = 12, [3] = 90, [4] = 2 }
-WoW.tick(3)
-WoW.tick(1)
-H.check(math.abs(btn:GetWidth() - 40.5) < 1e-9, "the poll follows a live change (90% = 40.5)")
+WoW.step(3)
+WoW.step(1)
+check(math.abs(btn:GetWidth() - 40.5) < 1e-9, "the poll follows a live change (90% = 40.5)")
 
 -- The poll costs nothing while nothing changed.
 local seq = Apotheca._updateSeq
-WoW.tick(3)
-WoW.tick(1)
-H.eq(Apotheca._updateSeq, seq, "no update while Action Bar 1 is unchanged")
+WoW.step(3)
+WoW.step(1)
+eq(Apotheca._updateSeq, seq, "no update while Action Bar 1 is unchanged")
 
 -- A saved or switched layout fires EDIT_MODE_LAYOUTS_UPDATED.
-H.check(WoW.events[ApothecaEventFrame]["EDIT_MODE_LAYOUTS_UPDATED"], "the layout event is registered")
+check(ApothecaEventFrame._events["EDIT_MODE_LAYOUTS_UPDATED"], "the layout event is registered")
 WoW.actionBar = { [0] = 0, [1] = 1, [2] = 12, [3] = 100, [4] = 2 }
 WoW.fire("EDIT_MODE_LAYOUTS_UPDATED")
-WoW.tick(1)
-H.check(math.abs(btn:GetWidth() - 45) < 1e-9, "a layout switch is followed")
+WoW.step(1)
+check(math.abs(btn:GetWidth() - 45) < 1e-9, "a layout switch is followed")
 
 -- Unreadable: the bar's own settings, never an error.
 WoW.actionBarThrow = true
 layout, matched = Apotheca.LayoutSettings()
-H.check(not matched, "a refused read falls back")
-H.eq(layout.iconSize, 36, "to the bar's own settings")
+check(not matched, "a refused read falls back")
+eq(layout.iconSize, 36, "to the bar's own settings")
 Apotheca.UpdateAllButtons()
-H.eq(btn:GetWidth(), 36, "and the buttons follow the fallback")
+eq(btn:GetWidth(), 36, "and the buttons follow the fallback")
 WoW.actionBarThrow = false
 
 WoW.actionBar = { [0] = 0, [1] = 1, [2] = 12, [4] = 2 }   -- no icon size
-H.check(not select(2, Apotheca.LayoutSettings()), "a missing value falls back")
+check(not select(2, Apotheca.LayoutSettings()), "a missing value falls back")
 WoW.actionBar = { [0] = 0, [1] = 1, [2] = 12, [3] = 100, [4] = 2 }
 Apotheca.UpdateAllButtons()
-H.check(math.abs(btn:GetWidth() - 45) < 1e-9, "readable again: 100% = 45")
+check(math.abs(btn:GetWidth() - 45) < 1e-9, "readable again: 100% = 45")
 
 -- In combat the poll waits: the secure buttons can't be resized.
 WoW.enterCombat()
 WoW.actionBar = { [0] = 0, [1] = 1, [2] = 12, [3] = 150, [4] = 2 }
-WoW.tick(3)
-H.check(math.abs(btn:GetWidth() - 45) < 1e-9, "no resize in combat")
+WoW.step(3)
+check(math.abs(btn:GetWidth() - 45) < 1e-9, "no resize in combat")
 WoW.leaveCombat()
-WoW.tick(1)
-H.check(math.abs(btn:GetWidth() - 67.5) < 1e-9, "resized after combat (150% = 67.5)")
+WoW.step(1)
+check(math.abs(btn:GetWidth() - 67.5) < 1e-9, "resized after combat (150% = 67.5)")
 
 -- Another bar: Action Bar 3 at 80%, padding 4.
 WoW.actionBars[3] = { [3] = 80, [4] = 4 }
 db.matchBar = 3
 layout, matched = Apotheca.LayoutSettings()
-H.check(matched, "bar 3 is read")
-H.check(math.abs(layout.iconSize - 36) < 1e-9 and math.abs(layout.iconPadding - 3.2) < 1e-9,
+check(matched, "bar 3 is read")
+check(math.abs(layout.iconSize - 36) < 1e-9 and math.abs(layout.iconPadding - 3.2) < 1e-9,
     "bar 3's own size and padding (45 x 80% = 36, 4 x 0.8 = 3.2)")
 db.matchBar = 9
-H.check(not select(2, Apotheca.LayoutSettings()), "a bar number out of range falls back")
+check(not select(2, Apotheca.LayoutSettings()), "a bar number out of range falls back")
 
 -- Off again: back to the bar's own settings.
 db.matchBar = 0
 Apotheca.UpdateAllButtons()
-H.eq(btn:GetWidth(), 36, "own settings once switched off")
+eq(btn:GetWidth(), 36, "own settings once switched off")
 
 -- The options panel: the layout controls grey out while matching.
 local panel = Apotheca.optionsPanel
-H.check(panel, "the options panel exists")
+check(panel, "the options panel exists")
 -- Created shown, Settings' first showing would fire no OnShow and the page
 -- would stay blank until the second visit (#72).
-H.check(not panel:IsShown(), "the panel starts hidden, so its first showing builds it")
+check(not panel:IsShown(), "the panel starts hidden, so its first showing builds it")
 panel._scripts.OnShow(panel)
 local sliders = H.framesWithTemplate("OptionsSliderTemplate")
 local function sliderLabelled(text)
@@ -113,8 +113,8 @@ local function sliderLabelled(text)
     end
 end
 local size = sliderLabelled("Icon Size")
-H.check(size, "the Icon Size slider exists")
-H.check(size:IsEnabled(), "enabled while off")
+check(size, "the Icon Size slider exists")
+check(size:IsEnabled(), "enabled while off")
 local function noteSaying(text)
     for _, f in ipairs(WoW.fontStrings) do
         if type(f._text) == "string" and f._text:find(text, 1, true) then return f end
@@ -122,46 +122,46 @@ local function noteSaying(text)
 end
 db.matchBar = 1
 Apotheca.RefreshOptions()
-H.check(not size:IsEnabled(), "greyed out while matching")
-H.check(not sliderLabelled("Icon Padding"):IsEnabled(), "padding too")
-H.eq(select(2, size.valText:GetTextColor()), 0.5, "its value greys out too, not shown as the size in use")
-H.check(noteSaying("Following Action Bar 1: 67.5 px"), "the note names the bar and its size (150%)")
+check(not size:IsEnabled(), "greyed out while matching")
+check(not sliderLabelled("Icon Padding"):IsEnabled(), "padding too")
+eq(select(2, size.valText:GetTextColor()), 0.5, "its value greys out too, not shown as the size in use")
+check(noteSaying("Following Action Bar 1: 67.5 px"), "the note names the bar and its size (150%)")
 -- The poll resizes the bar and refreshes the note with it.
 WoW.actionBar = { [0] = 0, [1] = 1, [2] = 12, [3] = 120, [4] = 2 }
 ApothecaFrame:Show()
-WoW.tick(3)
-WoW.tick(1)
-H.check(noteSaying("Following Action Bar 1: 54.0 px"), "the poll refreshes the note")
+WoW.step(3)
+WoW.step(1)
+check(noteSaying("Following Action Bar 1: 54.0 px"), "the poll refreshes the note")
 -- Another update applying the change before the poll refreshes it too
 -- (Codex on #44): the poll then sees nothing new.
 WoW.actionBar = { [0] = 0, [1] = 1, [2] = 12, [3] = 100, [4] = 2 }
 WoW.fire("BAG_UPDATE_DELAYED")
-WoW.tick(0.5)
-H.check(math.abs(btn:GetWidth() - 45) < 1e-9, "a bag update applies the new size")
-H.check(noteSaying("Following Action Bar 1: 45.0 px"), "and the note follows it")
-WoW.tick(3)
-H.check(noteSaying("Following Action Bar 1: 45.0 px"), "still right after the poll")
-H.check(sliderLabelled("Rows"):IsEnabled(), "rows stay the bar's own setting")
+WoW.step(0.5)
+check(math.abs(btn:GetWidth() - 45) < 1e-9, "a bag update applies the new size")
+check(noteSaying("Following Action Bar 1: 45.0 px"), "and the note follows it")
+WoW.step(3)
+check(noteSaying("Following Action Bar 1: 45.0 px"), "still right after the poll")
+check(sliderLabelled("Rows"):IsEnabled(), "rows stay the bar's own setting")
 -- The matched bar the same size as the bar's own settings (Codex on #45):
 -- losing it, and getting it back, still refreshes the note and sliders.
 local pct = db.iconSize / 45 * 100
 WoW.actionBar = { [0] = 0, [1] = 1, [2] = 12, [3] = pct, [4] = db.iconPadding / (pct / 100) }
 WoW.fire("BAG_UPDATE_DELAYED")
-WoW.tick(0.5)
-H.check(not size:IsEnabled(), "matching a bar as big as the own settings: greyed")
+WoW.step(0.5)
+check(not size:IsEnabled(), "matching a bar as big as the own settings: greyed")
 WoW.actionBarThrow = true
 WoW.fire("BAG_UPDATE_DELAYED")
-WoW.tick(0.5)
-H.check(noteSaying("can't be read here"), "losing it at the same size: the note says so")
-H.check(size:IsEnabled(), "and the sliders are enabled")
+WoW.step(0.5)
+check(noteSaying("can't be read here"), "losing it at the same size: the note says so")
+check(size:IsEnabled(), "and the sliders are enabled")
 WoW.actionBarThrow = false
 WoW.fire("BAG_UPDATE_DELAYED")
-WoW.tick(0.5)
-H.check(not size:IsEnabled(), "getting it back at the same size: greyed again")
+WoW.step(0.5)
+check(not size:IsEnabled(), "getting it back at the same size: greyed again")
 WoW.actionBarThrow = true
 Apotheca.RefreshOptions()
-H.check(size:IsEnabled(), "enabled again when Action Bar 1 can't be read")
-H.eq(select(2, size.valText:GetTextColor()), 0.82, "and its value is gold again")
+check(size:IsEnabled(), "enabled again when Action Bar 1 can't be read")
+eq(select(2, size.valText:GetTextColor()), 0.82, "and its value is gold again")
 WoW.actionBarThrow = false
 
-H.done("test_actionbar")
+done("test_actionbar")
