@@ -32,52 +32,52 @@ for _, list in pairs(D.POISONS) do
     families = families + 1
     items = items + #list
     for i = 2, #list do
-        if list[i].rank > list[i - 1].rank then H.check(false, "poisons are ordered highest rank first") end
+        if list[i].rank > list[i - 1].rank then check(false, "poisons are ordered highest rank first") end
     end
 end
-H.eq(families, 9, "nine poison families")
-H.eq(items, 25, "25 poisons")
+eq(families, 9, "nine poison families")
+eq(items, 25, "25 poisons")
 local testItem = false
 for _, list in pairs(D.POISONS) do for _, e in ipairs(list) do if e.id == 202316 then testItem = true end end end
-H.check(not testItem, "the Runecarving Test poison is left out")
-H.eq(D.POISONS.instant[1].id, 8928, "Instant Poison VI first")
-H.eq(D.POISON_FAMILIES[1].key .. "," .. D.POISON_FAMILIES[2].key, "instant,deadly", "Instant and Deadly listed first")
+check(not testItem, "the Runecarving Test poison is left out")
+eq(D.POISONS.instant[1].id, 8928, "Instant Poison VI first")
+eq(D.POISON_FAMILIES[1].key .. "," .. D.POISON_FAMILIES[2].key, "instant,deadly", "Instant and Deadly listed first")
 
 ------------------------------------------------------------
 -- The buttons
 ------------------------------------------------------------
-H.check(not on(mh) and not on(oh), "off by default: experimental, opt-in")
+check(not on(mh) and not on(oh), "off by default: experimental, opt-in")
 
 prof().poisons.enabled = true
 update()
-H.eq(mh.itemID, 6947, "main hand: Instant Poison, the strongest Instant usable at level 25")
-H.eq(mh:GetAttribute("target-slot"), 16, "aimed at the main hand")
-H.eq(mh:GetAttribute("item"), "item:6947", "for that item")
-H.check(not on(oh), "off hand: Deadly needs level 30, and no other family is offered")
+eq(mh.itemID, 6947, "main hand: Instant Poison, the strongest Instant usable at level 25")
+eq(mh:GetAttribute("target-slot"), 16, "aimed at the main hand")
+eq(mh:GetAttribute("item"), "item:6947", "for that item")
+check(not on(oh), "off hand: Deadly needs level 30, and no other family is offered")
 
 WoW.level = 30
 update()
-H.eq(mh.itemID, 6949, "at level 30: Instant Poison II")
-H.eq(oh.itemID, 2892, "and Deadly Poison on the off hand")
-H.eq(oh:GetAttribute("target-slot"), 17, "aimed at the off hand")
+eq(mh.itemID, 6949, "at level 30: Instant Poison II")
+eq(oh.itemID, 2892, "and Deadly Poison on the off hand")
+eq(oh:GetAttribute("target-slot"), 17, "aimed at the off hand")
 
 -- The choice is per character, and changing it updates the button.
 Apotheca.SetPoisonChoice(16, "crippling")
-for _ = 1, 3 do WoW.tick(0.1) end
-H.eq(mh.itemID, 3775, "choosing Crippling updates the main hand button")
-H.eq(ApothecaCharDB.poisonMH, "crippling", "saved per character")
+for _ = 1, 3 do WoW.step(0.1) end
+eq(mh.itemID, 3775, "choosing Crippling updates the main hand button")
+eq(ApothecaCharDB.poisonMH, "crippling", "saved per character")
 Apotheca.SetPoisonChoice(16, "none")
-for _ = 1, 3 do WoW.tick(0.1) end
-H.check(not mh:IsShown(), "None: no main hand button")
+for _ = 1, 3 do WoW.step(0.1) end
+check(not mh:IsShown(), "None: no main hand button")
 ApothecaCharDB.poisonMH = "sausage"
 update()
-H.eq(mh.itemID, 6949, "an unknown saved family falls back to Instant")
+eq(mh.itemID, 6949, "an unknown saved family falls back to Instant")
 ApothecaCharDB.poisonMH = nil
 
 -- Not a rogue: nothing.
 WoW.class = "WARRIOR"
 update()
-H.check(not mh:IsShown() and not oh:IsShown(), "not for other classes")
+check(not mh:IsShown() and not oh:IsShown(), "not for other classes")
 WoW.class = "ROGUE"
 update()
 
@@ -85,30 +85,30 @@ update()
 -- swap updates it through PLAYER_EQUIPMENT_CHANGED.
 WoW.equipped[17] = SHIELD
 WoW.fire("PLAYER_EQUIPMENT_CHANGED", 17, false)
-for _ = 1, 3 do WoW.tick(0.1) end
-H.check(not oh:IsShown(), "a shield in the off hand: no off-hand poison")
+for _ = 1, 3 do WoW.step(0.1) end
+check(not oh:IsShown(), "a shield in the off hand: no off-hand poison")
 WoW.equipped[17] = OH_WEAPON
 WoW.fire("PLAYER_EQUIPMENT_CHANGED", 17, false)
-for _ = 1, 3 do WoW.tick(0.1) end
-H.eq(oh.itemID, 2892, "a weapon back: the off-hand poison returns")
+for _ = 1, 3 do WoW.step(0.1) end
+eq(oh.itemID, 2892, "a weapon back: the off-hand poison returns")
 
 -- A fishing pole is a weapon (class 2) no poison can coat.
 WoW.equipped[16] = POLE
 WoW.fire("PLAYER_EQUIPMENT_CHANGED", 16, false)
-for _ = 1, 3 do WoW.tick(0.1) end
-H.check(not mh:IsShown(), "a fishing pole in the main hand: no poison button")
+for _ = 1, 3 do WoW.step(0.1) end
+check(not mh:IsShown(), "a fishing pole in the main hand: no poison button")
 WoW.equipped[16] = MH_WEAPON
 WoW.fire("PLAYER_EQUIPMENT_CHANGED", 16, false)
-for _ = 1, 3 do WoW.tick(0.1) end
+for _ = 1, 3 do WoW.step(0.1) end
 
 -- A poison the client says this character can't use is skipped: the next
 -- rank of the family, or nothing.
 WoW.unusable[6949] = true
 update()
-H.eq(mh.itemID, 6947, "Instant Poison II unusable: Instant Poison instead")
+eq(mh.itemID, 6947, "Instant Poison II unusable: Instant Poison instead")
 WoW.unusable[6947] = true
 update()
-H.check(not mh:IsShown(), "no usable Instant Poison: no main hand button")
+check(not mh:IsShown(), "no usable Instant Poison: no main hand button")
 WoW.unusable = {}
 update()
 
@@ -117,17 +117,17 @@ update()
 local seq = Apotheca._updateSeq
 Apotheca.SetPoisonChoice(16, "crippling")
 Apotheca.UpdateAllButtons()                  -- what the options dropdown does
-for _ = 1, 5 do WoW.tick(0.1) end
-H.eq(Apotheca._updateSeq - seq, 1, "one full update for a poison change from the options")
-H.eq(mh.itemID, 3775, "and the button changed")
+for _ = 1, 5 do WoW.step(0.1) end
+eq(Apotheca._updateSeq - seq, 1, "one full update for a poison change from the options")
+eq(mh.itemID, 3775, "and the button changed")
 Apotheca.SetPoisonChoice(16, "instant")
-for _ = 1, 5 do WoW.tick(0.1) end
-H.eq(mh.itemID, 6949, "on its own, the setter's request still updates the button")
+for _ = 1, 5 do WoW.step(0.1) end
+eq(mh.itemID, 6949, "on its own, the setter's request still updates the button")
 
 -- The target is cleared with the item.
 WoW.bags[0][1], WoW.bags[0][2] = nil, nil
 update()
-H.eq(mh:GetAttribute("target-slot"), nil, "no poison left: target-slot cleared with the item")
+eq(mh:GetAttribute("target-slot"), nil, "no poison left: target-slot cleared with the item")
 WoW.AddItem(0, 1, 6947, 10, "Instant Poison")
 WoW.AddItem(0, 2, 6949, 10, "Instant Poison II")
 update()
@@ -137,31 +137,31 @@ update()
 ------------------------------------------------------------
 WoW.enchants = {}
 WoW.fire("READY_CHECK")
-H.check(glowing(mh) and glowing(oh), "ready check: both uncoated hands glow")
+check(glowing(mh) and glowing(oh), "ready check: both uncoated hands glow")
 WoW.enchants[16] = { true, 1800000, 40, 323 }
 WoW.fire("WEAPON_ENCHANT_CHANGED")
-H.check(not glowing(mh) and glowing(oh), "the main hand coated: its glow goes (WEAPON_ENCHANT_CHANGED)")
+check(not glowing(mh) and glowing(oh), "the main hand coated: its glow goes (WEAPON_ENCHANT_CHANGED)")
 WoW.enchants[17] = { WoW.Secret(false), nil, nil, nil }
 WoW.fire("WEAPON_ENCHANT_CHANGED")
-H.check(not glowing(oh), "unreadable: no glow")
+check(not glowing(oh), "unreadable: no glow")
 WoW.fire("READY_CHECK_FINISHED")
 WoW.enchants = {}
 
 -- After combat: only when the reminder is switched on.
-local function combat() WoW.enterCombat() ; WoW.leaveCombat() ; for _ = 1, 3 do WoW.tick(0.1) end end
+local function combat() WoW.enterCombat() ; WoW.leaveCombat() ; for _ = 1, 3 do WoW.step(0.1) end end
 combat()
-H.check(not glowing(mh), "no reminder after combat by default")
+check(not glowing(mh), "no reminder after combat by default")
 prof().poisons.remind = true
 combat()
-H.check(glowing(mh) and glowing(oh), "with the reminder on: both glow after combat")
-WoW.tick(6)
-H.check(not glowing(mh), "for a few seconds")
+check(glowing(mh) and glowing(oh), "with the reminder on: both glow after combat")
+WoW.step(6)
+check(not glowing(mh), "for a few seconds")
 prof().poisons.remind = false
 
 -- Ready-check glow switched off.
 prof().poisons.glowOnMissingBuff = false
 WoW.fire("READY_CHECK")
-H.check(not glowing(mh), "ready-check glow switched off")
+check(not glowing(mh), "ready-check glow switched off")
 WoW.fire("READY_CHECK_FINISHED")
 
 ------------------------------------------------------------
@@ -171,17 +171,17 @@ WoW.class = "MAGE"
 WoW.AddItem(0, 5, 20744, 3, "Minor Wizard Oil")
 update()
 local oil = Apotheca.buttons.weaponoil
-H.eq(oil.itemID, 20744, "a mage is offered the wizard oil")
-H.eq(oil:GetAttribute("target-slot1"), 16, "left-click aimed at the main hand, as measured")
-H.eq(oil:GetAttribute("target-slot"), nil, "right-click keeps the cursor to pick a weapon")
+eq(oil.itemID, 20744, "a mage is offered the wizard oil")
+eq(oil:GetAttribute("target-slot1"), 16, "left-click aimed at the main hand, as measured")
+eq(oil:GetAttribute("target-slot"), nil, "right-click keeps the cursor to pick a weapon")
 WoW.equipped[16] = POLE
 WoW.fire("PLAYER_EQUIPMENT_CHANGED", 16, false)
-for _ = 1, 3 do WoW.tick(0.1) end
-H.eq(oil:GetAttribute("target-slot1"), nil, "a fishing pole in the main hand: no target, the cursor as before")
+for _ = 1, 3 do WoW.step(0.1) end
+eq(oil:GetAttribute("target-slot1"), nil, "a fishing pole in the main hand: no target, the cursor as before")
 WoW.equipped[16] = nil
 WoW.fire("PLAYER_EQUIPMENT_CHANGED", 16, false)
-for _ = 1, 3 do WoW.tick(0.1) end
-H.eq(oil:GetAttribute("target-slot1"), nil, "no main-hand weapon: no target")
+for _ = 1, 3 do WoW.step(0.1) end
+eq(oil:GetAttribute("target-slot1"), nil, "no main-hand weapon: no target")
 WoW.equipped[16] = MH_WEAPON
 
-H.done("test_poisons")
+done("test_poisons")

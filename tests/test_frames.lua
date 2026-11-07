@@ -20,20 +20,20 @@ local EVENTS = {
 
 local function fireAll()
     for _, e in ipairs(EVENTS) do WoW.fire(e, "player") end
-    WoW.tick(1)
-    WoW.tick(1)
+    WoW.step(1)
+    WoW.step(1)
 end
 
 fireAll()
-H.check(true, "every event runs out of combat")
+check(true, "every event runs out of combat")
 
 WoW.enterCombat()
 fireAll()
-H.check(true, "every event runs in combat, with auras throwing and health secret")
+check(true, "every event runs in combat, with auras throwing and health secret")
 -- Worst case, not yet measured: cooldowns and stack counts secret too.
 WoW.combatSecret = true
 fireAll()
-H.check(true, "bag and cooldown refreshes survive secret cooldowns and counts")
+check(true, "bag and cooldown refreshes survive secret cooldowns and counts")
 WoW.combatSecret = false
 WoW.leaveCombat()
 fireAll()
@@ -49,7 +49,7 @@ end
 WoW.enterCombat()
 SlashCmdList["APOTHECA"]("status")
 WoW.leaveCombat()
-H.check(true, "every slash command runs, in and out of combat")
+check(true, "every slash command runs, in and out of combat")
 
 -- Every button's scripts.
 for key, btn in pairs(Apotheca.buttons) do
@@ -62,7 +62,7 @@ for key, btn in pairs(Apotheca.buttons) do
         if h then h(btn._askOverlay, "LeftButton") ; h(btn._askOverlay, "RightButton") end
     end
 end
-H.check(true, "button scripts run")
+check(true, "button scripts run")
 
 -- Popups.
 for name, dlg in pairs(StaticPopupDialogs) do
@@ -70,19 +70,19 @@ for name, dlg in pairs(StaticPopupDialogs) do
         dlg.OnAccept({ data = { btnKey = "drink", altItemID = 8079 } })
     end
 end
-H.check(true, "popup accept handlers run")
+check(true, "popup accept handlers run")
 
 -- Drag anchor with Alt held.
 WoW.altDown = true
 WoW.fire("MODIFIER_STATE_CHANGED", "LALT", 1)
-WoW.tick(1)
+WoW.step(1)
 WoW.altDown = false
 WoW.fire("MODIFIER_STATE_CHANGED", "LALT", 0)
-WoW.tick(1)
+WoW.step(1)
 
 WoW.fire("PLAYER_LOGOUT")
-H.check(ApothecaDB.svLoadCheck ~= nil, "the SavedVariables sentinel is written every session")
+check(ApothecaDB.svLoadCheck ~= nil, "the SavedVariables sentinel is written every session")
 
-H.eq(H.messagesMatching("rejected event"), 0, "no event was rejected")
+eq(H.messagesMatching("rejected event"), 0, "no event was rejected")
 
-H.done("test_frames")
+done("test_frames")

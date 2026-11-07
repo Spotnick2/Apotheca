@@ -1,99 +1,190 @@
 ------------------------------------------------------------
--- wow_stubs.lua
+-- wow_stubs.lua: Apotheca's WoW: Forever mock for Lua 5.1 unit tests.
+-- dofile("tests/wow_stubs.lua") FIRST in every test; drive it via the WoW table.
 --
--- A minimal WoW: Forever API surface so Apotheca's files load and run
--- under stock Lua 5.1 with no game client.
+-- The mechanics come from WowTestKit (tests/kit.lua loads the commit
+-- tests/kit.pin names; its README is the reference): strict globals, secrets,
+-- event names checked against the pinned build, widgets that record every
+-- method called, protected frames refused in combat, print (with the
+-- stray-"|" check done() fails on), timers and the clock, fire /
+-- fireAllRegistered / tick, check / eq / done.
 --
--- The important rule: READING AN UNSTUBBED GLOBAL IS AN ERROR. This file is
--- the list of APIs verified present on builds 1.60.1.69977 and 70009
--- (C:\Projects\WoW\References\Forever\api\forever-api-1.60.1.70338.md). Stub a global only
--- after confirming it there, with the client's signature. Names the client
--- does NOT have go in KNOWN_ABSENT, so the addon has to cope without them.
--- A forgiving stub quietly certifies calls the client will reject.
---
--- Methods are NOT covered: unknown widget methods fall through to a no-op.
--- Assert what a handler produced, not only that it ran.
---
---     dofile("tests/wow_stubs.lua")   -- first, in every test
---     WoW.reset()
+-- This file adds Apotheca's own client APIs, each verified in the API dump
+-- (C:\Projects\WoW\References\Forever\api\, the highest build). Stub a global
+-- only after confirming it there, with the client's signature. A name the
+-- client does NOT have goes in the Kit.strict list at the bottom, so the
+-- addon has to cope without it. A forgiving stub quietly certifies calls the
+-- client will reject.
 ------------------------------------------------------------
 
-WoW = {}
-local WoW = WoW
-
-WoW.frames = {}       -- every frame created, in order
-WoW.events = {}       -- [frame] = { [event] = true }
+dofile("tests/kit.lua")
+local Methods = WoW.Methods
+local newWidget = WoW.newWidget
 
 ------------------------------------------------------------
--- Secret values
+-- Secrets
 --
 -- On Forever, the player's current health and power are secret even out
--- of combat (docs/FOREVER-PROBE.md). A secret here is a table whose
--- arithmetic yields another secret and whose ORDERING comparison with a
--- number throws, which Lua 5.1 does by itself for table < number.
---
--- KNOWN GAP: the real client also throws on `secret == x` and on truth
--- tests (`if secret`, `secret or 0`). Lua 5.1 cannot model either: __eq is
--- ignored between a table and a number, and a table is always truthy. So
--- these tests cannot catch an equality or truth test on a secret. Review
--- for that by hand: every read of health, power, cooldowns, counts, auras
--- or GetWeaponEnchantInfo belongs inside a pcall together with every
--- comparison made on it.
+-- of combat (docs/FOREVER-PROBE.md). The kit's secrets throw on arithmetic,
+-- ordering, concat, tostring and indexing. Lua 5.1 cannot make `secret == x`
+-- or a truth test throw: review those by hand.
 ------------------------------------------------------------
 
-local secretMT = {}
--- A secret may carry the real value, hidden from the addon (it can only be
--- read through WoW.Reveal, i.e. by what the client would draw).
+-- A secret may carry the real value, hidden from the addon: only what the
+-- client draws reads it (WoW.Reveal, the texture's _drawn colour).
 local hidden = setmetatable({}, { __mode = "k" })
+local kitSecret = WoW.Secret
 local function Secret(v)
-    local s = setmetatable({}, secretMT)
+    local s = kitSecret("Apotheca test secret")
     hidden[s] = v
     return s
 end
+WoW.Secret = Secret
 function WoW.Reveal(v)
-    if getmetatable(v) == secretMT then return hidden[v] end
+    if issecretvalue(v) then return hidden[v] end
     return v
 end
--- Arithmetic or ordering on a secret is blocked: the client throws, and
--- logs every attempt to taint.log even inside a pcall. So both throw here
--- too, and are counted (WoW.secretBlocked): code that tests issecretvalue
--- first never reaches them.
-for _, op in ipairs({ "__add", "__sub", "__mul", "__div", "__unm" }) do
-    secretMT[op] = function()
-        WoW.secretBlocked = WoW.secretBlocked + 1
-        error("attempt to perform arithmetic on a secret value", 2)
-    end
-end
-secretMT.__lt = function()
-    WoW.secretBlocked = WoW.secretBlocked + 1
-    error("attempt to compare a secret number value", 2)
-end
-secretMT.__le = secretMT.__lt
--- But Lua 5.1 calls __lt / __le only between two tables: `secret > 0`
--- raises its own type error before any metamethod runs (lvm.c,
--- luaV_lessthan). The addon catches that in a pcall, so the pcall is where
--- it is counted. A stub secret is the only table the addon would compare
--- with a number.
+function WoW.IsSecret(v) return issecretvalue(v) end
+
+-- WowTestKit #13: the client writes every blocked attempt on a secret to
+-- Logs/taint.log, even when a pcall catches it. Count each one a pcall
+-- swallowed (WoW.secretBlocked), and fail done() on one, as the old mock did:
+-- code that tests issecretvalue first never gets there. Lua 5.1 refuses
+-- `secret > 0` before any metamethod runs, with its own message.
 local rawpcall = pcall
 local function counted(ok, ...)
     local err = ...
-    if not ok and type(err) == "string"
-       and (err:find("attempt to compare %a+ with table") or err:find("attempt to compare table with")) then
+    if not ok and type(err) == "string" and (err:find("secret value touched in Lua", 1, true)
+            or err:find("attempt to compare %a+ with userdata") or err:find("attempt to compare userdata with")) then
         WoW.secretBlocked = WoW.secretBlocked + 1
     end
     return ok, ...
 end
 function pcall(f, ...) return counted(rawpcall(f, ...)) end
-WoW.Secret = Secret
-function WoW.IsSecret(v) return getmetatable(v) == secretMT end
+local kitDone = done
+function done(name)
+    eq(WoW.secretBlocked, 0, "no arithmetic or comparison was attempted on a secret")
+    kitDone(name)
+end
 
 ------------------------------------------------------------
--- State
+-- Templates
 ------------------------------------------------------------
 
-function WoW.reset()
-    WoW.time         = 10000
-    WoW.inCombat     = false
+-- Templates measured present on this build bring these regions (a named
+-- frame's also as <name><Region> globals, as the client's $parent names do).
+local TEMPLATE_REGIONS = {
+    InterfaceOptionsCheckButtonTemplate = { "Text" },
+    UICheckButtonTemplate               = { "Text" },
+    UIPanelButtonTemplate               = { "Text" },
+    UIDropDownMenuTemplate              = { "Text" },
+    OptionsSliderTemplate               = { "Low", "High", "Text" },
+}
+for template, regions in pairs(TEMPLATE_REGIONS) do
+    WoW.templates[template] = function(w)
+        for _, region in ipairs(regions) do
+            local r = Methods.CreateFontString(w)
+            w[region] = r
+            if w._name then rawset(_G, w._name .. region, r) end
+        end
+    end
+end
+-- A secure button and the frame that parents it are protected: in combat
+-- the client refuses to change them.
+WoW.templates.SecureActionButtonTemplate = function(w)
+    w._protected = true
+    if w._parent then w._parent._protected = true end
+end
+
+------------------------------------------------------------
+-- Widget methods the kit's core doesn't have (each a real method of that
+-- widget type on this build: Kit.checkMethods checks every call)
+------------------------------------------------------------
+
+-- Screen geometry: tests place a frame with _left / _bottom / _top (false
+-- reads as nil, a frame with no position yet).
+function Methods.GetLeft(w) if w._left == false then return nil end return w._left or 600 end
+function Methods.GetBottom(w) if w._bottom == false then return nil end return w._bottom or 200 end
+function Methods.GetTop(w) if w._top == false then return nil end return w._top or 500 end
+function Methods.GetSize(w) return w._width, w._height end
+function Methods.GetCenter() return 960, 540 end
+function Methods.GetEffectiveScale() return 1 end
+function Methods.GetScale() return 1 end
+function Methods.GetNumPoints(w) return #w._points end
+function Methods.IsMouseOver(w) return w._mouseOver == true end
+function Methods.StartMoving(w) w._moving = true end
+function Methods.StopMovingOrSizing(w) w._moving = false end
+function Methods.GetVerticalScroll(w) return w._vscroll or 0 end
+function Methods.GetVerticalScrollRange(w) return w._vrange or 0 end
+function Methods.SetVerticalScroll(w, v) w._vscroll = v end
+function Methods.GetMinMaxValues(w) return w._min or 0, w._max or 1 end
+function Methods.GetStringWidth() return 50 end
+function Methods.GetStringHeight() return 12 end
+function Methods.GetID() return 1 end
+function Methods.IsDesaturated(t) return t._desaturated == true end
+-- A button's own font string (its label), made on first ask.
+function Methods.GetFontString(b)
+    b._fs = b._fs or newWidget("FontString", b)
+    return b._fs
+end
+function Methods.RegisterForClicks(b, ...) b._clicks = { ... } end
+-- Every font string made, in order (WoW.fontStrings): the tests find a
+-- label, a note or an options row by its text.
+local kitFontString = Methods.CreateFontString
+function Methods.CreateFontString(w, ...)
+    local fs = kitFontString(w, ...)
+    WoW.fontStrings[#WoW.fontStrings + 1] = fs
+    return fs
+end
+-- Records what the texture would be drawn with: a secret channel is
+-- unwrapped here, as the client does, never by the addon (test_tint reads
+-- _drawn).
+function Methods.SetVertexColor(t, r, g, b, a)
+    t._vertex = { r, g, b, a }
+    t._drawn = { WoW.Reveal(r), WoW.Reveal(g), WoW.Reveal(b) }
+end
+-- Events: the core's check of the name against the build, plus two refusals
+-- the tests simulate: WoW.badEvents throws, WoW.refusedEvents returns false
+-- (Apotheca.API.RegisterEvents must report both).
+local kitRegister = Methods.RegisterEvent
+function Methods.RegisterEvent(w, e)
+    if WoW.badEvents[e] then error("Attempt to register unknown event \"" .. tostring(e) .. "\"", 2) end
+    if WoW.refusedEvents[e] then return false end
+    return kitRegister(w, e)
+end
+function Methods.RegisterUnitEvent(w, e) return Methods.RegisterEvent(w, e) end
+
+-- Protected frames in combat. The core refuses Show / Hide / SetShown /
+-- SetPoint / ClearAllPoints / SetAllPoints and records each in WoW.blocked.
+-- WowTestKit #12: it drops SetAttribute silently and doesn't refuse
+-- resizing or moving, which the client does (StopMovingOrSizing measured on
+-- the bar, AGENTS.md "Drag Anchor"); refused and recorded here meanwhile.
+-- WoW.strictLockdown (opt-in per test section) turns any of them into an
+-- error at the call, which fails the test where it happened.
+local CORE_REFUSES = { Show = true, Hide = true, SetPoint = true, ClearAllPoints = true, SetAllPoints = true }
+for _, m in ipairs({ "Show", "Hide", "SetPoint", "ClearAllPoints", "SetAllPoints", "SetAttribute",
+                     "SetWidth", "SetHeight", "SetSize", "StartMoving", "StopMovingOrSizing", "SetClampedToScreen" }) do
+    local plain = Methods[m]
+    Methods[m] = function(w, ...)
+        if WoW.combat and w._protected then
+            if WoW.strictLockdown then
+                error("protected " .. m .. " on " .. tostring(w._name) .. " in combat", 2)
+            end
+            if not CORE_REFUSES[m] then
+                table.insert(WoW.blocked, (w._name or w._type) .. ":" .. m)
+                return
+            end
+        end
+        if plain then return plain(w, ...) end
+    end
+end
+
+------------------------------------------------------------
+-- State the tests reset
+------------------------------------------------------------
+
+table.insert(WoW.onReset, function()
+    WoW.now          = 10000     -- the client's clock is never near 0
     WoW.build        = "70790"
     WoW.class        = "PRIEST"
     WoW.instanceName, WoW.instanceType, WoW.instanceMap = "Kalimdor", "none", 1
@@ -106,7 +197,6 @@ function WoW.reset()
     WoW.bags         = {}        -- [bag] = { [slot] = { itemID=, stackCount= } }
     WoW.cooldowns    = {}        -- [itemID] = { start, duration }
     WoW.items        = {}        -- [itemID] = name; missing -> cache miss
-    WoW.messages     = {}
     WoW.badEvents    = {}        -- RegisterEvent throws
     WoW.refusedEvents = {}       -- RegisterEvent returns false
     WoW.altDown      = false
@@ -114,8 +204,9 @@ function WoW.reset()
     WoW.itemsUsed    = {}        -- names passed to C_Item.UseItemByName
     WoW.curvesRefused = false    -- simulate a client that refuses colour curves
     WoW.strictLockdown = false   -- protected frames changed in combat fail the test
-    WoW.secretBlocked = 0     -- blocked secret arithmetic or comparisons (taint.log lines)
-end
+    WoW.secretBlocked = 0        -- blocked secret operations a pcall swallowed (taint.log lines)
+    WoW.fontStrings  = {}
+end)
 
 function WoW.AddItem(bag, slot, itemID, count, name)
     WoW.bags[bag] = WoW.bags[bag] or {}
@@ -128,179 +219,38 @@ function WoW.SetAura(filter, name, spellId)
     list[#list + 1] = { name = name, spellId = spellId }
 end
 
+-- As on Retail: PLAYER_REGEN_DISABLED fires just before lockdown engages
+-- (the last moment a protected frame may change), then combat is on.
+-- WoW.enterLockdown skips that moment, for code that must cope with
+-- lockdown already being on.
+function WoW.enterCombat()
+    WoW.aurasThrow = true
+    WoW.fire("PLAYER_REGEN_DISABLED")
+    WoW.combat = true
+end
+
+function WoW.enterLockdown()
+    WoW.combat, WoW.aurasThrow = true, true
+    WoW.fire("PLAYER_REGEN_DISABLED")
+end
+
+function WoW.leaveCombat()
+    WoW.combat, WoW.aurasThrow = false, false
+    WoW.fire("PLAYER_REGEN_ENABLED")
+end
+
+-- WowTestKit #9: the core's WoW.tick doesn't move GetTime. One step of the
+-- game: the clock (and any timer due) moves on by `elapsed` seconds, then
+-- every visible frame's OnUpdate runs with it.
+function WoW.step(elapsed)
+    elapsed = elapsed or 1
+    WoW.advance(elapsed)
+    WoW.tick(elapsed)
+end
+
 ------------------------------------------------------------
--- Frames
+-- Frames the client makes
 ------------------------------------------------------------
-
-local Frame = {}
-local FrameMT = {
-    __index = function(_, k)
-        local m = Frame[k]
-        if m then return m end
-        -- Unknown METHODS (capitalised, like the client's) are no-ops; see
-        -- the header. Unknown fields stay nil, as on a real frame.
-        if type(k) == "string" and k:match("^%u") then return function() end end
-        return nil
-    end,
-}
-
-local function NewRegion(kind, parent, name)
-    local f = setmetatable({
-        _kind = kind, _parent = parent, _name = name, _shown = true,
-        _attrs = {}, _scripts = {}, _points = {}, _level = 1,
-        _w = 36, _h = 36,
-    }, FrameMT)
-    return f
-end
-
-function Frame:GetName() return self._name end
-function Frame:GetParent() return self._parent end
-function Frame:Show() self._shown = true end
-function Frame:Hide() self._shown = false end
-function Frame:SetShown(v) self._shown = v and true or false end
-function Frame:IsShown() return self._shown end
-function Frame:IsVisible() return self._shown end
-function Frame:SetScript(event, fn) self._scripts[event] = fn end
-function Frame:GetScript(event) return self._scripts[event] end
-function Frame:HookScript(event, fn)
-    local old = self._scripts[event]
-    self._scripts[event] = function(...) if old then old(...) end fn(...) end
-end
-function Frame:SetAttribute(k, v) self._attrs[k] = v end
-function Frame:GetAttribute(k) return self._attrs[k] end
-function Frame:RegisterForClicks(...) self._clicks = { ... } end
-function Frame:RegisterEvent(event)
-    if WoW.badEvents[event] then
-        error("Attempt to register unknown event \"" .. event .. "\"", 2)
-    end
-    if WoW.refusedEvents[event] then return false end
-    WoW.events[self] = WoW.events[self] or {}
-    WoW.events[self][event] = true
-    return true
-end
-function Frame:RegisterUnitEvent(event) return Frame.RegisterEvent(self, event) end
-function Frame:UnregisterEvent(event)
-    if WoW.events[self] then WoW.events[self][event] = nil end
-end
-function Frame:SetWidth(w) self._w = w end
-function Frame:SetHeight(h) self._h = h end
-function Frame:SetSize(w, h) self._w, self._h = w, h end
-function Frame:GetWidth() return self._w end
-function Frame:GetHeight() return self._h end
-function Frame:GetSize() return self._w, self._h end
--- _left = false: the frame has no position yet (GetLeft answers nil).
-function Frame:GetLeft() if self._left == false then return nil end return self._left or 600 end
-function Frame:GetBottom() if self._bottom == false then return nil end return self._bottom or 200 end
-function Frame:GetTop() if self._top == false then return nil end return self._top or 500 end
--- Scroll frames (the options tabs).
-function Frame:GetVerticalScroll() return self._vscroll or 0 end
-function Frame:GetVerticalScrollRange() return self._vrange or 0 end
-function Frame:SetVerticalScroll(v) self._vscroll = v end
-function Frame:GetCenter() return 960, 540 end
-function Frame:GetEffectiveScale() return 1 end
-function Frame:GetScale() return 1 end
-function Frame:SetFrameLevel(l) self._level = l end
-function Frame:GetFrameLevel() return self._level end
-function Frame:IsMouseOver() return self._mouseOver == true end
-function Frame:StartMoving() self._moving = true end
-function Frame:StopMovingOrSizing() self._moving = false end
-function Frame:IsProtected() return false end
-function Frame:GetChecked() return self._checked end
-function Frame:SetChecked(v) self._checked = v end
-function Frame:GetValue() return self._value or 0 end
-function Frame:SetValue(v) self._value = v end
-function Frame:GetMinMaxValues() return 0, 1 end
-function Frame:GetStringWidth() return 50 end
-function Frame:GetStringHeight() return 12 end
-function Frame:GetText() return self._text end
-function Frame:SetText(t) self._text = t end
-function Frame:SetTextColor(r, g, b) self._color = { r, g, b } end
-function Frame:GetTextColor() local c = self._color or { 1, 1, 1 } return c[1], c[2], c[3] end
-function Frame:GetID() return 1 end
-function Frame:GetObjectType() return self._kind end
-function Frame:Enable() self._enabled = true end
-function Frame:Disable() self._enabled = false end
-function Frame:IsEnabled() return self._enabled ~= false end
-function Frame:SetAlpha(a) self._alpha = a end
--- Animation groups record play/stop (they never finish on their own), so a
--- test can tell a glow being faded out from one still shown.
-function Frame:Play() self._playing = true end
-function Frame:Stop() self._playing = false end
-function Frame:IsPlaying() return self._playing == true end
-function Frame:SetDesaturated(v) self._desaturated = v and true or false end
-function Frame:IsDesaturated() return self._desaturated == true end
-function Frame:GetNumPoints() return #self._points end
-function Frame:SetPoint(...) self._points[#self._points + 1] = { ... } end
-function Frame:ClearAllPoints() self._points = {} end
-function Frame:GetPoint() return "CENTER", nil, "CENTER", 0, 0 end
-function Frame:GetFontString() return self._fs end
--- Records what the texture would be drawn with: a secret channel is
--- unwrapped here, as the client does, never by the addon.
-function Frame:SetVertexColor(r, g, b)
-    self._vertex = { r, g, b }
-    self._drawn = { WoW.Reveal(r), WoW.Reveal(g), WoW.Reveal(b) }
-end
-
-local function childRegion(self, kind)
-    return NewRegion(kind, self)
-end
-function Frame:CreateTexture() return childRegion(self, "Texture") end
-WoW.fontStrings = {}
-function Frame:CreateFontString()
-    local fs = childRegion(self, "FontString")
-    WoW.fontStrings[#WoW.fontStrings + 1] = fs
-    return fs
-end
-function Frame:CreateAnimationGroup() return childRegion(self, "AnimationGroup") end
-function Frame:CreateAnimation(t) return childRegion(self, t or "Animation") end
-
--- Templates measured present on this build bring these regions.
-local TEMPLATE_REGIONS = {
-    InterfaceOptionsCheckButtonTemplate = { "Text" },
-    UICheckButtonTemplate               = { "Text" },
-    UIPanelButtonTemplate               = { "Text" },
-    UIDropDownMenuTemplate              = { "Text" },
-    OptionsSliderTemplate               = { "Low", "High", "Text" },
-}
-
-function CreateFrame(kind, name, parent, template)
-    local f = NewRegion(kind, parent, name)
-    f._template = template
-    for tpl in tostring(template or ""):gmatch("[^,%s]+") do
-        for _, region in ipairs(TEMPLATE_REGIONS[tpl] or {}) do
-            local r = NewRegion("FontString", f)
-            f[region] = r
-            if name then _G[name .. region] = r end
-        end
-    end
-    if kind == "Button" or kind == "CheckButton" then f._fs = NewRegion("FontString", f) end
-    -- A secure button and the frame that parents it are protected: in
-    -- combat the client refuses to change them (WoW.strictLockdown).
-    if tostring(template or ""):find("SecureActionButtonTemplate") then
-        f._protected = true
-        if parent then parent._protected = true end
-    end
-    if name then _G[name] = f end
-    WoW.frames[#WoW.frames + 1] = f
-    return f
-end
-
--- With WoW.strictLockdown, a protected frame changed in combat fails the
--- test: the client would refuse the call (attributes silently, the rest
--- with ADDON_ACTION_BLOCKED). Opt-in per test file.
-local PROTECTED_METHODS = { "Show", "Hide", "SetShown", "SetAttribute", "SetPoint", "ClearAllPoints",
-    "SetWidth", "SetHeight", "SetSize", "StartMoving", "StopMovingOrSizing", "SetClampedToScreen" }
-for _, m in ipairs(PROTECTED_METHODS) do
-    local plain = Frame[m] or function() end
-    Frame[m] = function(self, ...)
-        if WoW.strictLockdown and WoW.inCombat and self._protected then
-            error("protected " .. m .. " on " .. tostring(self._name) .. " in combat", 2)
-        end
-        return plain(self, ...)
-    end
-end
-
-UIParent = NewRegion("Frame", nil, "UIParent")
 
 -- The action bars (#40): frames, so not in the API dump. Bar 1 is measured
 -- on 70291 (/fp apo bar): MainActionBar's GetSettingValue returns plain values
@@ -318,79 +268,30 @@ local BARS = {
     { "MultiBar6", "MultiBar6Button1" }, { "MultiBar7", "MultiBar7Button1" },
 }
 for i, names in ipairs(BARS) do
-    local bar = NewRegion("Frame", UIParent, names[1])
-    function bar:GetSettingValue(setting)
+    local bar = newWidget("Frame", UIParent, names[1])
+    -- EditModeActionBarSystemMixin's (Blizzard_EditMode), so a field here.
+    function bar.GetSettingValue(_, setting)
         if WoW.actionBarThrow then error("GetSettingValue refused") end
         local t = (i == 1 and WoW.actionBar) or WoW.actionBars[i] or WoW.actionBar
         return t[setting]
     end
     _G[names[1]] = bar
-    local button = NewRegion("CheckButton", bar, names[2])
-    button._w, button._h = 45, 45
-    function button:GetEffectiveScale()   -- the icon size scales the button (measured)
+    local button = newWidget("CheckButton", bar, names[2])
+    button._width, button._height = 45, 45
+    function button.GetEffectiveScale()   -- the icon size scales the button (measured)
         local t = (i == 1 and WoW.actionBar) or WoW.actionBars[i] or WoW.actionBar
         return (t[3] or 100) / 100
     end
     _G[names[2]] = button
 end
-GameTooltip = NewRegion("GameTooltip", UIParent, "GameTooltip")
+GameTooltip = newWidget("GameTooltip", UIParent, "GameTooltip")
 GameFontNormal, GameFontHighlight = {}, {}
 
 ------------------------------------------------------------
--- Dispatch helpers
+-- Globals present on this client (forever-api-1.60.1.<build>.md)
 ------------------------------------------------------------
 
-function WoW.fire(event, ...)
-    for frame, evs in pairs(WoW.events) do
-        if evs[event] then
-            local h = frame._scripts.OnEvent
-            if h then h(frame, event, ...) end
-        end
-    end
-end
-
--- Run every OnUpdate handler once, as if `elapsed` seconds had passed.
-function WoW.tick(elapsed)
-    WoW.time = WoW.time + (elapsed or 1)
-    for _, f in ipairs(WoW.frames) do
-        local h = f._scripts.OnUpdate
-        if h then h(f, elapsed or 1) end
-    end
-end
-
--- As on Retail: PLAYER_REGEN_DISABLED fires just before lockdown engages
--- (the last moment a protected frame may change), then combat is on.
--- WoW.enterLockdown skips that moment, for code that must cope with
--- lockdown already being on.
-function WoW.enterCombat()
-    WoW.aurasThrow = true
-    WoW.fire("PLAYER_REGEN_DISABLED")
-    WoW.inCombat = true
-end
-
-function WoW.enterLockdown()
-    WoW.inCombat, WoW.aurasThrow = true, true
-    WoW.fire("PLAYER_REGEN_DISABLED")
-end
-
-function WoW.leaveCombat()
-    WoW.inCombat, WoW.aurasThrow = false, false
-    WoW.fire("PLAYER_REGEN_ENABLED")
-end
-
-------------------------------------------------------------
--- Globals present on 1.60.1.69977 and 70009
-------------------------------------------------------------
-
-function print(...)
-    local t = {}
-    for i = 1, select("#", ...) do t[i] = tostring(select(i, ...)) end
-    WoW.messages[#WoW.messages + 1] = table.concat(t, " ")
-end
-
-function time() return math.floor(WoW.time) end
-function GetTime() return WoW.time end
-function InCombatLockdown() return WoW.inCombat end
+function time() return math.floor(WoW.now) end
 function IsAltKeyDown() return WoW.altDown end
 function IsControlKeyDown() return WoW.ctrlDown == true end
 function IsShiftKeyDown() return WoW.shiftDown == true end
@@ -405,8 +306,8 @@ function GetInstanceInfo() return WoW.instanceName, WoW.instanceType, 0, "", 0, 
 WoW.enchants = {}
 local function left(e)
     if type(e[2]) ~= "number" then return e[2] end
-    e.t = e.t or WoW.time
-    return e[2] - (WoW.time - e.t) * 1000
+    e.t = e.t or WoW.now
+    return e[2] - (WoW.now - e.t) * 1000
 end
 WoW.enchantThrow = false
 function GetWeaponEnchantInfo()
@@ -426,7 +327,6 @@ function UnitHealth()    return maybeSecret(WoW.health) end
 function UnitHealthMax() return WoW.healthMax end
 function UnitPower()     return maybeSecret(WoW.power) end
 function UnitPowerMax()  return WoW.powerMax end
-function issecretvalue(v) return WoW.IsSecret(v) end
 
 NUM_BAG_SLOTS = 4
 Enum = { BagIndex = { Backpack = 0, ReagentBag = 5 }, PowerType = { Mana = 0 },
@@ -617,7 +517,7 @@ C_CVar = {}
 function C_CVar.GetCVar() return "1" end
 
 C_Secrets = {}
-function C_Secrets.ShouldAurasBeSecret() return WoW.inCombat end
+function C_Secrets.ShouldAurasBeSecret() return WoW.combat end
 function C_Secrets.ShouldCooldownsBeSecret() return false end
 function C_Secrets.ShouldUnitHealthMaxBeSecret() return false end
 function C_Secrets.ShouldUnitPowerBeSecret() return WoW.healthSecret end
@@ -723,9 +623,13 @@ function UIDropDownMenu_SetText(dd, t) dd._ddText = t end
 -- Strict globals
 ------------------------------------------------------------
 
+-- The onReset state above, set once before the first test line.
+WoW.reset()
+
 -- Names the client does not have, or that start nil. Reading one returns
 -- nil instead of failing the test, so guarded feature checks still run.
-local KNOWN_ABSENT = {
+-- Any other read of an undefined global fails the test.
+Kit.strict({
     -- Removed on Forever (forever-api-1.60.1.70338.md).
     AnimateTexCoords = true, InterfaceOptions_AddCategory = true,
     InterfaceOptionsFrame_OpenToCategory = true, GetItemInfo = true,
@@ -741,15 +645,4 @@ local KNOWN_ABSENT = {
     ApothecaFrame = true, ApothecaAnchor = true,
     -- Another addon's namespace (an OptionalDep, #68): nil unless installed.
     GlassActionBars = true,
-}
-WoW.KNOWN_ABSENT = KNOWN_ABSENT
-
-setmetatable(_G, {
-    __index = function(_, k)
-        if KNOWN_ABSENT[k] then return nil end
-        error("read of undefined global '" .. tostring(k) .. "': stub it only if "
-              .. "forever-api-1.60.1.70338.md confirms it exists, or list it in KNOWN_ABSENT", 2)
-    end,
 })
-
-WoW.reset()

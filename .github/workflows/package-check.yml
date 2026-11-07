@@ -44,6 +44,15 @@ jobs:
             --expect-present 13446 13444 9421 19013 19060 227813 232433 4604 8008 2888 6947 7964 12643 18262 255663 > /dev/null
           git diff --exit-code --ignore-cr-at-eol ApothecaItems.lua
 
+      # The tests' scaffolding (WowTestKit) at the commit tests/kit.pin names,
+      # outside the checkout, checked to BE that commit. Its data for the
+      # pinned build stands in for the API dump, which is local only: event
+      # names and widget methods are checked here as on the owner's machine.
+      - name: Fetch WowTestKit at its pin
+        run: |
+          bash tests/fetch_kit.sh "$RUNNER_TEMP/WowTestKit"
+          echo "WOWTESTKIT=$RUNNER_TEMP/WowTestKit" >> "$GITHUB_ENV"
+
       # The probe tests (test_probe, test_applytest, test_profprobe) need
       # ForeverProbe, which is private and local: they run in tests/run.ps1
       # only, and say SKIPPED here (ForeverProbe's docs/GUIDE.md, section 8).
