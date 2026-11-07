@@ -185,6 +185,30 @@ if trigger then
 end
 
 -- ── Art (insecure) ────────────────────────────────────────────────
+-- The disc, hub, highlight and name are an insecure child of the ring:
+-- they show with it, and are never a parent of a secure button, so they can
+-- change in combat. The ring's own SetAlpha works in combat too (measured on
+-- a protected bar: GlassActionBars docs/FOREVER-PROBE.md, item 5, 70374).
+--
+-- Opening: the disc grows from 70% while the ring (slots included) fades
+-- in. Closing: the snippet hides the ring at once, so a ghost (a UIParent
+-- child, never part of the ring) copies the disc and the icons and fades
+-- out. The timings are GlassPearls' raid mark wheel's.
+--
+-- The look follows Glass UI's suite when it is loaded (GlassUI
+-- docs/SUITE-LOOK.md): the body of the current tint (a backing under the
+-- tint) and the accent (the quest tracker's titles) on the hub, highlight
+-- and name, repainted live on GlassUI.Suite.LookChanged. Without it, a dark
+-- disc of our own.
+W.OPEN, W.CLOSE = 0.15, 0.12      -- seconds
+W.BACKING_FLOOR = 0.8             -- opens over the bars: denser than the tracker's 0.35
+W.OWN = { backing = { 0.04, 0.05, 0.07, 0.85 }, hub = { 0.6, 0.4, 1 } }
+W.SOUNDS = {                      -- Portal Roulette's open and close
+    open = "Interface\\AddOns\\Apotheca\\Sounds\\WheelOpen.ogg",
+    close = "Interface\\AddOns\\Apotheca\\Sounds\\WheelClose.ogg",
+}
+local DISC = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+
 local art = CreateFrame("Frame", nil, ring)
 art:SetPoint("CENTER", ring, "CENTER")
 art:SetSize(2 * W.MIN_RADIUS + W.SIZE + 20, 2 * W.MIN_RADIUS + W.SIZE + 20)
@@ -192,26 +216,122 @@ art:SetFrameLevel(ring:GetFrameLevel())
 art:EnableMouse(false)
 W.art = art
 
-local disc = art:CreateTexture(nil, "BACKGROUND")
-disc:SetAllPoints(art)
-disc:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
-disc:SetVertexColor(0, 0, 0, 0.55)
-
-local hub = art:CreateTexture(nil, "BORDER")
-hub:SetSize(2 * W.DEADZONE, 2 * W.DEADZONE)
-hub:SetPoint("CENTER", art, "CENTER")
-hub:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
-hub:SetVertexColor(0.6, 0.4, 1, 0.25)
-
-local hilite = art:CreateTexture(nil, "ARTWORK")
-hilite:SetSize(W.SIZE + 18, W.SIZE + 18)
-hilite:SetTexture("Interface\\Buttons\\CheckButtonHilight")
-hilite:SetBlendMode("ADD")
-hilite:Hide()
-
-local label = art:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-label:SetPoint("TOP", art, "BOTTOM", 0, -4)
+-- The regions of one disc: the art's, and the ghost's copy.
+local function DiscParts(host)
+    local p = {}
+    p.backing = host:CreateTexture(nil, "BACKGROUND", nil, 0)
+    p.backing:SetAllPoints(host)
+    p.backing:SetTexture(DISC)
+    p.tint = host:CreateTexture(nil, "BACKGROUND", nil, 1)
+    p.tint:SetAllPoints(host)
+    p.tint:SetTexture(DISC)
+    p.hub = host:CreateTexture(nil, "BORDER")
+    p.hub:SetSize(2 * W.DEADZONE, 2 * W.DEADZONE)
+    p.hub:SetPoint("CENTER", host, "CENTER")
+    p.hub:SetTexture(DISC)
+    p.hilite = host:CreateTexture(nil, "ARTWORK", nil, 1)
+    p.hilite:SetSize(W.SIZE + 18, W.SIZE + 18)
+    p.hilite:SetTexture("Interface\\Buttons\\CheckButtonHilight")
+    p.hilite:SetBlendMode("ADD")
+    p.hilite:Hide()
+    p.label = host:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    p.label:SetPoint("TOP", host, "BOTTOM", 0, -4)
+    return p
+end
+local parts = DiscParts(art)
+local label = parts.label
 W.label = label
+
+-- ── Look ──
+-- Optional globals are read with rawget: Glass UI may be absent, and the
+-- test stub fails on a global it doesn't list.
+local function Suite()
+    local gui = rawget(_G, "GlassUI")
+    local s = type(gui) == "table" and rawget(gui, "Suite")
+    if type(s) == "table" and rawget(s, "API") == 1 then return s end
+end
+-- Each function feature-detected and called under pcall (SUITE.md).
+local function SuiteCall(s, name, ...)
+    local fn = rawget(s, name)
+    if type(fn) ~= "function" then return nil end
+    local ok, r = pcall(fn, ...)
+    if ok then return r end
+end
+local function IsColor(c, n)
+    if type(c) ~= "table" then return false end
+    for i = 1, n do
+        if type(c[i]) ~= "number" or c[i] < 0 or c[i] > 1 then return false end
+    end
+    return true
+end
+local function ClassColor()
+    local cc = rawget(_G, "C_ClassColor")
+    local _, class = UnitClass("player")
+    if not (type(cc) == "table" and type(class) == "string") then return nil end
+    local ok, c = pcall(cc.GetClassColor, class)
+    if ok and type(c) == "table" and type(c.r) == "number" then return c.r, c.g, c.b end
+end
+
+-- The look now: { backing = rgba, tint = rgba or nil, accent = rgb or nil }.
+function W.Look()
+    local s = Suite()
+    local body = s and SuiteCall(s, "Body")       -- nil: the suite's current tint
+    if not (type(body) == "table" and IsColor(body.backing, 4)) then
+        return { backing = W.OWN.backing }
+    end
+    local b = body.backing
+    local look = { backing = { b[1], b[2], b[3], math.max(b[4], W.BACKING_FLOOR) } }
+    if IsColor(body.tint, 4) then
+        look.tint = body.tint
+    elseif type(body.classShade) == "number" then
+        -- The class body has no colour of its own: the class colour, shaded,
+        -- at clear's alpha (a follower keeps its built alpha, SUITE-LOOK.md).
+        local r, g, bl = ClassColor()
+        local clear = SuiteCall(s, "Body", "clear")
+        local a = type(clear) == "table" and IsColor(clear.tint, 4) and clear.tint[4] or 0.24
+        if r then look.tint = { r * body.classShade, g * body.classShade, bl * body.classShade, a } end
+    end
+    local accent = SuiteCall(s, "Accent")
+    if IsColor(accent, 3) then look.accent = accent end
+    return look
+end
+
+local function Paint(p, look)
+    local c = look.backing
+    p.backing:SetVertexColor(c[1], c[2], c[3], c[4])
+    if look.tint then
+        p.tint:SetVertexColor(look.tint[1], look.tint[2], look.tint[3], look.tint[4])
+        p.tint:Show()
+    else
+        p.tint:Hide()
+    end
+    local a = look.accent
+    if a then
+        p.hub:SetVertexColor(a[1], a[2], a[3], 0.3)
+        p.hilite:SetVertexColor(a[1], a[2], a[3], 1)
+        p.label:SetTextColor(a[1], a[2], a[3])
+    else
+        local h = W.OWN.hub
+        p.hub:SetVertexColor(h[1], h[2], h[3], 0.25)
+        p.hilite:SetVertexColor(1, 1, 1, 1)
+        p.label:SetTextColor(1, 1, 1)
+    end
+end
+function W.Paint() Paint(parts, W.Look()) end
+
+-- Live: Glass UI fires this when the player changes the suite look, in or
+-- out of combat. Only our own textures change.
+local registry = rawget(_G, "EventRegistry")
+if type(registry) == "table" and type(registry.RegisterCallback) == "function" then
+    pcall(registry.RegisterCallback, registry, "GlassUI.Suite.LookChanged", function() W.Paint() end, W)
+end
+
+local function Sound(which)
+    local s = Apotheca.GetDB().mageScrolls
+    if s and s.sound == false then return end
+    local play = rawget(_G, "PlaySoundFile")
+    if type(play) == "function" then pcall(play, W.SOUNDS[which], "SFX") end
+end
 
 -- Positions are in the ring's own units (the header's: the ring is not
 -- scaled). Slot i of n sits clockwise from the top.
@@ -238,6 +358,7 @@ function W.Pick(dx, dy, pos)
 end
 
 local layout = {}       -- the current slot positions
+local lit               -- the highlighted slot, or nil
 local function Highlight()
     local x, y = GetCursorPosition()
     local scale = ring:GetEffectiveScale()
@@ -245,17 +366,109 @@ local function Highlight()
     local i = rx and W.Pick(x / scale - rx, y / scale - ry, layout)
     local b = i and slots[i]
     if b and b.itemID then
-        hilite:ClearAllPoints()
-        hilite:SetPoint("CENTER", b, "CENTER")
-        hilite:Show()
+        lit = i
+        parts.hilite:ClearAllPoints()
+        parts.hilite:SetPoint("CENTER", art, "CENTER", layout[i][1], layout[i][2])
+        parts.hilite:Show()
         label:SetText(API.ItemInfo(b.itemID) or "")
     else
-        hilite:Hide()
+        lit = nil
+        parts.hilite:Hide()
         label:SetText("Mage Scrolls")
     end
 end
-art:SetScript("OnUpdate", Highlight)
-art:SetScript("OnShow", Highlight)
+
+-- An animation's "OUT" and "IN" smoothing.
+local function Out(t) return 1 - (1 - t) * (1 - t) end
+local function In(t) return t * t end
+
+-- ── Closing: the ghost ──
+local ghost
+local function BuildGhost()
+    ghost = CreateFrame("Frame", nil, UIParent)
+    ghost:SetFrameStrata("DIALOG")
+    ghost:EnableMouse(false)
+    ghost:Hide()
+    ghost.parts = DiscParts(ghost)
+    ghost.icons = {}
+    for i = 1, W.SLOTS do
+        local t = ghost:CreateTexture(nil, "ARTWORK")
+        t:SetSize(W.SIZE, W.SIZE)
+        t:Hide()
+        ghost.icons[i] = t
+    end
+    ghost:SetScript("OnUpdate", function(self)
+        local t = math.min(1, (GetTime() - self.started) / W.CLOSE)
+        self:SetAlpha(1 - In(t))
+        self:SetScale(1 - 0.15 * In(t))
+        if t >= 1 then self:Hide() end
+    end)
+    W.ghost = ghost
+end
+
+local cx0, cy0    -- the ring's centre while open (the header fills UIParent: its units)
+local function FadeOut()
+    if not cx0 then return end
+    if not ghost then BuildGhost() end
+    ghost:SetSize(art:GetWidth(), art:GetHeight())
+    ghost:SetScale(1)
+    ghost:SetAlpha(1)
+    ghost:ClearAllPoints()
+    ghost:SetPoint("CENTER", UIParent, "BOTTOMLEFT", cx0, cy0)
+    local p = ghost.parts
+    Paint(p, W.Look())
+    p.label:SetText(label:GetText() or "")
+    p.hilite:ClearAllPoints()
+    if lit and layout[lit] then
+        p.hilite:SetPoint("CENTER", ghost, "CENTER", layout[lit][1], layout[lit][2])
+        p.hilite:Show()
+    else
+        p.hilite:Hide()
+    end
+    for i, t in ipairs(ghost.icons) do
+        local b, pos = slots[i], layout[i]
+        if pos and b.itemID then
+            t:SetTexture(b.icon:GetTexture())
+            t:SetDesaturated(b.icon:IsDesaturated())
+            t:ClearAllPoints()
+            t:SetPoint("CENTER", ghost, "CENTER", pos[1], pos[2])
+            t:Show()
+        else
+            t:Hide()
+        end
+    end
+    ghost.started = GetTime()
+    ghost:Show()
+end
+
+-- ── Opening ──
+local opened = 0
+art:SetScript("OnShow", function()
+    if ghost then ghost:Hide() end
+    W.Paint()
+    opened = GetTime()
+    art:SetScale(0.7)
+    ring:SetAlpha(0)
+    cx0, cy0 = ring:GetCenter()
+    Highlight()
+    Sound("open")
+end)
+art:SetScript("OnUpdate", function()
+    if art:GetScale() < 1 then
+        local t = math.min(1, (GetTime() - opened) / W.OPEN)
+        art:SetScale(0.7 + 0.3 * Out(t))
+        ring:SetAlpha(Out(t))
+    end
+    local x, y = ring:GetCenter()
+    if x then cx0, cy0 = x, y end
+    Highlight()
+end)
+art:SetScript("OnHide", function()
+    ring:SetAlpha(1)
+    art:SetScale(1)
+    FadeOut()
+    Sound("close")
+end)
 
 -- ── Contents ──────────────────────────────────────────────────────
 -- list: Apotheca.FindMageScrolls's { id, count, tex, entry }, in order.

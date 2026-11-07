@@ -785,6 +785,9 @@ function Apotheca.BuildOptionsPanelContent(pageContents)
     Checkbox("Glow Mage Scrolls when imbue or familiar is missing  |cff888888(ready check)|r",
         function() return DBGet("mageScrolls", "glowOnMissingBuff") ~= false end,
         function(v) DBSet(v, "mageScrolls", "glowOnMissingBuff") end)
+    Checkbox("Play a sound when the Mage Scrolls wheel opens and closes",
+        function() return DBGet("mageScrolls", "sound") ~= false end,
+        function(v) DBSet(v, "mageScrolls", "sound") end)
     SmallLabel("|cff888888Click the button (or tap its key) to open the wheel, then click a scroll.\n"
         .. "Or hold the key and release over a scroll. Esc closes it. Imbues show\n"
         .. "only for the weapon in your main hand.|r")

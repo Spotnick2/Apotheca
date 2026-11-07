@@ -98,8 +98,10 @@ if (Test-Path $manifest) {
 }
 
 $tocText = (Get-Content $TocPath -Raw) -replace '@project-version@', 'dev'
-# Bindings.xml loads from the addon folder by name, never from the TOC.
-$extraFiles = @("Bindings.xml")
+# Bindings.xml loads from the addon folder by name, never from the TOC, and
+# the sounds by path (the wheel's, #94).
+$extraFiles = @("Bindings.xml") + @(Get-ChildItem (Join-Path $RepoRoot "Sounds") -File -ErrorAction SilentlyContinue |
+    ForEach-Object { "Sounds/$($_.Name)" })
 $copied  = $luaFiles + $extraFiles
 $shipped = @("Apotheca.toc") + $copied
 
@@ -136,12 +138,14 @@ Get-ChildItem $dest -File | Where-Object {
 }
 
 foreach ($f in $copied) {
+    $dir = Split-Path (Join-Path $dest $f) -Parent
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
     Copy-Item (Join-Path $RepoRoot $f) (Join-Path $dest $f) -Force
 }
 Set-Content -Path (Join-Path $dest "Apotheca.toc") -Value $tocText -NoNewline
 
 $shipped | ForEach-Object { "$_ $(Get-Hash (Join-Path $dest $_))" } | Set-Content $manifest
 
-Write-Host "Deployed Apotheca ($($luaFiles.Count) Lua files and Bindings.xml) to $dest"
+Write-Host "Deployed Apotheca ($($luaFiles.Count) Lua files, $($extraFiles.Count) other files) to $dest"
 
 if ($Probe) { Deploy-Probe }

@@ -99,6 +99,7 @@ local PROFILE_DEFAULTS = {
     mageScrolls = {
         enabled           = true,
         glowOnMissingBuff = true,
+        sound             = true,   -- the wheel's open and close sounds
     },
     weaponOil = {
         enabled           = true,
