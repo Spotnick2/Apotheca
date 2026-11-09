@@ -1719,6 +1719,40 @@ OnBlocked(function(event, addon, func)
     end
 end)
 
+-- What the game answered while the wheel steps run (owner's second run: an
+-- imbue and the combat steps went by hand, with no reason recorded). Each
+-- line goes to the log, between the step lines: the wheel opening and
+-- closing, the casts and the red error text.
+local function WheelTrace(event, a1, a2, a3)
+    if not wheel.watching then return end
+    if event:find("^UNIT_") and a1 ~= "player" then return end
+    local what = event
+    if event:find("^UNIT_SPELLCAST") then
+        local ok, name = pcall(C_Spell.GetSpellName, a3)
+        if not ok then name = "?" end
+        what = what .. " " .. tostring(plain(name)) .. " #" .. tostring(plain(a3))
+    elseif event == "UI_ERROR_MESSAGE" then
+        what = what .. " " .. tostring(plain(a2))
+    else
+        what = what .. " " .. tostring(plain(a1))
+    end
+    say("wheel trace: " .. what .. (InCombatLockdown() and " (combat)" or ""))
+end
+local wheelTrace = CreateFrame("Frame")
+Probe:RegisterEvents(wheelTrace, APPLY_EVENTS)
+wheelTrace:SetScript("OnEvent", function(_, event, a1, a2, a3) WheelTrace(event, a1, a2, a3) end)
+local traceHooked
+local function HookWheelArt()
+    if traceHooked or not (Apotheca and Apotheca.Wheel and Apotheca.Wheel.art) then return end
+    traceHooked = true
+    Apotheca.Wheel.art:HookScript("OnShow", function()
+        if wheel.watching then say("wheel trace: opened" .. (InCombatLockdown() and " (combat)" or "")) end
+    end)
+    Apotheca.Wheel.art:HookScript("OnHide", function()
+        if wheel.watching then say("wheel trace: closed" .. (InCombatLockdown() and " (combat)" or "")) end
+    end)
+end
+
 local function WheelOpen()
     local r = Apotheca and Apotheca.Wheel and Apotheca.Wheel.ring
     return r ~= nil and r:IsShown() == true
@@ -1783,6 +1817,7 @@ end
 local function Baseline()
     wheel.total, wheel.auras, wheel.seenOpen, wheel.targeting = ScrollTotal(), AuraIDs(), false, false
     wheel.watching = true
+    HookWheelArt()
     return "scrolls " .. wheel.total
 end
 
@@ -1899,7 +1934,8 @@ Probe:Steps("wheel", {
           .. "key. That scroll is used, once.",
       wait = WaitUsed(false), timeout = 120, check = OneUsed },
     { text = "Remembering your scrolls.", auto = true, run = Baseline },
-    { text = CLICK_OPEN .. "Then click a scroll on the wheel with the mouse. That scroll is used, once.",
+    { text = CLICK_OPEN .. "Then click a scroll on the wheel with the mouse, one that is not cooling down "
+          .. "(the one you just used may be). That scroll is used, once.",
       wait = WaitUsed(false), timeout = 120, check = OneUsed },
     { text = "Putting your 'cast on key down' setting back.", auto = true,
       run = function()
@@ -1908,10 +1944,12 @@ Probe:Steps("wheel", {
       end },
     { text = "Remembering your scrolls.", auto = true, run = Baseline },
     { text = "Get into combat (attack a training dummy or a low-level mob). Then: " .. HOLD
-          .. "any scroll (Minor Evocation or Cryoblast are good here), then let go of the key.",
+          .. "any scroll that is not cooling down, then let go of the key. If the game says no (red text), "
+          .. "press Done: the log keeps what it said.",
       wait = WaitUsed(true), timeout = 300, check = OneUsed },
     { text = "Remembering your scrolls.", auto = true, run = Baseline },
-    { text = "Still in combat: " .. CLICK_OPEN .. "Then click a scroll on the wheel with the mouse.",
+    { text = "Still in combat: " .. CLICK_OPEN .. "Then click a scroll on the wheel with the mouse, one that is "
+          .. "not cooling down. If the game says no, press Done.",
       wait = WaitUsed(true), timeout = 300,
       check = function()
           return #wheel.blocked == 0, #wheel.blocked == 0 and "nothing blocked" or table.concat(wheel.blocked, "; ")

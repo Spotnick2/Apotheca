@@ -35,7 +35,8 @@ W.SIZE = 36            -- a slot's size
 W.GAP = 10             -- between slots along the ring
 W.MIN_RADIUS = 70
 W.DEADZONE = 26        -- a release this close to the centre keeps it open
-W.LABEL_ROOM = 22      -- under the ring, for the scroll's name (owner: it fell off the screen)
+W.LABEL_ROOM = 26      -- under the ring, for the scroll's name (owner: it fell off the screen)
+W.PLATE_ALPHA = 0.9    -- the name's plate: readable over the action bars (owner)
 W.CLOSE_NAME = "ApothecaWheelClose"
 
 -- ── Secure frames ─────────────────────────────────────────────────
@@ -231,7 +232,12 @@ local function DiscParts(host)
     p.hilite:SetBlendMode("ADD")
     p.hilite:Hide()
     p.label = host:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    p.label:SetPoint("TOP", host, "BOTTOM", 0, -4)
+    p.label:SetPoint("TOP", host, "BOTTOM", 0, -7)
+    -- A plate behind the name, following its width.
+    p.plate = host:CreateTexture(nil, "BORDER", nil, 1)
+    p.plate:SetTexture("Interface\\Buttons\\WHITE8X8")
+    p.plate:SetPoint("TOPLEFT", p.label, "TOPLEFT", -8, 4)
+    p.plate:SetPoint("BOTTOMRIGHT", p.label, "BOTTOMRIGHT", 8, -4)
     return p
 end
 local parts = DiscParts(art)
@@ -295,6 +301,7 @@ end
 local function Paint(p, look)
     local c = look.backing
     p.backing:SetVertexColor(c[1], c[2], c[3], c[4])
+    p.plate:SetVertexColor(c[1], c[2], c[3], math.max(c[4], W.PLATE_ALPHA))
     if look.tint then
         p.tint:SetVertexColor(look.tint[1], look.tint[2], look.tint[3], look.tint[4])
         p.tint:Show()

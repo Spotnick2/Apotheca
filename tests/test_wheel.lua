@@ -352,11 +352,14 @@ check(parts.tint:IsShown() and near(parts.tint._vertex[4], 0.24), "its tint over
 local tr, tg = W.label:GetTextColor()
 check(near(tr, 1) and near(tg, 0.82), "the name in the suite's accent (gold)")
 check(near(parts.hilite._vertex[2], 0.82), "and the highlight")
+check(near(parts.plate._vertex[4], W.PLATE_ALPHA) and near(parts.plate._vertex[1], 0.04),
+    "the name on a dark plate in the body's colour, readable over the action bars")
 
 suiteBody = { tint = { 0.05, 0.06, 0.08, 0.62 }, backing = { 0.04, 0.05, 0.07, 0.92 }, wash = 0.8 }
 accent = { 0.65, 0.835, 0.905 }
 EventRegistry:TriggerEvent("GlassUI.Suite.LookChanged", { tint = "smoked", accent = "ice" })
 check(near(parts.backing._vertex[4], 0.92), "a change to Smoked repaints live: its denser backing kept")
+check(near(parts.plate._vertex[4], 0.92), "the plate as dense as the body when it is denser")
 tr = W.label:GetTextColor()
 check(near(tr, 0.65), "and the accent changes to ice")
 
