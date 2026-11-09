@@ -101,8 +101,8 @@ for i = 1, W.SLOTS do
 end
 
 -- The trigger: press opens, release picks (or leaves it open). `cx, cy`
--- (the ring's centre) and `swallow` live in the header's environment,
--- shared by every snippet it owns.
+-- (the ring's centre) live in the header's environment, shared by every
+-- snippet it owns.
 W.PRE_CLICK = [[
     local ring = owner:GetFrameRef("ring")
     if not owner:GetAttribute("enabled") then
@@ -111,12 +111,10 @@ W.PRE_CLICK = [[
     end
     if down then
         if ring:IsShown() then
-            -- A second tap closes; its release does nothing.
+            -- A second tap closes; its release finds the ring closed.
             owner:RunAttribute("close")
-            swallow = true
             return false
         end
-        swallow = false
         local x, y = owner:GetMousePosition()
         if not x then return false end
         local w, h = owner:GetWidth(), owner:GetHeight()
@@ -127,10 +125,6 @@ W.PRE_CLICK = [[
         ring:SetPoint("CENTER", owner, "BOTTOMLEFT", cx, cy)
         ring:Show()
         owner:SetBindingClick(true, "ESCAPE", "]] .. W.CLOSE_NAME .. [[")
-        return false
-    end
-    if swallow then
-        swallow = false
         return false
     end
     if not ring:IsShown() or not cx then return false end
@@ -240,7 +234,7 @@ local function DiscParts(host)
 end
 local parts = DiscParts(art)
 local label = parts.label
-W.label = label
+W.parts, W.label = parts, label
 
 -- ── Look ──
 -- Optional globals are read with rawget: Glass UI may be absent, and the
@@ -464,8 +458,6 @@ art:SetScript("OnUpdate", function()
     Highlight()
 end)
 art:SetScript("OnHide", function()
-    ring:SetAlpha(1)
-    art:SetScale(1)
     FadeOut()
     Sound("close")
 end)

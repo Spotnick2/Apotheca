@@ -21,6 +21,8 @@ H.loadAddon({ savedDB = {
       ["Realm-Ordered"] = { buttonOrder = { "bandage", "bufffood", "mana", "weaponoil" } },
       -- A custom order saved before the conjured twins (#96).
       ["Realm-Thirsty"] = { buttonOrder = { "drink", "mana", "food" } },
+      -- A custom order saved before the Mage Scrolls button (#94).
+      ["Realm-Mage"] = { buttonOrder = { "mana", "managem", "food" } },
       -- The old wizard oil checkbox: ticked (a choice), and the saved default.
       ["Realm-Wizard"]  = { weaponOil = { enabled = true, includeWizardOils = true } },
       ["Realm-Plain"]   = { weaponOil = { enabled = true, includeWizardOils = false } },
@@ -86,6 +88,8 @@ eq(table.concat(ord, ","), "bandage,bufffood,xpfood,mana,weaponoil,poisonmh,pois
     "a saved order gets XP Food next to Buff Food, the poisons after Weapon Oil, then the stones")
 eq(table.concat(ApothecaDB.profiles["Realm-Thirsty"].buttonOrder, ","), "drink,conjdrink,mana,food,conjfood",
     "a saved order gets each conjured twin right after Food and Drink (#96)")
+eq(table.concat(ApothecaDB.profiles["Realm-Mage"].buttonOrder, ","), "mana,managem,magescrolls,food,conjfood",
+    "a saved order gets Mage Scrolls right after the Mana Gem (#94)")
 
 -- The flat (pre-profile) database route.
 local flat = { preventWaste = false, buffFoodPriority = { PRIEST = { "healing", "mp5", "crit", "stamina" } } }

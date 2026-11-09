@@ -265,12 +265,13 @@ local function MigrateProfile(prof)
     end
     -- A custom button order saved before a newer button gets it next to its
     -- neighbour, as in the default order, not at the end where
-    -- GetButtonOrder would append it: XP Food (#19), poisons (#24).
+    -- GetButtonOrder would append it: XP Food (#19), poisons (#24), Mage
+    -- Scrolls (#94).
     if type(prof.buttonOrder) == "table" and #prof.buttonOrder > 0 then
         for _, new in ipairs({ { "xpfood", "bufffood" }, { "poisonmh", "weaponoil" },
                                { "poisonoh", "poisonmh" }, { "stonemh", "poisonoh" },
                                { "stoneoh", "stonemh" }, { "conjfood", "food" },
-                               { "conjdrink", "drink" } }) do
+                               { "conjdrink", "drink" }, { "magescrolls", "managem" } }) do
             local at, has = nil, false
             for i, k in ipairs(prof.buttonOrder) do
                 if k == new[1] then has = true end
