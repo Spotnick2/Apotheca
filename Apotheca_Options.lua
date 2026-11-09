@@ -585,6 +585,11 @@ function Apotheca.BuildOptionsPanelContent(pageContents)
         function(v) DBSet(v, "conjuredThreshold") end,
         function(v) return string.format("%.1fx", v) end)
     SmallLabel("|cff888888Prefer conjured food/drink unless a non-conjured item restores this many times more.|r")
+    Checkbox("Also offer my conjured food and drink when a bought one is picked",
+        function() return DBGet("offerConjuredToo") == true end,
+        function(v) DBSet(v, "offerConjuredToo") end)
+    SmallLabel("|cff888888Adds a Conjured Food or Conjured Drink button next to Food or Drink, so you\n"
+        .. "can take the free one when there is time.|r")
 
     SectionHeader("Visibility")
     SmallLabel("Show bar when:")

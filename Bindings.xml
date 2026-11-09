@@ -10,7 +10,9 @@
 	<Binding name="CLICK ApothecaButton_rune:LeftButton" category="Apotheca"/>
 	<Binding name="CLICK ApothecaButton_recovery:LeftButton" category="Apotheca"/>
 	<Binding name="CLICK ApothecaButton_food:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_conjfood:LeftButton" category="Apotheca"/>
 	<Binding name="CLICK ApothecaButton_drink:LeftButton" category="Apotheca"/>
+	<Binding name="CLICK ApothecaButton_conjdrink:LeftButton" category="Apotheca"/>
 	<Binding name="CLICK ApothecaButton_flask:LeftButton" category="Apotheca"/>
 	<Binding name="CLICK ApothecaButton_battle:LeftButton" category="Apotheca"/>
 	<Binding name="CLICK ApothecaButton_guardian:LeftButton" category="Apotheca"/>
