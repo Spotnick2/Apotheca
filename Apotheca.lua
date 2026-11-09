@@ -143,6 +143,10 @@ local PROFILE_DEFAULTS = {
     rightClickAlternate = "OFF",
     -- Prefer conjured food/drink unless non-conjured is >= this multiplier better.
     conjuredThreshold   = 1.5,
+    -- #96: when Food or Drink picks a bought item over a conjured one you
+    -- carry, also offer the conjured one on its own button (Conjured Food /
+    -- Conjured Drink), so you can take the free one when there is time.
+    offerConjuredToo    = false,
     -- Custom visual order of button categories.
     -- nil / missing = use the built-in default order.
     buttonOrder         = nil,
@@ -259,7 +263,8 @@ local function MigrateProfile(prof)
     if type(prof.buttonOrder) == "table" and #prof.buttonOrder > 0 then
         for _, new in ipairs({ { "xpfood", "bufffood" }, { "poisonmh", "weaponoil" },
                                { "poisonoh", "poisonmh" }, { "stonemh", "poisonoh" },
-                               { "stoneoh", "stonemh" } }) do
+                               { "stoneoh", "stonemh" }, { "conjfood", "food" },
+                               { "conjdrink", "drink" } }) do
             local at, has = nil, false
             for i, k in ipairs(prof.buttonOrder) do
                 if k == new[1] then has = true end
@@ -778,6 +783,10 @@ local RECOVERY_BUTTON_CONFIG = {
     { key = "recovery", label = "Recovery", emptyIcon = "Interface\\Icons\\INV_Misc_Food_15" },
     { key = "food",     label = "Food",     restores = "health", emptyIcon = "Interface\\Icons\\INV_Misc_Food_01" },
     { key = "drink",    label = "Drink",    restores = "mana",   emptyIcon = "Interface\\Icons\\INV_Drink_05"     },
+    -- #96 (offerConjuredToo): the conjured item Food / Drink passed over for
+    -- a bought one. Never shown empty.
+    { key = "conjfood",  label = "Conjured Food",  restores = "health", emptyIcon = "Interface\\Icons\\INV_Misc_Food_01" },
+    { key = "conjdrink", label = "Conjured Drink", restores = "mana",   emptyIcon = "Interface\\Icons\\INV_Drink_05"     },
 }
 
 local BUFFFOOD_BUTTON_CONFIG = {
@@ -1705,6 +1714,12 @@ end
 Apotheca.waterSmartMode = true
 Apotheca.hideWhenFull   = false
 
+-- Conjured food and drink by item ID (#96).
+local IS_CONJURED = {}
+for _, list in ipairs({ FOOD_ITEMS, DRINK_ITEMS }) do
+    for _, e in ipairs(list) do if e.conjured then IS_CONJURED[e.id] = true end end
+end
+
 local function ResolveRecovery(bagMap)
     local result = {
         mode = "split",
@@ -1747,6 +1762,19 @@ local function ResolveRecovery(bagMap)
         result.drinkID  = id  ; result.drinkCount  = cnt  ; result.drinkTexture  = tex
         result.drinkAltID = aID ; result.drinkAltCount = aCnt ; result.drinkAltTexture = aTex
         result.drinkRestoresHealth = restoresHealth or false
+    end
+
+    -- #96: the alternate is conjured only when a bought item won (else the
+    -- alternate is the bought one): then offer it too, if asked.
+    if DB().offerConjuredToo then
+        if IS_CONJURED[result.foodAltID] then
+            result.conjFoodID, result.conjFoodCount, result.conjFoodTexture =
+                result.foodAltID, result.foodAltCount, result.foodAltTexture
+        end
+        if IS_CONJURED[result.drinkAltID] then
+            result.conjDrinkID, result.conjDrinkCount, result.conjDrinkTexture =
+                result.drinkAltID, result.drinkAltCount, result.drinkAltTexture
+        end
     end
 
     return result
@@ -2803,7 +2831,7 @@ local function CreateAskOverlay(btn)
     btn._askOverlay = overlay
 end
 
-for _, key in ipairs({ "recovery", "food", "drink" }) do
+for _, key in ipairs({ "recovery", "food", "drink", "conjfood", "conjdrink" }) do
     CreateAskOverlay(Apotheca.buttons[key])
 end
 
@@ -2821,7 +2849,7 @@ end
 
 Apotheca.DEFAULT_BUTTON_ORDER = {
     "mana", "managem", "health", "healthstone", "rune",
-    "recovery", "food", "drink",
+    "recovery", "food", "conjfood", "drink", "conjdrink",
     "flask", "battle", "guardian",
     "bufffood", "xpfood",
     "spiritscroll", "protectionscroll",
@@ -2841,6 +2869,7 @@ Apotheca.BUTTON_LABELS = {
     mana = "Mana Potion", health = "Health Potion", healthstone = "Healthstone",
     rune = "Rune (mana)", managem = "Mana Gem",
     recovery = "Recovery (Conjured)", food = "Food", drink = "Drink",
+    conjfood = "Conjured Food", conjdrink = "Conjured Drink",
     flask = "Flask", battle = "Elixir", guardian = "Elixir 2",
     bufffood = "Buff Food", xpfood = "XP Food", spiritscroll = "Spirit Scroll",
     protectionscroll = "Protection Scroll", intellectscroll = "Intellect Scroll",
@@ -2922,6 +2951,8 @@ local function RefreshLayout(recoveryMode, elixirMode, staticFlags, scrollFlags)
     elseif recoveryMode == "split" then
         shouldShow["food"]  = true
         shouldShow["drink"] = true
+        if scrollFlags and scrollFlags.conjfood  then shouldShow["conjfood"]  = true end
+        if scrollFlags and scrollFlags.conjdrink then shouldShow["conjdrink"] = true end
     end
 
     if elixirMode then
@@ -3340,6 +3371,8 @@ function UpdateAllButtonsBody()
         scrolls     = scrollRes,
         managem     = gemOn and (gemID ~= nil or showEmpty),
         xpfood      = xpOn and (xpID ~= nil or showEmpty),
+        conjfood    = rec.conjFoodID ~= nil,
+        conjdrink   = rec.conjDrinkID ~= nil,
         oil         = not oilOwned and ((oilID ~= nil) or ((not db.weaponOil or db.weaponOil.enabled) and showEmpty)),
         poisons     = poisonRes,
         bandage     = (bandageID  ~= nil)          or ((not db.bandage or db.bandage.enabled) and showEmpty),
@@ -3358,6 +3391,9 @@ function UpdateAllButtonsBody()
         Apotheca.buttons["drink"]._alternateItemID = rec.drinkAltID
         ApplyItemToButton(Apotheca.buttons["food"],  rec.foodID,  rec.foodCount,  rec.foodTexture)
         ApplyItemToButton(Apotheca.buttons["drink"], rec.drinkID, rec.drinkCount, rec.drinkTexture)
+        -- #96: applied even when off the bar, so no stale item stays.
+        ApplyItemToButton(Apotheca.buttons["conjfood"],  rec.conjFoodID,  rec.conjFoodCount,  rec.conjFoodTexture)
+        ApplyItemToButton(Apotheca.buttons["conjdrink"], rec.conjDrinkID, rec.conjDrinkCount, rec.conjDrinkTexture)
         -- Food and drink are always visible; ApplyItemToButton handles
         -- greyed-out display when itemID is nil.
     end
@@ -3489,9 +3525,19 @@ function UpdateAllButtonsBody()
             if drinkFull then DisableButton(Apotheca.buttons["drink"],
                               rec.drinkRestoresHealth and "health and mana" or "mana")
             else             EnableButton(Apotheca.buttons["drink"]) end
+            -- #96: the conjured twins, judged by their own item.
+            for key, own in pairs({ conjfood = "health", conjdrink = "mana" }) do
+                local btn = Apotheca.buttons[key]
+                local both = btn.itemID and RESTORES_BOTH[btn.itemID]
+                local full = manaFull
+                if own == "health" then full = hpFull end
+                if both then full = hpFull and manaFull end
+                if full then DisableButton(btn, both and "health and mana" or own)
+                else         EnableButton(btn) end
+            end
         end
     else
-        for _, key in ipairs({ "recovery", "food", "drink" }) do
+        for _, key in ipairs({ "recovery", "food", "drink", "conjfood", "conjdrink" }) do
             local btn = Apotheca.buttons[key]
             if btn then
                 btn._wasteBlocked = false
