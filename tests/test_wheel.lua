@@ -347,8 +347,8 @@ check(parts.plate:GetWidth() >= 80, "the plate fits the name")
 local hv = parts.hilite._vertex
 check(near(hv[1], 1) and near(hv[2], 1) and near(hv[4], W.HOVER_ALPHA), "the hover glow is GAB's: white, soft")
 -- Without Glass UI: its default, clear.
-check(near(rgba(parts.backing)[4], 0.35) and near(rgba(parts.g.tint)[4], 0.24),
-    "without Glass UI: Glass UI's clear body (backing 0.35, tint 0.24)")
+check(near(rgba(parts.g.tint)[4], 0.24), "without Glass UI: Glass UI's clear body (tint 0.24)")
+check(near(rgba(parts.backing)[4], W.DISC_BACKING), "its backing raised to the disc's floor (owner: more opacity)")
 check(near(rgba(parts.plateBacking)[4], W.PLATE_ALPHA), "the name's plate dense as a window: readable over the bars")
 local tr, tg = W.label:GetTextColor()
 check(near(tr, 1) and near(tg, 0.82), "the name in gold, as Glass UI's titles")
@@ -378,11 +378,12 @@ check(near(rgba(parts.g.tint)[1], c.r * 0.6) and near(rgba(parts.g.tint)[4], bui
 
 suite.Body = function() error("broken") end
 W.Paint()
-check(near(rgba(parts.backing)[4], W.OWN.backing[4]), "a failing Glass UI: the default look")
+local function ownTint() return near(rgba(parts.g.tint)[1], W.OWN.tint[1]) and near(rgba(parts.g.tint)[4], W.OWN.tint[4]) end
+check(ownTint(), "a failing Glass UI: the default look")
 suite.Body = function() return suiteBody end
 suite.API = 2
 W.Paint()
-check(near(rgba(parts.backing)[4], W.OWN.backing[4]), "an API it doesn't know: the default look")
+check(ownTint(), "an API it doesn't know: the default look")
 rawset(_G, "GlassUI", nil)
 W.Paint()
 

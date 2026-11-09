@@ -200,8 +200,13 @@ end
 -- tint and wash, the accent on the name, as its windows' titles), repainted
 -- live on GlassUI.Suite.LookChanged; without it, Glass UI's own default,
 -- clear. The name's plate opens over the action bars, so its backing is a
--- window's (GlassUI Theme.WINDOW_BACKING): readable over anything.
+-- window's (GlassUI Theme.WINDOW_BACKING): readable over anything. The
+-- disc's backing is at least DISC_BACKING: at clear's 0.35 the action bars
+-- and bright scenery showed through it (owner, third run: "a bit more
+-- opacity"); 0.6 is the middle of the three Glass UI's owner compared on its
+-- merchant (0.85, 0.6, 0.35). Smoked's 0.92 stays.
 W.OPEN, W.CLOSE = 0.15, 0.12      -- seconds
+W.DISC_BACKING = 0.6
 W.PLATE_ALPHA = 0.93              -- GlassUI Theme.WINDOW_BACKING
 W.HOVER_ALPHA = 0.4               -- GAB's hover glow (Buttons.HIGHLIGHT)
 W.GOLD = { 1, 0.82, 0 }           -- Glass UI's default accent
@@ -355,7 +360,7 @@ local function PaintBody(g, backing, look, floor)
     backing:SetColorTexture(c[1], c[2], c[3], math.max(c[4], floor or 0))
 end
 local function Paint(p, look)
-    PaintBody(p.g, p.backing, look)
+    PaintBody(p.g, p.backing, look, W.DISC_BACKING)
     PaintBody(p.pg, p.plateBacking, look, W.PLATE_ALPHA)
     local a = look.accent
     p.label:SetTextColor(a[1], a[2], a[3])
