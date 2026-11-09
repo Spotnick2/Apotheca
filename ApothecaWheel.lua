@@ -30,7 +30,11 @@ local API = Apotheca.API
 local W = {}
 Apotheca.Wheel = W
 
-W.SLOTS = 24           -- the most scrolls the ring shows (34 kinds exist)
+-- One secure slot per scroll in the catalogue, so every scroll carried is
+-- reachable (Codex review of #98: a cap of 24 dropped the rest of a full
+-- staff mage's 30). Made at load, out of combat. The ring grows with the
+-- count: 34 slots make a radius of about 250, which still fits the screen.
+W.SLOTS = math.max(24, #(Apotheca.DATA and Apotheca.DATA.MAGE_SCROLLS or {}))
 W.SIZE = 36            -- a slot's size
 W.GAP = 10             -- between slots along the ring
 W.MIN_RADIUS = 70
@@ -103,8 +107,11 @@ for i = 1, W.SLOTS do
 end
 
 -- The trigger: press opens, release picks (or leaves it open). `cx, cy`
--- (the ring's centre) live in the header's environment, shared by every
--- snippet it owns.
+-- (the ring's centre) and `px, py` (where the press was) live in the
+-- header's environment, shared by every snippet it owns. A release still
+-- within the dead zone of the press is a tap, even when the ring was moved
+-- in from the screen's edge and its centre is far from the cursor (Codex
+-- review of #98: a stationary tap there used a scroll).
 W.PRE_CLICK = [[
     local ring = owner:GetFrameRef("ring")
     if not owner:GetAttribute("enabled") then
@@ -121,6 +128,7 @@ W.PRE_CLICK = [[
         if not x then return false end
         local w, h = owner:GetWidth(), owner:GetHeight()
         local r = owner:GetAttribute("radius") + 30
+        px, py = x * w, y * h
         cx = math.max(r, math.min(w - r, x * w))
         cy = math.max(r + owner:GetAttribute("labelroom"), math.min(h - r, y * h))
         ring:ClearAllPoints()
@@ -132,9 +140,11 @@ W.PRE_CLICK = [[
     if not ring:IsShown() or not cx then return false end
     local x, y = owner:GetMousePosition()
     if not x then return false end
-    local dx, dy = x * owner:GetWidth() - cx, y * owner:GetHeight() - cy
+    local ux, uy = x * owner:GetWidth(), y * owner:GetHeight()
+    local dx, dy = ux - cx, uy - cy
     local dead = owner:GetAttribute("deadzone")
     if dx * dx + dy * dy < dead * dead then return false end
+    if px and (ux - px) * (ux - px) + (uy - py) * (uy - py) < dead * dead then return false end
     local best, bestD
     for i = 1, owner:GetAttribute("count") do
         local sx, sy = owner:GetAttribute("sx" .. i), owner:GetAttribute("sy" .. i)
@@ -407,11 +417,14 @@ end
 
 local layout = {}       -- the current slot positions
 local lit               -- the highlighted slot, or nil
+local pressX, pressY    -- the cursor when the wheel opened (the snippet's px, py)
 local function Highlight()
     local x, y = GetCursorPosition()
     local scale = ring:GetEffectiveScale()
     local rx, ry = ring:GetCenter()
     local i = rx and W.Pick(x / scale - rx, y / scale - ry, layout)
+    -- Still where the press was: a release there is a tap, picks nothing.
+    if pressX and (x / scale - pressX) ^ 2 + (y / scale - pressY) ^ 2 < W.DEADZONE * W.DEADZONE then i = nil end
     local b = i and slots[i]
     if b and b.itemID then
         lit = i
@@ -501,6 +514,9 @@ art:SetScript("OnShow", function()
     art:SetScale(0.7)
     ring:SetAlpha(0)
     cx0, cy0 = ring:GetCenter()
+    local x, y = GetCursorPosition()
+    local s = ring:GetEffectiveScale()
+    pressX, pressY = x / s, y / s
     Highlight()
     Sound("open")
 end)

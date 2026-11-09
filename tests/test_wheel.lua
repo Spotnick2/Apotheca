@@ -228,6 +228,36 @@ eq(ring._points[1][4], r, "clamped from the left edge")
 eq(ring._points[1][5], r + W.LABEL_ROOM, "and the bottom, with room for the name under it")
 WoW.pressKey("ESCAPE", true)
 
+-- A stationary tap there is still a tap: the ring moved in, the cursor
+-- didn't, and the release must not pick (Codex review of #98). Each corner.
+for _, at in ipairs({ { 5, 5 }, { 1915, 5 }, { 5, 1075 }, { 1915, 1075 } }) do
+    reset()
+    cursor(at[1], at[2])
+    WoW.click(btn, "LeftButton", true)
+    WoW.click(btn, "LeftButton", false)
+    local where = at[1] .. "," .. at[2]
+    eq(#WoW.secureActions, 0, "a tap at " .. where .. " uses nothing")
+    check(ring:IsShown(), "and leaves the wheel open")
+    WoW.step(0.3)
+    check(not W.parts.hilite:IsShown(), "with no scroll highlighted under the unmoved cursor")
+    -- Moving onto a scroll then works as usual.
+    local rx, ry = ring._points[1][4], ring._points[1][5]
+    cursor(rx + screen:GetAttribute("sx3"), ry + screen:GetAttribute("sy3"))
+    WoW.click(slots[3], "LeftButton", true)
+    WoW.click(slots[3], "LeftButton", false)
+    eq(used() and used().item, "item:" .. EVO, "then a click on a scroll at " .. where .. " uses it")
+    check(not ring:IsShown(), "and closes the wheel")
+end
+-- A hold there that moves onto a scroll and lets go picks it.
+reset()
+cursor(5, 5)
+WoW.click(btn, "LeftButton", true)
+local rx, ry = ring._points[1][4], ring._points[1][5]
+cursor(rx + screen:GetAttribute("sx3"), ry + screen:GetAttribute("sy3"))
+WoW.click(btn, "LeftButton", false)
+eq(used() and used().item, "item:" .. EVO, "a hold from the edge onto a scroll uses it")
+cursor(CX, CY)
+
 -- Disabled (nothing to offer): the key does nothing.
 W.SetContents({}, false, false)
 reset()
@@ -238,6 +268,58 @@ WoW.click(btn, "LeftButton", false)
 eq(#WoW.secureActions, 0, "and the release uses nothing")
 Apotheca.UpdateAllButtons()
 eq(screen:GetAttribute("enabled"), true, "the next update enables it again")
+
+-- The bar switched off, or "only while Healer" not met, after the wheel was
+-- filled: its key does nothing, and an open wheel closes (Codex review of #98).
+local function disarmed(why)
+    eq(screen:GetAttribute("enabled"), false, why .. ": the wheel is disabled")
+    eq(slots[1]:GetAttribute("item"), nil, why .. ": its slots hold nothing")
+    check(not ring:IsShown(), why .. ": an open wheel closed")
+    reset()
+    cursor(CX, CY)
+    WoW.click(btn, "LeftButton", true)
+    check(not ring:IsShown(), why .. ": the key opens nothing")
+    cursor(CX, CY + W.MIN_RADIUS)   -- where slot 1 was
+    WoW.click(btn, "LeftButton", false)
+    eq(#WoW.secureActions, 0, why .. ": and uses nothing")
+end
+cursor(CX, CY)
+WoW.click(btn, "LeftButton", true)
+WoW.click(btn, "LeftButton", false)
+check(ring:IsShown(), "open before the bar is switched off")
+ApothecaDB.profiles.Global.enabled = false
+Apotheca.UpdateAllButtons()
+disarmed("the bar switched off")
+ApothecaDB.profiles.Global.enabled = true
+Apotheca.UpdateAllButtons()
+eq(screen:GetAttribute("enabled"), true, "switched back on: armed again")
+ApothecaDB.profiles.Global.onlyWhenHealer = true
+Apotheca.UpdateAllButtons()
+disarmed("only while Healer, on a damage mage")
+ApothecaDB.profiles.Global.onlyWhenHealer = false
+Apotheca.UpdateAllButtons()
+eq(screen:GetAttribute("enabled"), true, "and back")
+
+-- More than 24 scrolls: every one gets a slot and can be used.
+check(W.SLOTS >= #D.MAGE_SCROLLS, "a secure slot for every scroll in the catalogue")
+local many = {}
+for i = 1, 30 do
+    many[i] = { id = 800000 + i, count = 1, tex = "Interface\\Icons\\INV_Scroll_0" .. (i % 7 + 1), entry = { kind = "utility" } }
+end
+W.SetContents(many, true, false)
+eq(screen:GetAttribute("count"), 30, "30 scrolls: 30 on the wheel")
+check(slots[30]:IsShown(), "the 30th is shown")
+reset()
+cursor(CX, CY)
+WoW.click(btn, "LeftButton", true)
+WoW.click(btn, "LeftButton", false)
+WoW.click(slots[30], "LeftButton", true)
+WoW.click(slots[30], "LeftButton", false)
+eq(used() and used().item, "item:800030", "and can be used")
+local _, r30 = W.Layout(30)
+check(2 * (r30 + 30) + W.LABEL_ROOM < 768, "the ring still fits the screen's 768 units")
+Apotheca.UpdateAllButtons()
+eq(screen:GetAttribute("count"), 4, "back to what the bags hold")
 
 -- In combat: the snippets work, contents are frozen, nothing is blocked.
 WoW.enterCombat()

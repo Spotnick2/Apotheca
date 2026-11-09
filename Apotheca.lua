@@ -3271,18 +3271,24 @@ function UpdateAllButtonsBody()
     -- (RecheckAt: the mana gem, Windstone).
     Apotheca._recheckAt = nil
 
-    if db.enabled == false then
+    -- The bar switched off, or "only while Healer" not met: nothing on it
+    -- may act. ClearInactiveButtons clears the item buttons; the Mage Scrolls
+    -- wheel has its own secure slots, so it is emptied too, which disables
+    -- its key and closes it if open (Codex review of #98).
+    local function Inactive()
         ApothecaFrame:Hide()
         remindPending = false   -- a hidden bar has nothing to remind
         Apotheca._activeKeys = {}
+        if Apotheca.Wheel then Apotheca.Wheel.SetContents({}, false, false) end
+    end
+    if db.enabled == false then
+        Inactive()
         return
     end
 
     local specOk = (not db.onlyWhenHealer) or Apotheca.IsHealerSpec()
     if not specOk then
-        ApothecaFrame:Hide()
-        remindPending = false
-        Apotheca._activeKeys = {}
+        Inactive()
         return
     end
     -- The Visibility setting only hides the bar: its buttons stay set up,
