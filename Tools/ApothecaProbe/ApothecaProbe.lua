@@ -1807,36 +1807,50 @@ Probe:Command("wheel", function()
 end, "the Mage Scrolls wheel's state (#94)")
 
 local CLOSE_ACTION = "CLICK ApothecaWheelClose:LeftButton"
+-- Two ways in, named the same in every step (owner: "very confusing on what
+-- button to push and what to hold"): THE BUTTON is the Mage Scrolls button on
+-- Apotheca's bar, used with the mouse; YOUR KEY is the key bound to it.
+local CLICK_OPEN = "Click THE BUTTON with the mouse (press and let go). The wheel opens and stays open. "
+local HOLD = "Press YOUR KEY and keep holding it. The wheel opens around the mouse cursor. Still holding the "
+      .. "key, move the mouse onto "
 Probe:Steps("wheel", {
     title = "The Mage Scrolls wheel (#94)",
-    { text = "On a mage, out of combat, carrying a few mage scrolls: a familiar, an imbue for the weapon "
-          .. "in your main hand, and Minor Evocation or Cryoblast. Bind a key to Apotheca > Mage "
-          .. "Scrolls (Key Bindings). Press Run.", button = "Read the wheel",
-      run = function() return WheelState() end,
+    { text = "On a mage, out of combat, with some mage scrolls in your bags (a familiar, an imbue for your "
+          .. "main-hand weapon, Minor Evocation or Cryoblast). In this test, THE BUTTON is the Mage Scrolls "
+          .. "button on Apotheca's bar (its tooltip says Mage Scrolls), and YOUR KEY is a key you bind to it "
+          .. "now: Esc > Options > Keybindings, find the Apotheca section, click the box next to Mage "
+          .. "Scrolls, press a free key, then Okay. The step goes on by itself once the key is bound.",
+      wait = function()
+          local s = WheelState()
+          if s.missing then return false, s.missing end
+          if s.key == nil then return false, "no key bound to Mage Scrolls yet" end
+          return true, s
+      end, timeout = 300,
       check = function()
           local s = WheelState()
           if s.missing then return false, s.missing end
           return s.enabled == true and (s.count or 0) > 0 and s.key ~= nil,
               "enabled " .. tostring(s.enabled) .. ", " .. tostring(s.count) .. " scrolls, key " .. tostring(s.key)
       end },
-    { text = "Click the Mage Scrolls button on the bar and let go without moving: the wheel opens "
-          .. "around the cursor and stays open.", screenshot = "wheel open",
+    { text = CLICK_OPEN .. "Leave it open.", screenshot = "wheel open",
       wait = function()
           if not WheelOpen() then return false, "waiting for the wheel" end
           return true, "open; Esc is now " .. Probe.Show(EscAction(), true)
       end,
       check = function() return EscAction() == CLOSE_ACTION, Probe.Show(EscAction(), true) end },
-    { text = "Does it look right: the scrolls' icons in a ring on a dark disc, the name of the one under "
-          .. "the cursor below it, a highlight that follows the cursor?", ask = true },
-    { text = "Press Esc: the wheel closes (and the game menu does not open).",
+    { text = "Move the mouse over the scrolls without clicking. Does it look right: the scrolls' icons in a "
+          .. "ring on a dark disc, the name of the scroll under the cursor shown under the disc (all of it "
+          .. "on screen), a highlight following the cursor, and no tooltip covering the wheel?", ask = true },
+    { text = "Press Esc on the keyboard. The wheel closes.",
       wait = function()
           if WheelOpen() then return false, "waiting for Esc" end
           return true, "closed; Esc is now " .. Probe.Show(EscAction(), true)
       end,
       check = function() return EscAction() ~= CLOSE_ACTION, Probe.Show(EscAction(), true) end },
-    { text = "Did the game menu stay closed?", ask = true },
+    { text = "Did the game menu stay closed when you pressed Esc?", ask = true },
     { text = "Remembering your buffs.", auto = true, run = Baseline },
-    { text = "Open the wheel (click the button) and click a FAMILIAR scroll (Rat, Frog or Cat).",
+    { text = CLICK_OPEN .. "Then click the FAMILIAR scroll on the wheel (Familiar: Rat, Frog, Cat...). "
+          .. "No familiar scroll? Press Skip.",
       wait = function()
           local now = AuraIDs()
           if not now or not wheel.auras then return false, "auras unreadable" end
@@ -1850,8 +1864,9 @@ Probe:Steps("wheel", {
       check = function() return Apotheca.HasFamiliar() == true, "Apotheca.HasFamiliar() sees it" end },
     { text = "Remembering the main hand.", auto = true,
       run = function() Baseline(); return MainHandEnchant() end },
-    { text = "Hold the wheel's key, move the cursor toward an IMBUE scroll, and let go of the key. "
-          .. "If a targeting cursor appears, click your weapon.",
+    { text = HOLD .. "the IMBUE scroll (Imbue Lesser Flame, Chillknife...), then let go of the key. The "
+          .. "imbue goes on your weapon. If the cursor turns into a pointing hand instead, click your "
+          .. "weapon in the character sheet. No imbue scroll? Press Skip.",
       wait = function()
           if WheelOpen() then wheel.seenOpen = true end
           local ok, t = pcall(SpellIsTargeting)
@@ -1864,38 +1879,40 @@ Probe:Steps("wheel", {
       end, timeout = 120,
       check = function() return wheel.targeting == false, "no targeting cursor: target-slot applied it" end },
     { text = "Remembering your scrolls.", auto = true, run = Baseline },
-    { text = "Tap the key (press and let go at once): the wheel opens and stays open. Tap it again: it "
-          .. "closes. Nothing is used.",
+    { text = "Press YOUR KEY once, quickly (press and let go at once, without moving the mouse). The wheel "
+          .. "opens and stays open. Press YOUR KEY once more: the wheel closes. Nothing is used.",
       wait = function()
-          if WheelOpen() then wheel.seenOpen = true; return false, "open: tap again" end
+          if WheelOpen() then wheel.seenOpen = true; return false, "open: press your key once more" end
           if not wheel.seenOpen then return false, "waiting for the wheel" end
           return true, "opened and closed; scrolls " .. ScrollTotal()
       end, timeout = 120,
       check = function() return ScrollTotal() == wheel.total, "nothing used" end },
-    { text = "Now the other 'cast on key down' setting (ActionButtonUseKeyDown). Press Run to flip it; "
-          .. "a later step puts it back.", button = "Flip it",
+    { text = "Next, the same with the game's other 'cast on key down' setting. Press Flip it; a later "
+          .. "step puts your setting back.", button = "Flip it",
       run = function()
           wheel.keyDown = C_CVar.GetCVar("ActionButtonUseKeyDown")
           C_CVar.SetCVar("ActionButtonUseKeyDown", wheel.keyDown == "1" and "0" or "1")
           return "was " .. tostring(wheel.keyDown) .. ", now " .. tostring(C_CVar.GetCVar("ActionButtonUseKeyDown"))
       end },
     { text = "Remembering your scrolls.", auto = true, run = Baseline },
-    { text = "Hold the key, move toward any scroll and let go: it is used once.",
+    { text = HOLD .. "any scroll you don't mind using (Minor Evocation, Cryoblast...), then let go of the "
+          .. "key. That scroll is used, once.",
       wait = WaitUsed(false), timeout = 120, check = OneUsed },
     { text = "Remembering your scrolls.", auto = true, run = Baseline },
-    { text = "Click the button, then click a scroll on the wheel: it is used once.",
+    { text = CLICK_OPEN .. "Then click a scroll on the wheel with the mouse. That scroll is used, once.",
       wait = WaitUsed(false), timeout = 120, check = OneUsed },
-    { text = "Putting 'cast on key down' back.", auto = true,
+    { text = "Putting your 'cast on key down' setting back.", auto = true,
       run = function()
           if wheel.keyDown then C_CVar.SetCVar("ActionButtonUseKeyDown", wheel.keyDown) end
           return "now " .. tostring(C_CVar.GetCVar("ActionButtonUseKeyDown"))
       end },
     { text = "Remembering your scrolls.", auto = true, run = Baseline },
-    { text = "Enter combat (a training dummy or a low-level mob). Hold the key and let go over Minor "
-          .. "Evocation or Cryoblast (any scroll will do).", wait = WaitUsed(true), timeout = 300,
-      check = OneUsed },
+    { text = "Get into combat (attack a training dummy or a low-level mob). Then: " .. HOLD
+          .. "any scroll (Minor Evocation or Cryoblast are good here), then let go of the key.",
+      wait = WaitUsed(true), timeout = 300, check = OneUsed },
     { text = "Remembering your scrolls.", auto = true, run = Baseline },
-    { text = "Still in combat: click the button, then click a scroll.", wait = WaitUsed(true), timeout = 300,
+    { text = "Still in combat: " .. CLICK_OPEN .. "Then click a scroll on the wheel with the mouse.",
+      wait = WaitUsed(true), timeout = 300,
       check = function()
           return #wheel.blocked == 0, #wheel.blocked == 0 and "nothing blocked" or table.concat(wheel.blocked, "; ")
       end },

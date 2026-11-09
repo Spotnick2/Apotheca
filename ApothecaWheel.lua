@@ -35,6 +35,7 @@ W.SIZE = 36            -- a slot's size
 W.GAP = 10             -- between slots along the ring
 W.MIN_RADIUS = 70
 W.DEADZONE = 26        -- a release this close to the centre keeps it open
+W.LABEL_ROOM = 22      -- under the ring, for the scroll's name (owner: it fell off the screen)
 W.CLOSE_NAME = "ApothecaWheelClose"
 
 -- ── Secure frames ─────────────────────────────────────────────────
@@ -70,6 +71,7 @@ screen:SetAttribute("count", 0)
 screen:SetAttribute("enabled", false)
 screen:SetAttribute("deadzone", W.DEADZONE)
 screen:SetAttribute("radius", W.MIN_RADIUS)
+screen:SetAttribute("labelroom", W.LABEL_ROOM)
 
 SecureHandlerWrapScript(closeBtn, "OnClick", screen, [[
     owner:RunAttribute("close")
@@ -120,7 +122,7 @@ W.PRE_CLICK = [[
         local w, h = owner:GetWidth(), owner:GetHeight()
         local r = owner:GetAttribute("radius") + 30
         cx = math.max(r, math.min(w - r, x * w))
-        cy = math.max(r, math.min(h - r, y * h))
+        cy = math.max(r + owner:GetAttribute("labelroom"), math.min(h - r, y * h))
         ring:ClearAllPoints()
         ring:SetPoint("CENTER", owner, "BOTTOMLEFT", cx, cy)
         ring:Show()
@@ -439,6 +441,8 @@ end
 local opened = 0
 art:SetScript("OnShow", function()
     if ghost then ghost:Hide() end
+    -- The bar button's tooltip would cover the wheel opened next to it.
+    if trigger and GameTooltip:IsOwned(trigger) then GameTooltip:Hide() end
     W.Paint()
     opened = GetTime()
     art:SetScale(0.7)

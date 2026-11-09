@@ -225,7 +225,7 @@ cursor(5, 5)
 WoW.click(btn, "LeftButton", true)
 local r = screen:GetAttribute("radius") + 30
 eq(ring._points[1][4], r, "clamped from the left edge")
-eq(ring._points[1][5], r, "and the bottom")
+eq(ring._points[1][5], r + W.LABEL_ROOM, "and the bottom, with room for the name under it")
 WoW.pressKey("ESCAPE", true)
 
 -- Disabled (nothing to offer): the key does nothing.
@@ -269,7 +269,10 @@ WoW.leaveCombat()
 local art = W.art
 WoW.sounds = {}
 cursor(CX, CY)
+btn:GetScript("OnEnter")(btn)
+check(GameTooltip:IsOwned(btn), "the button's tooltip is up")
 WoW.click(btn, "LeftButton", true)
+check(not GameTooltip:IsShown(), "and goes when the wheel opens over it")
 WoW.click(btn, "LeftButton", false)
 eq(art:GetScale(), 0.7, "the disc opens small")
 eq(ring:GetAlpha(), 0, "and the ring transparent")

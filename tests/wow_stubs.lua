@@ -475,6 +475,9 @@ for i, names in ipairs(BARS) do
     _G[names[2]] = button
 end
 GameTooltip = newWidget("GameTooltip", UIParent, "GameTooltip")
+-- The tooltip's owner, so a test can see whose tooltip is up.
+function GameTooltip:SetOwner(owner) self._owner = owner end
+function GameTooltip:IsOwned(f) return self._owner == f and self:IsShown() end
 GameFontNormal, GameFontHighlight = {}, {}
 
 ------------------------------------------------------------
