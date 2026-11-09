@@ -853,6 +853,8 @@ Kit.strict({
     ApothecaDB = true, ApothecaCharDB = true, ApothecaProbeDB = true,
     -- The addon namespace, nil until ApothecaCompat.lua creates it.
     Apotheca = true,
+    -- The embedded LibGlass's own loader reads _G.LibStub before creating it.
+    LibStub = true,
     -- Frames the addon names itself; nil until created.
     ApothecaFrame = true, ApothecaAnchor = true,
     -- Another addon's namespace (an OptionalDep, #68): nil unless installed.

@@ -36,7 +36,6 @@ W.GAP = 10             -- between slots along the ring
 W.MIN_RADIUS = 70
 W.DEADZONE = 26        -- a release this close to the centre keeps it open
 W.LABEL_ROOM = 26      -- under the ring, for the scroll's name (owner: it fell off the screen)
-W.PLATE_ALPHA = 0.9    -- the name's plate: readable over the action bars (owner)
 W.CLOSE_NAME = "ApothecaWheelClose"
 
 -- ── Secure frames ─────────────────────────────────────────────────
@@ -182,8 +181,8 @@ if trigger then
 end
 
 -- ── Art (insecure) ────────────────────────────────────────────────
--- The disc, hub, highlight and name are an insecure child of the ring:
--- they show with it, and are never a parent of a secure button, so they can
+-- The disc, highlight and name are an insecure child of the ring: they
+-- show with it, and are never a parent of a secure button, so they can
 -- change in combat. The ring's own SetAlpha works in combat too (measured on
 -- a protected bar: GlassActionBars docs/FOREVER-PROBE.md, item 5, 70374).
 --
@@ -192,19 +191,39 @@ end
 -- child, never part of the ring) copies the disc and the icons and fades
 -- out. The timings are GlassPearls' raid mark wheel's.
 --
--- The look follows Glass UI's suite when it is loaded (GlassUI
--- docs/SUITE-LOOK.md): the body of the current tint (a backing under the
--- tint) and the accent (the quest tracker's titles) on the hub, highlight
--- and name, repainted live on GlassUI.Suite.LookChanged. Without it, a dark
--- disc of our own.
+-- The glass is LibGlass's (embedded, Libs\LibGlass-1.0; owner, 2026-11-09:
+-- "I really don't like this design... why the tint doesn't align like the
+-- rest of glassui"), built as Glass UI builds its own: Pearl, a disc for
+-- the wheel and a rounded glass plate for the name, each with an opaque
+-- backing under the tint (GlassUI Theme.lua). The body follows Glass UI's
+-- suite when it is loaded (docs/SUITE-LOOK.md: the current tint's backing,
+-- tint and wash, the accent on the name, as its windows' titles), repainted
+-- live on GlassUI.Suite.LookChanged; without it, Glass UI's own default,
+-- clear. The name's plate opens over the action bars, so its backing is a
+-- window's (GlassUI Theme.WINDOW_BACKING): readable over anything.
 W.OPEN, W.CLOSE = 0.15, 0.12      -- seconds
-W.BACKING_FLOOR = 0.8             -- opens over the bars: denser than the tracker's 0.35
-W.OWN = { backing = { 0.04, 0.05, 0.07, 0.85 }, hub = { 0.6, 0.4, 1 } }
+W.PLATE_ALPHA = 0.93              -- GlassUI Theme.WINDOW_BACKING
+W.HOVER_ALPHA = 0.4               -- GAB's hover glow (Buttons.HIGHLIGHT)
+W.GOLD = { 1, 0.82, 0 }           -- Glass UI's default accent
+W.OWN = {                         -- Glass UI's clear body (Suite.BODY.clear)
+    backing = { 0.04, 0.05, 0.07, 0.35 }, tint = { 0.13, 0.16, 0.22, 0.24 }, wash = 1,
+}
+W.DISC_SIDE = 200                 -- the disc is built at this size and scaled
+W.PLATE_H = 24
 W.SOUNDS = {                      -- Portal Roulette's open and close
     open = "Interface\\AddOns\\Apotheca\\Sounds\\WheelOpen.ogg",
     close = "Interface\\AddOns\\Apotheca\\Sounds\\WheelClose.ogg",
 }
-local DISC = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+
+-- One LibGlass instance for Apotheca, Pearl (the suite's only material; a
+-- copy older than r11 has no Pearl and builds its default).
+local Glass
+do
+    local lib = LibStub("LibGlass-1.0")
+    local ok, made = pcall(lib.New, lib, { preset = "pearl" })
+    Glass = ok and made or lib:New()
+end
+W.Glass = Glass
 
 local art = CreateFrame("Frame", nil, ring)
 art:SetPoint("CENTER", ring, "CENTER")
@@ -213,36 +232,61 @@ art:SetFrameLevel(ring:GetFrameLevel())
 art:EnableMouse(false)
 W.art = art
 
--- The regions of one disc: the art's, and the ghost's copy.
+-- A glass body on `host`: the material plus an opaque backing under the
+-- tint, clipped by the glass's own mask (GlassUI Skin/Kit.lua, Backing).
+local function Body(host, g)
+    local backing = host:CreateTexture(nil, "BACKGROUND", nil, -7)
+    backing:SetAllPoints(host)
+    backing:AddMaskTexture(g.mask)
+    return backing
+end
+
+-- The regions of one wheel: the art's, and the ghost's copy. The disc is
+-- built square at DISC_SIDE on a frame of its own and scaled to the wheel
+-- (LibGlass: resize a disc with SetScale, never SetSize). Its rims stay at
+-- its own level, under the slots (GlassUI Kit:Disc).
 local function DiscParts(host)
     local p = {}
-    p.backing = host:CreateTexture(nil, "BACKGROUND", nil, 0)
-    p.backing:SetAllPoints(host)
-    p.backing:SetTexture(DISC)
-    p.tint = host:CreateTexture(nil, "BACKGROUND", nil, 1)
-    p.tint:SetAllPoints(host)
-    p.tint:SetTexture(DISC)
-    p.hub = host:CreateTexture(nil, "BORDER")
-    p.hub:SetSize(2 * W.DEADZONE, 2 * W.DEADZONE)
-    p.hub:SetPoint("CENTER", host, "CENTER")
-    p.hub:SetTexture(DISC)
-    p.hilite = host:CreateTexture(nil, "ARTWORK", nil, 1)
-    p.hilite:SetSize(W.SIZE + 18, W.SIZE + 18)
-    p.hilite:SetTexture("Interface\\Buttons\\CheckButtonHilight")
+    p.disc = CreateFrame("Frame", nil, host)
+    p.disc:SetSize(W.DISC_SIDE, W.DISC_SIDE)
+    p.disc:SetPoint("CENTER", host, "CENTER")
+    p.disc:SetFrameLevel(host:GetFrameLevel())
+    p.g = Glass.Disc(p.disc, "disc")
+    if p.g.top then p.g.top:SetFrameLevel(p.disc:GetFrameLevel()) end
+    p.backing = Body(p.disc, p.g)
+    -- The name, on a glass plate under the disc, as wide as the name.
+    p.plate = CreateFrame("Frame", nil, host)
+    p.plate:SetSize(120, W.PLATE_H)
+    p.plate:SetPoint("TOP", host, "BOTTOM", 0, -2)
+    p.pg = Glass.Apply(p.plate, "small")
+    p.plateBacking = Body(p.plate, p.pg)
+    p.label = (p.pg.top or p.plate):CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    p.label:SetPoint("CENTER", p.plate, "CENTER", 0, 0)
+    -- The slot under the cursor: GAB's hover glow, over the slots.
+    p.over = CreateFrame("Frame", nil, host)
+    p.over:SetAllPoints(host)
+    p.over:SetFrameLevel(host:GetFrameLevel() + 6)
+    p.hilite = p.over:CreateTexture(nil, "OVERLAY")
+    p.hilite:SetSize(W.SIZE, W.SIZE)
+    p.hilite:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
     p.hilite:SetBlendMode("ADD")
+    p.hilite:SetVertexColor(1, 1, 1, W.HOVER_ALPHA)
     p.hilite:Hide()
-    p.label = host:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    p.label:SetPoint("TOP", host, "BOTTOM", 0, -7)
-    -- A plate behind the name, following its width.
-    p.plate = host:CreateTexture(nil, "BORDER", nil, 1)
-    p.plate:SetTexture("Interface\\Buttons\\WHITE8X8")
-    p.plate:SetPoint("TOPLEFT", p.label, "TOPLEFT", -8, 4)
-    p.plate:SetPoint("BOTTOMRIGHT", p.label, "BOTTOMRIGHT", 8, -4)
     return p
 end
 local parts = DiscParts(art)
 local label = parts.label
 W.parts, W.label = parts, label
+
+-- The disc's scale for a wheel of this size, and the plate's width for the
+-- name it shows.
+local function FitDisc(p, side) p.disc:SetScale(side / W.DISC_SIDE) end
+local function SetName(p, text)
+    p.label:SetText(text)
+    local w = p.label:GetStringWidth()
+    if type(w) ~= "number" then w = 0 end
+    p.plate:SetWidth(math.max(80, w + 28))
+end
 
 -- ── Look ──
 -- Optional globals are read with rawget: Glass UI may be absent, and the
@@ -274,51 +318,47 @@ local function ClassColor()
     if ok and type(c) == "table" and type(c.r) == "number" then return c.r, c.g, c.b end
 end
 
--- The look now: { backing = rgba, tint = rgba or nil, accent = rgb or nil }.
+-- The look now: { backing = rgba, tint = rgb[a] or nil (the built tint),
+-- wash = factor, accent = rgb }.
 function W.Look()
     local s = Suite()
     local body = s and SuiteCall(s, "Body")       -- nil: the suite's current tint
+    local accent = s and SuiteCall(s, "Accent")
+    accent = IsColor(accent, 3) and accent or W.GOLD
     if not (type(body) == "table" and IsColor(body.backing, 4)) then
-        return { backing = W.OWN.backing }
+        return { backing = W.OWN.backing, tint = W.OWN.tint, wash = W.OWN.wash, accent = accent }
     end
-    local b = body.backing
-    local look = { backing = { b[1], b[2], b[3], math.max(b[4], W.BACKING_FLOOR) } }
+    local look = { backing = body.backing, accent = accent,
+                   wash = type(body.wash) == "number" and body.wash or 1 }
     if IsColor(body.tint, 4) then
         look.tint = body.tint
     elseif type(body.classShade) == "number" then
         -- The class body has no colour of its own: the class colour, shaded,
-        -- at clear's alpha (a follower keeps its built alpha, SUITE-LOOK.md).
+        -- at the material's alpha (GlassUI Theme.lua, tintFor).
         local r, g, bl = ClassColor()
-        local clear = SuiteCall(s, "Body", "clear")
-        local a = type(clear) == "table" and IsColor(clear.tint, 4) and clear.tint[4] or 0.24
-        if r then look.tint = { r * body.classShade, g * body.classShade, bl * body.classShade, a } end
+        if r then look.tint = { r * body.classShade, g * body.classShade, bl * body.classShade } end
     end
-    local accent = SuiteCall(s, "Accent")
-    if IsColor(accent, 3) then look.accent = accent end
     return look
 end
 
-local function Paint(p, look)
+-- Glass UI's paint (Theme.lua): the tint (nil: the material's own), the
+-- wash as a factor of the material's, the backing under them.
+local function PaintBody(g, backing, look, floor)
+    local t = look.tint
+    if t then
+        Glass.SetSurfaceTint(g, t[1], t[2], t[3], t[4])
+    else
+        Glass.SetSurfaceTint(g)
+    end
+    Glass.SetWash(g, math.min(1, Glass.STYLE.wash * look.wash))
     local c = look.backing
-    p.backing:SetVertexColor(c[1], c[2], c[3], c[4])
-    p.plate:SetVertexColor(c[1], c[2], c[3], math.max(c[4], W.PLATE_ALPHA))
-    if look.tint then
-        p.tint:SetVertexColor(look.tint[1], look.tint[2], look.tint[3], look.tint[4])
-        p.tint:Show()
-    else
-        p.tint:Hide()
-    end
+    backing:SetColorTexture(c[1], c[2], c[3], math.max(c[4], floor or 0))
+end
+local function Paint(p, look)
+    PaintBody(p.g, p.backing, look)
+    PaintBody(p.pg, p.plateBacking, look, W.PLATE_ALPHA)
     local a = look.accent
-    if a then
-        p.hub:SetVertexColor(a[1], a[2], a[3], 0.3)
-        p.hilite:SetVertexColor(a[1], a[2], a[3], 1)
-        p.label:SetTextColor(a[1], a[2], a[3])
-    else
-        local h = W.OWN.hub
-        p.hub:SetVertexColor(h[1], h[2], h[3], 0.25)
-        p.hilite:SetVertexColor(1, 1, 1, 1)
-        p.label:SetTextColor(1, 1, 1)
-    end
+    p.label:SetTextColor(a[1], a[2], a[3])
 end
 function W.Paint() Paint(parts, W.Look()) end
 
@@ -373,11 +413,11 @@ local function Highlight()
         parts.hilite:ClearAllPoints()
         parts.hilite:SetPoint("CENTER", art, "CENTER", layout[i][1], layout[i][2])
         parts.hilite:Show()
-        label:SetText(API.ItemInfo(b.itemID) or "")
+        SetName(parts, API.ItemInfo(b.itemID) or "")
     else
         lit = nil
         parts.hilite:Hide()
-        label:SetText("Mage Scrolls")
+        SetName(parts, "Mage Scrolls")
     end
 end
 
@@ -420,7 +460,8 @@ local function FadeOut()
     ghost:SetPoint("CENTER", UIParent, "BOTTOMLEFT", cx0, cy0)
     local p = ghost.parts
     Paint(p, W.Look())
-    p.label:SetText(label:GetText() or "")
+    FitDisc(p, art:GetWidth())
+    SetName(p, label:GetText() or "")
     p.hilite:ClearAllPoints()
     if lit and layout[lit] then
         p.hilite:SetPoint("CENTER", ghost, "CENTER", layout[lit][1], layout[lit][2])
@@ -516,6 +557,7 @@ function W.SetContents(list, enabled, debug)
     screen:SetAttribute("radius", r)
     screen:SetAttribute("enabled", enabled and n > 0 and true or false)
     art:SetSize(2 * r + W.SIZE + 20, 2 * r + W.SIZE + 20)
+    FitDisc(parts, 2 * r + W.SIZE + 20)
     -- Nothing left to offer: close an open ring.
     if n == 0 and ring:IsShown() then W.Close() end
 end

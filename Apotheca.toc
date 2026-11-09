@@ -20,6 +20,7 @@
 ## OptionalDeps: GlassActionBars
 ## X-Curse-Project-ID: 1498195
 
+Libs\LibGlass-1.0\LibGlass-1.0.xml
 ApothecaCompat.lua
 ApothecaItems.lua
 Apotheca.lua

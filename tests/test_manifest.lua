@@ -39,6 +39,17 @@ end
 
 local pkg = assert(io.open(".pkgmeta")):read("*a"):gsub("\r", "")
 check(pkg:find("package%-as: Apotheca\n"), ".pkgmeta packages as Apotheca")
+-- LibGlass, embedded at a pinned tag (never `latest`), and its dev files
+-- left out: CurseForge's packager ignores an external's own ignore list.
+check(pkg:find("\nexternals:\n  Libs/LibGlass%-1%.0:\n    url: https://github%.com/Spotnick2/LibGlass\n    tag: r%d+\n"),
+    ".pkgmeta embeds LibGlass at a pinned tag")
+for _, ignored in ipairs({ "tests", "docs", "Tools", "AGENTS.md", "CLAUDE.md", "README.md" }) do
+    check(pkg:find("\n%s*%- Libs/LibGlass%-1%.0/" .. ignored:gsub("%p", "%%%0") .. "\n"),
+        ".pkgmeta ignores the library's " .. ignored)
+end
+local gi = io.open(".gitignore")
+check(gi and gi:read("*a"):find("\nLibs/") ~= nil, "Libs/ is never committed (the packager fills it)")
+if gi then gi:close() end
 for _, ignored in ipairs({ "tests", "Tools", "docs", "AGENTS.md", "CLAUDE.md", ".claude", ".github" }) do
     check(pkg:find("\n%s*%- " .. ignored:gsub("%p", "%%%0") .. "\n"), ".pkgmeta ignores " .. ignored)
 end

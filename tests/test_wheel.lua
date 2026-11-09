@@ -333,49 +333,56 @@ eq(Apotheca.GetDB().mageScrolls.sound, true, "the setting is in the profile (def
 
 local parts = W.parts
 local function near(a, b) return math.abs(a - b) < 1e-6 end
+local function rgba(t) return t._color or {} end
 W.Paint()
-eq(parts.backing._vertex[4], W.OWN.backing[4], "without Glass UI: our own dark disc")
-check(not parts.tint:IsShown(), "with no tint layer")
+-- Glass, as Glass UI builds its own: a disc and a rounded plate, each with
+-- a backing under the tint, clipped by the glass's mask.
+check(parts.g and parts.g.mask and parts.g.tint, "the disc is LibGlass's")
+check(parts.pg and parts.pg.mask, "and the name's plate too")
+check(parts.backing._masks and parts.backing._masks[1] == parts.g.mask, "the backing clipped by the disc's mask")
+check(parts.plateBacking._masks and parts.plateBacking._masks[1] == parts.pg.mask, "and the plate's by its own")
+check(parts.hub == nil, "no hub circle (owner: 'I don't understand the yellow circle')")
+check(near(parts.disc:GetScale(), W.art:GetWidth() / W.DISC_SIDE), "the disc scaled to the wheel, never resized")
+check(parts.plate:GetWidth() >= 80, "the plate fits the name")
+local hv = parts.hilite._vertex
+check(near(hv[1], 1) and near(hv[2], 1) and near(hv[4], W.HOVER_ALPHA), "the hover glow is GAB's: white, soft")
+-- Without Glass UI: its default, clear.
+check(near(rgba(parts.backing)[4], 0.35) and near(rgba(parts.g.tint)[4], 0.24),
+    "without Glass UI: Glass UI's clear body (backing 0.35, tint 0.24)")
+check(near(rgba(parts.plateBacking)[4], W.PLATE_ALPHA), "the name's plate dense as a window: readable over the bars")
+local tr, tg = W.label:GetTextColor()
+check(near(tr, 1) and near(tg, 0.82), "the name in gold, as Glass UI's titles")
 
 local accent = { 1, 0.82, 0 }
 local suiteBody = { tint = { 0.13, 0.16, 0.22, 0.24 }, backing = { 0.04, 0.05, 0.07, 0.35 }, wash = 1 }
 local suite = { API = 1,
-    Body = function(name)
-        if name == "clear" then return { tint = { 0.13, 0.16, 0.22, 0.24 }, backing = { 0.04, 0.05, 0.07, 0.35 }, wash = 1 } end
-        if name == nil then return suiteBody end
-    end,
+    Body = function(name) if name == nil then return suiteBody end end,
     Accent = function() return accent end }
 rawset(_G, "GlassUI", { Suite = suite })
-W.Paint()
-check(near(parts.backing._vertex[4], W.BACKING_FLOOR), "Glass UI's clear body: the backing raised to the floor")
-check(parts.tint:IsShown() and near(parts.tint._vertex[4], 0.24), "its tint over it")
-local tr, tg = W.label:GetTextColor()
-check(near(tr, 1) and near(tg, 0.82), "the name in the suite's accent (gold)")
-check(near(parts.hilite._vertex[2], 0.82), "and the highlight")
-check(near(parts.plate._vertex[4], W.PLATE_ALPHA) and near(parts.plate._vertex[1], 0.04),
-    "the name on a dark plate in the body's colour, readable over the action bars")
-
-suiteBody = { tint = { 0.05, 0.06, 0.08, 0.62 }, backing = { 0.04, 0.05, 0.07, 0.92 }, wash = 0.8 }
+suiteBody = { tint = { 0.05, 0.06, 0.08, 0.62 }, backing = { 0.04, 0.05, 0.07, 0.92 }, wash = 0.5 }
 accent = { 0.65, 0.835, 0.905 }
 EventRegistry:TriggerEvent("GlassUI.Suite.LookChanged", { tint = "smoked", accent = "ice" })
-check(near(parts.backing._vertex[4], 0.92), "a change to Smoked repaints live: its denser backing kept")
-check(near(parts.plate._vertex[4], 0.92), "the plate as dense as the body when it is denser")
+check(near(rgba(parts.backing)[4], 0.92) and near(rgba(parts.g.tint)[4], 0.62),
+    "a change to Smoked repaints live: its backing and tint, as Glass UI's windows")
+check(near(rgba(parts.pg.tint)[4], 0.62), "the plate too")
+check(near(parts.g.wash.glassPeak, W.Glass.STYLE.wash * 0.5), "the wash a factor of the material's")
 tr = W.label:GetTextColor()
 check(near(tr, 0.65), "and the accent changes to ice")
 
 suiteBody = { classShade = 0.6, backing = { 0.04, 0.05, 0.07, 0.35 }, wash = 1 }
 W.Paint()
 local c = WoW.classColors.MAGE
-check(near(parts.tint._vertex[1], c.r * 0.6) and near(parts.tint._vertex[4], 0.24),
-    "the class body: the class colour shaded, at clear's alpha")
+local built = (parts.g.tint.glassColor or W.Glass.STYLE.tint)[4]
+check(near(rgba(parts.g.tint)[1], c.r * 0.6) and near(rgba(parts.g.tint)[4], built),
+    "the class body: the class colour shaded, at the material's alpha")
 
 suite.Body = function() error("broken") end
 W.Paint()
-eq(parts.backing._vertex[4], W.OWN.backing[4], "a failing Glass UI: our own look")
+check(near(rgba(parts.backing)[4], W.OWN.backing[4]), "a failing Glass UI: the default look")
 suite.Body = function() return suiteBody end
 suite.API = 2
 W.Paint()
-eq(parts.backing._vertex[4], W.OWN.backing[4], "an API it doesn't know: our own look")
+check(near(rgba(parts.backing)[4], W.OWN.backing[4]), "an API it doesn't know: the default look")
 rawset(_G, "GlassUI", nil)
 W.Paint()
 

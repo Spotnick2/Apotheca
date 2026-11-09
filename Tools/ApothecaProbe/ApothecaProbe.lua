@@ -1873,9 +1873,10 @@ Probe:Steps("wheel", {
           return true, "open; Esc is now " .. Probe.Show(EscAction(), true)
       end,
       check = function() return EscAction() == CLOSE_ACTION, Probe.Show(EscAction(), true) end },
-    { text = "Move the mouse over the scrolls without clicking. Does it look right: the scrolls' icons in a "
-          .. "ring on a dark disc, the name of the scroll under the cursor shown under the disc (all of it "
-          .. "on screen), a highlight following the cursor, and no tooltip covering the wheel?", ask = true },
+    { text = "Move the mouse over the scrolls without clicking. Does it look right: the scrolls' icons on a "
+          .. "glass disc like Glass UI's windows (same tint), the name of the scroll under the cursor on a "
+          .. "glass plate under it (all of it on screen, readable), a soft glow on that scroll, and no "
+          .. "tooltip covering the wheel?", ask = true },
     { text = "Press Esc on the keyboard. The wheel closes.",
       wait = function()
           if WheelOpen() then return false, "waiting for Esc" end
