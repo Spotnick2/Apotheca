@@ -628,6 +628,59 @@ def stones(rows):
     return {k: sorted(v) for k, v in out.items()}, skipped
 
 
+# ------------------------------------------------------------------
+# Mage scrolls (#94)
+# ------------------------------------------------------------------
+# Forever's class scrolls for mages, bought from vendors and used from the
+# bags: weapon imbues, familiars, Minor Evocation, Cryoblast and utility.
+# They go on the Mage Scrolls wheel, every one held, by kind. Mage-only
+# "Scroll of ..." items with a Use spell; scrolls meant for one quest
+# object ("Use on Hypnotic Blade", Fel portals, Leyline Confluxes) and
+# scrolls with no spell are reported as skipped.
+MAGE_ONLY = re.compile(r'(?:^| \| )Classes: Mage *(?: \||$)')
+MAGE_SCROLL_QUEST = re.compile(r'Use: (?:Use on |Close |Attempt to attune)')
+# The wheel's order: what a mage re-applies every hour first.
+MAGE_SCROLL_KINDS = ['familiar', 'imbue', 'mana', 'damage', 'utility']
+
+
+def mage_scroll_kind(u):
+    """kind, weapon (imbues only) from the Use text."""
+    m = re.search(r'Imbue an? (staff|dagger|sword)\b', u)
+    if m:
+        return 'imbue', m.group(1)
+    if re.search(r'familiar', u, re.I):
+        return 'familiar', None
+    # Minor Evocation: "Restores mana." (an amount only in game). Arcane
+    # Recovery restores mana over time as a buff: utility.
+    if re.match(r'Use: Restores (?:[\d,]+ )?[Mm]ana\b', u) and ' per ' not in u:
+        return 'mana', None
+    if u.startswith('Use: Inflicts'):
+        return 'damage', None
+    return 'utility', None
+
+
+def mage_scrolls(rows, taken):
+    """[(kind order, -level, id, name, kind, weapon, level, spell)] in wheel
+    order, and the skipped ones with why. taken: item IDs already offered
+    by another table, left alone."""
+    out, skipped = [], []
+    for r in rows:
+        if not r['name'].startswith('Scroll of ') or not MAGE_ONLY.search(r['tip']):
+            continue
+        if r['id'] in taken:
+            continue
+        if not r['spell'] or not r['use']:
+            skipped.append((r['id'], r['name'], 'mage scroll: no Use spell in the scan'))
+            continue
+        if r['quest'] or MAGE_SCROLL_QUEST.match(r['use']):
+            skipped.append((r['id'], r['name'], 'mage scroll: for one quest object'))
+            continue
+        k, weapon = mage_scroll_kind(r['use'])
+        lvl = max(1, r['lvl'])
+        out.append((MAGE_SCROLL_KINDS.index(k), -lvl, r['id'], r['name'], k, weapon, lvl, r['spell']))
+    return sorted(out), skipped
+
+
 def ordinary_well_fed(spells, xp):
     """Well Fed auras known NOT to be XP: a described non-XP one, or a
     Vanilla spell. A Forever spell with no description (1283082 on 70009)
@@ -658,6 +711,7 @@ def offered_item_ids(out):
         ids.update(t[1] for t in lst)
     for lst in out.get('STONES', {}).values():
         ids.update(t[1] for t in lst)
+    ids.update(t[2] for t in out.get('MAGE_SCROLLS', []))
     return ids
 
 
@@ -785,6 +839,15 @@ def emit(out, build_id, src):
         w('    },')
     w('}')
     w('')
+    w('-- Mage scrolls (#94): the Mage Scrolls wheel, in its order (familiars,')
+    w('-- imbues, mana, damage, utility; highest required level first). weapon =')
+    w('-- what an imbue is for (staff, dagger, sword); spell = the item\'s spell.')
+    w('D.MAGE_SCROLLS = {')
+    for t in out['MAGE_SCROLLS']:
+        w('    { id = %-6d, kind = %-11s weapon = %-9s level = %-2d, spell = %-7s },  -- %s' % (
+            t[2], '"%s",' % t[4], ('"%s",' % t[5]) if t[5] else 'nil,', t[6], t[7], t[3]))
+    w('}')
+    w('')
     w('-- The families in the order the options list them.')
     w('D.POISON_FAMILIES = {')
     for k in order:
@@ -899,6 +962,8 @@ if __name__ == '__main__':
     skipped.extend(poison_skipped)
     out['STONES'], stone_skipped = stones(rows)
     skipped.extend(stone_skipped)
+    out['MAGE_SCROLLS'], mage_skipped = mage_scrolls(rows, offered_item_ids(out))
+    skipped.extend(mage_skipped)
     out['XP_WELL_FED_SPELLS'] = xp_auras(wellfed, out['XP_FOOD'])
     out['WELL_FED_SPELLS'] = sorted(wellfed)
     out['ORDINARY_WELL_FED_SPELLS'] = ordinary_well_fed(wellfed, out['XP_WELL_FED_SPELLS'])

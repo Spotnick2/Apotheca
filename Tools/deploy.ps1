@@ -24,6 +24,12 @@
     touched. -ProbeOnly deploys the host and the probe, not Apotheca. Neither
     is ever packaged for players.
 
+    The glass material is the embedded LibGlass-1.0 (the wheel's look, #94).
+    The packager fetches it into Libs\LibGlass-1.0 (.pkgmeta externals); here
+    the LibGlass checkout's own deploy.ps1 copies it, first, so a refusal
+    leaves Apotheca as it was. The checkout is $env:LIBGLASS, else
+    ..\LibGlass; one off the .pkgmeta pin deploys with a warning.
+
     A file this script installed earlier that the TOC no longer lists (the
     probe used to live inside Apotheca) is removed, but only if it is
     unchanged since it was deployed.
@@ -52,6 +58,8 @@ if (-not (Test-Path $AddOnsPath)) {
     exit 1
 }
 
+. (Join-Path $PSScriptRoot "LibGlassPin.ps1")
+$LibGlass = if ($env:LIBGLASS) { $env:LIBGLASS } else { Join-Path (Split-Path -Parent $RepoRoot) "LibGlass" }
 $ForeverProbe = if ($env:FOREVERPROBE) { $env:FOREVERPROBE } else { Join-Path (Split-Path -Parent $RepoRoot) "ForeverProbe" }
 
 # The probe and its host: ForeverProbe first, then Tools\ApothecaProbe's TOC and Lua.
@@ -70,16 +78,23 @@ function Deploy-Probe {
 
 if ($ProbeOnly) { Deploy-Probe; exit 0 }
 
-# Lua files, in TOC order: every non-comment, non-blank line.
+# Lua files, in TOC order: every non-comment, non-blank line but the
+# library's, which LibGlass's deploy installs.
 $luaFiles = @(Get-Content $TocPath |
     Where-Object { $_ -and -not $_.StartsWith("#") } |
-    ForEach-Object { $_.Trim() })
+    ForEach-Object { $_.Trim() } |
+    Where-Object { -not $_.StartsWith("Libs\") })
 
 foreach ($f in $luaFiles) {
     if (-not (Test-Path (Join-Path $RepoRoot $f))) {
         Write-Error "The TOC lists $f, which does not exist in the repo."
         exit 1
     }
+}
+
+if (-not (Test-Path -LiteralPath (Join-Path $LibGlass "Tools\deploy.ps1"))) {
+    Write-Error "LibGlass checkout not found at $LibGlass (clone github.com/Spotnick2/LibGlass there, or set `$env:LIBGLASS)"
+    exit 1
 }
 
 $dest     = Join-Path $AddOnsPath "Apotheca"
@@ -98,8 +113,10 @@ if (Test-Path $manifest) {
 }
 
 $tocText = (Get-Content $TocPath -Raw) -replace '@project-version@', 'dev'
-# Bindings.xml loads from the addon folder by name, never from the TOC.
-$extraFiles = @("Bindings.xml")
+# Bindings.xml loads from the addon folder by name, never from the TOC, and
+# the sounds by path (the wheel's, #94).
+$extraFiles = @("Bindings.xml") + @(Get-ChildItem (Join-Path $RepoRoot "Sounds") -File -ErrorAction SilentlyContinue |
+    ForEach-Object { "Sounds/$($_.Name)" })
 $copied  = $luaFiles + $extraFiles
 $shipped = @("Apotheca.toc") + $copied
 
@@ -123,6 +140,12 @@ if ($changed.Count -gt 0 -and -not $Force) {
     exit 1
 }
 
+# The library first: its deploy checks the checkout and may refuse, and a
+# refusal must leave the deployed addon as it was.
+Write-LibGlassPinStatus $RepoRoot $LibGlass "this deploy tests a library the release won't ship"
+& pwsh -NoProfile -File (Join-Path $LibGlass "Tools\deploy.ps1") -Addon Apotheca -AddOnsPath $AddOnsPath
+if ($LASTEXITCODE -ne 0) { Write-Error "LibGlass deploy refused; Apotheca was not touched"; exit 1 }
+
 Get-ChildItem $dest -File | Where-Object {
     $shipped -notcontains $_.Name -and $_.Name -ne ".apotheca-deploy.txt"
 } | ForEach-Object {
@@ -136,12 +159,14 @@ Get-ChildItem $dest -File | Where-Object {
 }
 
 foreach ($f in $copied) {
+    $dir = Split-Path (Join-Path $dest $f) -Parent
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
     Copy-Item (Join-Path $RepoRoot $f) (Join-Path $dest $f) -Force
 }
 Set-Content -Path (Join-Path $dest "Apotheca.toc") -Value $tocText -NoNewline
 
 $shipped | ForEach-Object { "$_ $(Get-Hash (Join-Path $dest $_))" } | Set-Content $manifest
 
-Write-Host "Deployed Apotheca ($($luaFiles.Count) Lua files and Bindings.xml) to $dest"
+Write-Host "Deployed Apotheca ($($luaFiles.Count) Lua files, $($extraFiles.Count) other files) to $dest"
 
 if ($Probe) { Deploy-Probe }

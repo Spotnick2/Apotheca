@@ -109,7 +109,11 @@ function Methods.GetTop(w) if w._top == false then return nil end return w._top 
 function Methods.GetSize(w) return w._width, w._height end
 function Methods.GetCenter() return 960, 540 end
 function Methods.GetEffectiveScale() return 1 end
-function Methods.GetScale() return 1 end
+-- A frame's own scale (the wheel's opening animation, #94); 1 unless set.
+-- An animation's SetScale(x, y) is another widget type: kept apart.
+function Methods.SetScale(w, s, ...) if select('#', ...) == 0 then w._scale = s end end
+function Methods.GetScale(w) return w._scale or 1 end
+function Methods.GetTexture(t) return t._file end
 function Methods.GetNumPoints(w) return #w._points end
 function Methods.IsMouseOver(w) return w._mouseOver == true end
 function Methods.StartMoving(w) w._moving = true end
@@ -179,6 +183,189 @@ for _, m in ipairs({ "Show", "Hide", "SetPoint", "ClearAllPoints", "SetAllPoints
     end
 end
 
+-- WowTestKit #21: on the client, OnShow / OnHide also fire on each shown
+-- descendant whose visibility changes with its parent's (the wheel's art is
+-- an insecure child of the ring a snippet shows and hides). The core runs
+-- only the frame's own; propagated here meanwhile.
+local function fireDown(w, script)
+    for _, c in ipairs(w._children or {}) do
+        if c._shown then
+            if c._scripts[script] then c._scripts[script](c) end
+            fireDown(c, script)
+        end
+    end
+end
+local guardedShow, guardedHide = Methods.Show, Methods.Hide
+function Methods.Show(w, ...)
+    local was = Methods.IsVisible(w)
+    guardedShow(w, ...)
+    if not was and Methods.IsVisible(w) then fireDown(w, "OnShow") end
+end
+function Methods.Hide(w, ...)
+    local was = Methods.IsVisible(w)
+    guardedHide(w, ...)
+    if was and not Methods.IsVisible(w) then fireDown(w, "OnHide") end
+end
+
+------------------------------------------------------------
+-- WowTestKit #20: secure handlers (the Mage Scrolls wheel, #94)
+--
+-- The core has none. This is the subset the wheel uses, from the client's
+-- own source (wow-ui-source, Blizzard_RestrictedAddOnEnvironment):
+-- SecureHandlerWrapScript on OnClick (Wrapped_Click, SecureHandlers.lua:272),
+-- SecureHandlerSetFrameRef, one environment per header, handles with the
+-- methods below (RestrictedFrames.lua), and WoW.click to drive a click.
+-- A snippet may change protected frames in combat: that's the point.
+------------------------------------------------------------
+
+for _, t in ipairs({ "SecureHandlerBaseTemplate", "SecureFrameTemplate" }) do
+    WoW.templates[t] = function(w) w._protected = true end
+end
+
+-- What a snippet sees besides its handles: no insecure global.
+local RESTRICTED = { math = math, string = string, table = table, type = type, tostring = tostring,
+                     tonumber = tonumber, select = select, pairs = pairs, ipairs = ipairs }
+local function envOf(w)
+    w._secureEnv = w._secureEnv or setmetatable({}, { __index = RESTRICTED })
+    return w._secureEnv
+end
+
+local handles = setmetatable({}, { __mode = "k" })
+local HANDLE = {}
+HANDLE.__index = HANDLE
+local function handle(w)
+    if not w then return nil end
+    local h = handles[w]
+    if not h then
+        h = setmetatable({ _frame = w }, HANDLE)
+        handles[w] = h
+    end
+    return h
+end
+local function frameOf(h) return type(h) == "table" and rawget(h, "_frame") or h end
+
+-- Run a snippet as the client does: `owner` the header's handle, then the
+-- signature's names, in the header's environment.
+local function runSnippet(header, w, names, body, ...)
+    local chunk = assert(loadstring("local owner, " .. names .. " = ...\n" .. body, "snippet"))
+    setfenv(chunk, envOf(header))
+    return chunk(handle(header), handle(w), ...)
+end
+
+-- Shown and hidden from secure code: allowed in combat, never refused.
+local function secureShow(w)
+    local was = Methods.IsVisible(w)
+    w._shown = true
+    if not was and Methods.IsVisible(w) then
+        if w._scripts.OnShow then w._scripts.OnShow(w) end
+        fireDown(w, "OnShow")
+    end
+end
+local function secureHide(w)
+    local was = Methods.IsVisible(w)
+    w._shown = false
+    if was then
+        if w._scripts.OnHide then w._scripts.OnHide(w) end
+        fireDown(w, "OnHide")
+    end
+end
+
+function HANDLE:GetAttribute(k) return Methods.GetAttribute(self._frame, k) end
+function HANDLE:SetAttribute(k, v)
+    local w = self._frame
+    w._attrs = w._attrs or {}
+    w._attrs[k] = v
+end
+function HANDLE:Show() secureShow(self._frame) end
+function HANDLE:Hide() secureHide(self._frame) end
+function HANDLE:IsShown() return self._frame._shown end
+function HANDLE:ClearAllPoints() self._frame._points = {} end
+function HANDLE:SetPoint(p, rel, rp, x, y) table.insert(self._frame._points, { p, frameOf(rel), rp, x, y }) end
+function HANDLE:GetWidth() return self._frame._width end
+function HANDLE:GetHeight() return self._frame._height end
+-- The cursor as a fraction of the frame's rect, nil outside it
+-- (RestrictedFrames.lua:307). The rect: _left / _bottom (0 if unset),
+-- _width / _height; effective scale 1.
+function HANDLE:GetMousePosition()
+    local w = self._frame
+    local l, b, wd, ht = w._left or 0, w._bottom or 0, w._width, w._height
+    if not wd or not ht or wd == 0 or ht == 0 then return nil end
+    local x, y = GetCursorPosition()
+    x, y = x - l, y - b
+    if x < 0 or x > wd or y < 0 or y > ht then return nil end
+    return x / wd, y / ht
+end
+function HANDLE:GetFrameRef(name) return handle(self._frame._frameRefs and self._frame._frameRefs[name]) end
+function HANDLE:RunAttribute(name, ...)
+    local body = Methods.GetAttribute(self._frame, name)
+    if type(body) ~= "string" then error("RunAttribute: no snippet in " .. tostring(name), 2) end
+    return runSnippet(self._frame, self._frame, "self", body, ...)
+end
+-- Override bindings owned by the frame (WoW.overrideBindings, as
+-- SetOverrideBindingClick's).
+function HANDLE:SetBindingClick(_, key, name, button)
+    WoW.overrideBindings[key] = name .. ":" .. (button or "LeftButton")
+    WoW.bindingOwners[key] = self._frame
+end
+function HANDLE:ClearBindings()
+    for key, owner in pairs(WoW.bindingOwners) do
+        if owner == self._frame then WoW.overrideBindings[key], WoW.bindingOwners[key] = nil, nil end
+    end
+end
+
+function SecureHandlerSetFrameRef(header, name, frame)
+    header._frameRefs = header._frameRefs or {}
+    header._frameRefs[name] = frame
+end
+function SecureHandlerWrapScript(frame, script, header, pre, post)
+    if script ~= "OnClick" then error("the stub wraps OnClick only: " .. tostring(script), 2) end
+    frame._wraps = frame._wraps or {}
+    table.insert(frame._wraps, { header = header, pre = pre, post = post })
+end
+
+-- The button's own secure action: it acts only on the edge where down ==
+-- useOnKeyDown (the attribute, else ActionButtonUseKeyDown: WoW.useKeyDown;
+-- measured, AGENTS.md). An item is recorded in WoW.secureActions.
+local function secureAction(b, down)
+    local attrs = b._attrs or {}
+    local onDown = attrs.useOnKeyDown
+    if onDown == nil then onDown = WoW.useKeyDown end
+    if down ~= (onDown and true or false) then return end
+    if attrs.type == "item" then
+        table.insert(WoW.secureActions, { button = b._name, item = attrs.item, targetSlot = attrs["target-slot"] })
+    end
+end
+-- Wrapped_Click: the newest wrap outermost, each around the next.
+local function clickWrapped(b, i, mouse, down)
+    local wrap = b._wraps and b._wraps[i]
+    if not wrap then return secureAction(b, down) end
+    local newbutton, message
+    if not WoW.combat or b._protected then
+        newbutton, message = runSnippet(wrap.header, b, "self, button, down", wrap.pre, mouse, down)
+        if newbutton == false then return end
+        if newbutton then mouse = tostring(newbutton) end
+    end
+    clickWrapped(b, i - 1, mouse, down)
+    if wrap.post and message ~= nil then
+        runSnippet(wrap.header, b, "self, message, button, down", wrap.post, message, mouse, down)
+    end
+end
+-- One edge of a click or key press on a button, as the client runs it.
+function WoW.click(b, mouse, down)
+    mouse, down = mouse or "LeftButton", down and true or false
+    if b._scripts.PreClick then b._scripts.PreClick(b, mouse, down) end
+    clickWrapped(b, b._wraps and #b._wraps or 0, mouse, down)
+    if b._scripts.PostClick then b._scripts.PostClick(b, mouse, down) end
+end
+-- A key binding clicks the button it names (CLICK <name>:<button>), hidden or not.
+function WoW.pressKey(key, down)
+    local action = WoW.overrideBindings[key]
+    if not action then return false end
+    local name, mouse = action:match("^(.-):(.+)$")
+    WoW.click(_G[name], mouse, down)
+    return true
+end
+
 ------------------------------------------------------------
 -- State the tests reset
 ------------------------------------------------------------
@@ -206,6 +393,9 @@ table.insert(WoW.onReset, function()
     WoW.strictLockdown = false   -- protected frames changed in combat fail the test
     WoW.secretBlocked = 0        -- blocked secret operations a pcall swallowed (taint.log lines)
     WoW.fontStrings  = {}
+    WoW.secureActions = {}       -- secure item uses (WowTestKit #20 meanwhile)
+    WoW.bindingOwners = {}       -- [key] = the frame whose snippet set it
+    WoW.useKeyDown   = true      -- ActionButtonUseKeyDown, the client's default
 end)
 
 function WoW.AddItem(bag, slot, itemID, count, name)
@@ -285,6 +475,9 @@ for i, names in ipairs(BARS) do
     _G[names[2]] = button
 end
 GameTooltip = newWidget("GameTooltip", UIParent, "GameTooltip")
+-- The tooltip's owner, so a test can see whose tooltip is up.
+function GameTooltip:SetOwner(owner) self._owner = owner end
+function GameTooltip:IsOwned(f) return self._owner == f and self:IsShown() end
 GameFontNormal, GameFontHighlight = {}, {}
 
 ------------------------------------------------------------
@@ -478,7 +671,26 @@ WoW.overrideBindings = {}     -- [key] = "buttonName:mouseButton"
 function SetOverrideBindingClick(owner, priority, key, name, button)
     WoW.overrideBindings[key] = name .. ":" .. (button or "LeftButton")
 end
-function ClearOverrideBindings() WoW.overrideBindings = {} end
+function ClearOverrideBindings() WoW.overrideBindings, WoW.bindingOwners = {}, {} end
+-- Sounds: an addon's own file plays (porting guide); WoW.sounds records them.
+WoW.sounds = {}
+function PlaySoundFile(path, channel)
+    WoW.sounds[#WoW.sounds + 1] = { path = path, channel = channel }
+    return true, #WoW.sounds
+end
+C_ClassColor = {}
+WoW.classColors = { MAGE = { r = 0.25, g = 0.78, b = 0.92 }, PRIEST = { r = 1, g = 1, b = 1 } }
+function C_ClassColor.GetClassColor(class) return WoW.classColors[class] end
+-- FrameXML's callback registry (EventRegistry.RegisterCallback /
+-- TriggerEvent): a callback gets its owner, then the event's arguments.
+EventRegistry = { _callbacks = {} }
+function EventRegistry:RegisterCallback(event, fn, owner)
+    self._callbacks[event] = self._callbacks[event] or {}
+    table.insert(self._callbacks[event], { fn = fn, owner = owner })
+end
+function EventRegistry:TriggerEvent(event, ...)
+    for _, c in ipairs(self._callbacks[event] or {}) do c.fn(c.owner, ...) end
+end
 function date(fmt) return os.date(fmt) end
 
 -- A profiling clock that advances with every read, so a per-frame time
@@ -641,6 +853,8 @@ Kit.strict({
     ApothecaDB = true, ApothecaCharDB = true, ApothecaProbeDB = true,
     -- The addon namespace, nil until ApothecaCompat.lua creates it.
     Apotheca = true,
+    -- The embedded LibGlass's own loader reads _G.LibStub before creating it.
+    LibStub = true,
     -- Frames the addon names itself; nil until created.
     ApothecaFrame = true, ApothecaAnchor = true,
     -- Another addon's namespace (an OptionalDep, #68): nil unless installed.
