@@ -1760,6 +1760,11 @@ local function MainHandEnchant()
 end
 
 local function WheelState()
+    if not (Apotheca and Apotheca.Wheel) then
+        -- An Apotheca without the wheel (a release from before #94): say so, don't throw.
+        local v = C_AddOns.GetAddOnMetadata("Apotheca", "Version")
+        return { missing = "Apotheca " .. tostring(v) .. " has no wheel: deploy the dev build" }
+    end
     local s = Apotheca.Wheel.screen
     local names = {}
     for _, b in ipairs(Apotheca.Wheel.slots) do
@@ -1798,7 +1803,6 @@ end
 local function OneUsed() return ScrollTotal() == (wheel.total or 0) - 1, "exactly one used" end
 
 Probe:Command("wheel", function()
-    if not (Apotheca and Apotheca.Wheel) then say("Apotheca's wheel is not loaded"); return end
     for k, v in pairs(WheelState()) do say("wheel " .. k .. " = " .. Probe.Show(v, true)) end
 end, "the Mage Scrolls wheel's state (#94)")
 
@@ -1811,6 +1815,7 @@ Probe:Steps("wheel", {
       run = function() return WheelState() end,
       check = function()
           local s = WheelState()
+          if s.missing then return false, s.missing end
           return s.enabled == true and (s.count or 0) > 0 and s.key ~= nil,
               "enabled " .. tostring(s.enabled) .. ", " .. tostring(s.count) .. " scrolls, key " .. tostring(s.key)
       end },
