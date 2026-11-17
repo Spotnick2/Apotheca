@@ -218,6 +218,7 @@ CurseForge builds from the repository webhook (project `1498195`) when it sees a
 - **Major** (3.0.0): a break, such as a new client target or settings that reset (2.0.0 moved to Forever).
 
 1. Add a `## [<version>] - <date>` section at the top. Write it for players, not from the diff: what changed for someone using the addon, in their words. Anything that resets or behaves differently after updating goes under its own heading.
+   A release tag (`vX.Y.Z`, not an alpha or beta) also updates **both READMEs** in its prep PR (`References\Docs\RELEASING.md` §3): `README.md` and the untracked `README.curseforge.md` (in `.git/info/exclude`) describe what this release does, and nothing it no longer does. Say in the PR whether `README.curseforge.md` changed: the owner pastes it into CurseForge and Wago after the release.
 2. Commit, then tag and push: `git tag v2.0.1 && git push origin v2.0.1`.
 3. **The release type comes from the tag name**: `alpha` → Alpha, `beta` → Beta, anything else → Release. This is a distribution channel, not a stability claim. CurseForge defaults every user to Release, so tag `beta` only to hold a build back on purpose. The game client being in beta is not a reason: say that in the notes and ship a Release.
 4. Check the published file on CurseForge: the game flavor is **Forever** (derived from `## Interface: 16001`), and the zip holds exactly `Apotheca/` with the TOC and the files it lists. There is no probe and no `Tools`.
