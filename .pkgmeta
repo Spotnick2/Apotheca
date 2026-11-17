@@ -1,6 +1,16 @@
 package-as: Apotheca
 enable-nolib-creation: no
 
+# The glass material, for the Mage Scrolls wheel (#94; owner, 2026-11-09:
+# embed it). Pinned, never `tag: latest` (the packager picks the newest tag
+# by creation date). CI reads the pin from here, so it is written once.
+# No comment on a value line: the packager's YAML reader keeps it as part of
+# the value (measured in GlassUnitFrames #64).
+externals:
+  Libs/LibGlass-1.0:
+    url: https://github.com/Spotnick2/LibGlass
+    tag: r11
+
 manual-changelog:
   filename: CHANGELOG.md
   markup-type: markdown
@@ -18,3 +28,11 @@ ignore:
   - docs
   - tests
   - Tools
+  # The library's own .pkgmeta ignores these, but CurseForge's packager does
+  # NOT honour an external's ignore list (Priestly #53), so they are named here.
+  - Libs/LibGlass-1.0/tests
+  - Libs/LibGlass-1.0/docs
+  - Libs/LibGlass-1.0/Tools
+  - Libs/LibGlass-1.0/AGENTS.md
+  - Libs/LibGlass-1.0/CLAUDE.md
+  - Libs/LibGlass-1.0/README.md

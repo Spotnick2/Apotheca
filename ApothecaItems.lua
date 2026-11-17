@@ -650,6 +650,46 @@ D.STONES = {
     },
 }
 
+-- Mage scrolls (#94): the Mage Scrolls wheel, in its order (familiars,
+-- imbues, mana, damage, utility; highest required level first). weapon =
+-- what an imbue is for (staff, dagger, sword); spell = the item's spell.
+D.MAGE_SCROLLS = {
+    { id = 277493, kind = "familiar", weapon = nil,      level = 25, spell = 1302303 },  -- Scroll of Cat Familiar
+    { id = 277483, kind = "familiar", weapon = nil,      level = 16, spell = 1302285 },  -- Scroll of Frog Familiar
+    { id = 275069, kind = "familiar", weapon = nil,      level = 5 , spell = 1296202 },  -- Scroll of Rat Familiar
+    { id = 277500, kind = "imbue",    weapon = "staff",  level = 46, spell = 1302311 },  -- Scroll of Imbue Greater Flame
+    { id = 277501, kind = "imbue",    weapon = "staff",  level = 46, spell = 1302312 },  -- Scroll of Imbue Greater Frost
+    { id = 277502, kind = "imbue",    weapon = "staff",  level = 46, spell = 1302310 },  -- Scroll of Imbue Precision
+    { id = 277503, kind = "imbue",    weapon = "staff",  level = 46, spell = 1295720 },  -- Scroll of Imbue Spellbreak
+    { id = 277494, kind = "imbue",    weapon = "staff",  level = 25, spell = 1302306 },  -- Scroll of Imbue Accuracy
+    { id = 277495, kind = "imbue",    weapon = "staff",  level = 25, spell = 1302307 },  -- Scroll of Imbue Quickening
+    { id = 277496, kind = "imbue",    weapon = "staff",  level = 25, spell = 1302305 },  -- Scroll of Imbue Balefrost
+    { id = 277497, kind = "imbue",    weapon = "staff",  level = 25, spell = 1302304 },  -- Scroll of Imbue Flame
+    { id = 277498, kind = "imbue",    weapon = "dagger", level = 25, spell = 1302308 },  -- Scroll of Imbue Manablade
+    { id = 277485, kind = "imbue",    weapon = "staff",  level = 16, spell = 1302283 },  -- Scroll of Imbue Frost
+    { id = 277486, kind = "imbue",    weapon = "staff",  level = 16, spell = 1302217 },  -- Scroll of Imbue Striking
+    { id = 277487, kind = "imbue",    weapon = "staff",  level = 16, spell = 1302219 },  -- Scroll of Imbue Baleflame
+    { id = 277488, kind = "imbue",    weapon = "dagger", level = 16, spell = 1302284 },  -- Scroll of Imbue Iceknife
+    { id = 277489, kind = "imbue",    weapon = "sword",  level = 16, spell = 1302227 },  -- Scroll of Imbue Spark
+    { id = 274947, kind = "imbue",    weapon = "staff",  level = 5 , spell = 1295720 },  -- Scroll of Imbue Lesser Flame
+    { id = 275067, kind = "imbue",    weapon = "dagger", level = 5 , spell = 1296225 },  -- Scroll of Imbue Chillknife
+    { id = 213564, kind = "mana",     weapon = nil,      level = 1 , spell = 434851  },  -- Scroll of Minor Evocation
+    { id = 277499, kind = "damage",   weapon = nil,      level = 46, spell = 1302309 },  -- Scroll of Greater Cryoblast
+    { id = 217495, kind = "damage",   weapon = nil,      level = 16, spell = 440212  },  -- Scroll of Cryoblast
+    { id = 277491, kind = "utility",  weapon = nil,      level = 25, spell = 1302301 },  -- Scroll of Rebuke Elemental
+    { id = 277492, kind = "utility",  weapon = nil,      level = 25, spell = 1302297 },  -- Scroll of Khadgar's Unlocking
+    { id = 211953, kind = "utility",  weapon = nil,      level = 20, spell = 430948  },  -- Scroll of Arcane Recovery I
+    { id = 211954, kind = "utility",  weapon = nil,      level = 20, spell = 430949  },  -- Scroll of Arcane Accuracy I
+    { id = 211955, kind = "utility",  weapon = nil,      level = 20, spell = 430950  },  -- Scroll of Arcane Protection - Fire I
+    { id = 211956, kind = "utility",  weapon = nil,      level = 20, spell = 430951  },  -- Scroll of Arcane Protection - Frost I
+    { id = 211957, kind = "utility",  weapon = nil,      level = 20, spell = 430952  },  -- Scroll of Arcane Power I
+    { id = 213550, kind = "utility",  weapon = nil,      level = 16, spell = 434754  },  -- Scroll of Polymorph: Odd Melon
+    { id = 277484, kind = "utility",  weapon = nil,      level = 16, spell = 1309788 },  -- Scroll of Confuse Beast
+    { id = 211800, kind = "utility",  weapon = nil,      level = 12, spell = 430318  },  -- Scroll of Reintegration
+    { id = 213548, kind = "utility",  weapon = nil,      level = 1 , spell = 434752  },  -- Scroll of Liminal Passage
+    { id = 215257, kind = "utility",  weapon = nil,      level = 1 , spell = 435563  },  -- Scroll of Comprehension
+}
+
 -- The families in the order the options list them.
 D.POISON_FAMILIES = {
     { key = "instant", label = "Instant Poison" },

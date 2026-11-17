@@ -21,6 +21,14 @@ for _, f in ipairs(files) do
     check(io.open(f) ~= nil, "TOC file exists: " .. f)
 end
 check(seen["Apotheca.lua"] and seen["Apotheca_Options.lua"], "both main files are listed")
+-- A texture path with single backslashes loses them in Lua 5.1 ("\I" is no
+-- escape), so the icon never loads (Codex on #98: the Mage Scrolls empty icon).
+for _, f in ipairs(files) do
+    if f:find("%.lua$") and not f:find("^Libs") then
+        local src = io.open(f):read("*a")
+        check(not src:find("\"Interface\\%a"), "every Interface path is escaped: " .. f)
+    end
+end
 -- The client loads Bindings.xml by name from the addon folder (#42).
 check(io.open("Bindings.xml") ~= nil, "Bindings.xml exists")
 check(not seen["Bindings.xml"], "and is not in the TOC")
@@ -39,6 +47,17 @@ end
 
 local pkg = assert(io.open(".pkgmeta")):read("*a"):gsub("\r", "")
 check(pkg:find("package%-as: Apotheca\n"), ".pkgmeta packages as Apotheca")
+-- LibGlass, embedded at a pinned tag (never `latest`), and its dev files
+-- left out: CurseForge's packager ignores an external's own ignore list.
+check(pkg:find("\nexternals:\n  Libs/LibGlass%-1%.0:\n    url: https://github%.com/Spotnick2/LibGlass\n    tag: r%d+\n"),
+    ".pkgmeta embeds LibGlass at a pinned tag")
+for _, ignored in ipairs({ "tests", "docs", "Tools", "AGENTS.md", "CLAUDE.md", "README.md" }) do
+    check(pkg:find("\n%s*%- Libs/LibGlass%-1%.0/" .. ignored:gsub("%p", "%%%0") .. "\n"),
+        ".pkgmeta ignores the library's " .. ignored)
+end
+local gi = io.open(".gitignore")
+check(gi and gi:read("*a"):find("\nLibs/") ~= nil, "Libs/ is never committed (the packager fills it)")
+if gi then gi:close() end
 for _, ignored in ipairs({ "tests", "Tools", "docs", "AGENTS.md", "CLAUDE.md", ".claude", ".github" }) do
     check(pkg:find("\n%s*%- " .. ignored:gsub("%p", "%%%0") .. "\n"), ".pkgmeta ignores " .. ignored)
 end

@@ -17,6 +17,54 @@ TOC = "Apotheca.toc"
 function H.tocLines() return Kit.tocLines(TOC) end
 function H.tocFiles() return Kit.tocFiles(TOC) end
 
+-- The embedded LibGlass-1.0 (the wheel's glass, #94) comes from a checkout,
+-- not from Libs\ (gitignored, filled by the packager): $LIBGLASS, else
+-- ../LibGlass. No checkout fails the run loudly; a silently skipped library
+-- would test nothing. (GlassChat's harness.)
+H.LIBGLASS_XML = "Libs\\LibGlass-1.0\\LibGlass-1.0.xml"
+function H.libGlassRoot()
+    local root = (os.getenv("LIBGLASS") or "../LibGlass"):gsub("\\", "/"):gsub("/$", "")
+    local f = io.open(root .. "/LibGlass-1.0.xml", "rb")
+    if not f then
+        error("LibGlass checkout not found at " .. root .. " (no LibGlass-1.0.xml): clone "
+              .. "github.com/Spotnick2/LibGlass there or set LIBGLASS", 0)
+    end
+    f:close()
+    return root
+end
+-- The Lua files the library's XML loads, in order: what the client runs for
+-- that TOC line. A listed file that is missing fails here.
+function H.libGlassScripts()
+    local root = H.libGlassRoot()
+    local f = assert(io.open(root .. "/LibGlass-1.0.xml", "rb"))
+    local xml = f:read("*a"):gsub("<!%-%-.-%-%->", "")   -- listed in a comment is not loaded
+    f:close()
+    local files = {}
+    for file in xml:gmatch('<Script%s+file="([^"]+)"') do
+        local path = root .. "/" .. file:gsub("\\", "/")
+        local src = io.open(path, "rb")
+        if not src then error("LibGlass-1.0.xml at " .. root .. " is missing " .. file, 0) end
+        src:close()
+        files[#files + 1] = path
+    end
+    if #files == 0 then error("LibGlass-1.0.xml at " .. root .. " lists no Script files", 0) end
+    return files
+end
+-- Every TOC line's Lua, in load order: the library's XML is its scripts.
+function H.loadOrder()
+    local files = {}
+    for _, line in ipairs(H.tocLines()) do
+        if line == H.LIBGLASS_XML then
+            for _, f in ipairs(H.libGlassScripts()) do files[#files + 1] = f end
+        elseif line:match("%.lua$") then
+            files[#files + 1] = line:gsub("\\", "/")
+        else
+            error("a TOC line the tests can't load: " .. line, 0)
+        end
+    end
+    return files
+end
+
 -- ForeverProbe, the probe's host (GUIDE.md section 8, as GlassChat's
 -- harness): $FOREVERPROBE, else ../ForeverProbe. It is private and lives
 -- on the owner's disk only, so CI sets FOREVERPROBE_OPTIONAL=1 and a probe
@@ -56,7 +104,7 @@ end
 function H.loadAddon(opts)
     opts = opts or {}
     if opts.probe then H.loadForeverProbe() end
-    loadFiles(H.tocFiles(), "Apotheca", {})
+    loadFiles(H.loadOrder(), "Apotheca", {})
     if opts.savedDB then rawset(_G, "ApothecaDB", opts.savedDB) end
     WoW.fire("ADDON_LOADED", "Apotheca")
     if opts.probe then

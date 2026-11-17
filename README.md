@@ -20,9 +20,10 @@ What it offers follows your role: Tank, Healer or Damage. Apotheca reads it from
 |---|---|
 | Mana / Health | The strongest potion you carry. Rejuvenation potions come after plain potions of the same strength. Percentage potions (Restored Healing 30%, Restored Mana 20%) are compared using your own maximum health and mana. |
 | Mana Gem *(mages)* | The strongest gem that is off cooldown: each gem has its own. |
+| Mage Scrolls *(mages)* | Every mage scroll you carry (familiars, weapon imbues, Minor Evocation, Cryoblast…), on a wheel that opens around your cursor. Hold its key, move onto a scroll and let go to use it; or click the button (or tap the key) and click a scroll. Esc or another tap closes it, and it works in combat. Imbues go straight onto your main-hand weapon, and only those your weapon can take are shown. On a ready check it glows if your weapon has no imbue or your familiar isn't out. |
 | Healthstone | The strongest stone. |
 | Rune | A Demonic or Dark Rune, for mana. |
-| Food / Drink | The best plain food and water. Conjured items are preferred unless vendor food is clearly better; the threshold is configurable. Food that restores both health and mana can appear on both buttons. |
+| Food / Drink | The best plain food and water. Conjured items are preferred unless vendor food is clearly better; the threshold is configurable. Food that restores both health and mana can appear on both buttons. Optionally, when a bought item wins, the conjured one you carry gets its own Conjured Food or Conjured Drink button too. |
 | Buff food | Well Fed food for your role's stat priority, which you can reorder in the options. For a healer on Forever that means the teas (mana + healing), the smoothies (mana + spirit), and the new cooking. |
 | XP food *(optional, off by default)* | While you're levelling: food or drink with Forever's 5% kill-XP bonus that you can eat at your level: a stat your role uses first, then the highest level. When you leave combat without that buff, it glows for a few seconds as a reminder. |
 | Flask / Elixir / Elixir 2 | Three separate slots, each offering its best item for your role on its own (for a healer: Distilled Wisdom, Cleric's Elixirs, Mageblood…). Forever has no TBC-style battle/guardian elixir limit. Which elixirs stack with each other hasn't been measured yet; if two don't, please report it. A slot whose buff is already running offers nothing, so a misclick can't waste a two-hour flask. |
@@ -59,9 +60,11 @@ Measured in game so far: Cooking, First Aid, Fishing, Enchanting, Tailoring, Lea
 
 With [Glass Action Bars](https://www.curseforge.com/wow/addons/glass-action-bars) installed, Apotheca's buttons (both bars) wear its glass: the same theme, hover and click feedback as your action bars, following its settings. You can also dock the bar beside one of your action bars in Glass Action Bars' Dock settings; it then places the bar and can match that bar's icon size and padding. Apotheca keeps its own rows and orientation unless you also tick "Match the bar's rows and direction" there. Undock it and the bar goes back where you had it. Without Glass Action Bars, Apotheca looks as it always has.
 
+The Mage Scrolls wheel is glass of its own, whether or not you use Glass Action Bars. With Glass UI installed, it follows Glass UI's tint (Clear, Smoked or Class) and accent, like Glass UI's windows.
+
 ## Also
 
-- Ready check: missing buffs glow (buff food, XP food, flask and elixirs, scrolls, weapon oil).
+- Ready check: missing buffs glow (buff food, XP food, flask and elixirs, scrolls, weapon oil, a mage's imbue or familiar).
 - Potions, food, drink and healthstones turn grey while you're at full health or mana (on by default). The game colours the icon itself, so this works even though addons can't read your health.
 - Global or per-character profiles.
 - Horizontal or vertical layout, rows, icon size and padding, or the icon size and padding of one of your action bars (Edit Mode), followed as you change it.

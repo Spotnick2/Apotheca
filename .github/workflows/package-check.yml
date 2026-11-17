@@ -23,7 +23,8 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq lua5.1
-          files=$(grep -v '^#' Apotheca.toc | tr -d '\r' | sed '/^$/d')
+          # Our own Lua: the TOC's .lua lines (the library's XML is checked in its repo).
+          files=$(grep -v '^#' Apotheca.toc | tr -d '\r' | sed '/^$/d' | grep '\.lua$')
           luac5.1 -p $files Tools/ApothecaProbe/ApothecaProbe.lua
 
       # ApothecaItems.lua is generated; it must match what the generator
@@ -34,14 +35,18 @@ jobs:
           # lost: Whipper Root Tuber and Full Moonshine (own cooldown),
           # Restorative Bread (percentage), Scooby Snack (no Use text),
           # Mana Ruby (off the potion buttons), Specklefin Feast (a feast), the
-          # Runecarving Test poison, Consecrated Sharpening Stone (undead only).
+          # Runecarving Test poison, Consecrated Sharpening Stone (undead only),
+          # Scroll of the Blade (a mage scroll for one quest object) and Scroll
+          # of Arcane Angling (no Use spell in the scan).
           # And items the bar must offer are present: potions, healthstones,
           # a ration, Holy Water, Dense Runecloth, Forest Mushroom Cap, and
           # Mana Ruby on its own mana gem button, Beer Basted Boar Ribs (XP food)
-          # Instant Poison, and the stones (sharpening, weight, Elemental).
+          # Instant Poison, the stones (sharpening, weight, Elemental), and
+          # the mage scrolls on the wheel (#94): Imbue Chillknife, Minor
+          # Evocation, Familiar: Cat, Cryoblast.
           python3 Tools/build_item_tables.py docs/forever-consumables-70009.tsv \
-            --expect-skipped 11951 1072 282018 8243 8008 238641 202316 23122 \
-            --expect-present 13446 13444 9421 19013 19060 227813 232433 4604 8008 2888 6947 7964 12643 18262 255663 > /dev/null
+            --expect-skipped 11951 1072 282018 8243 8008 238641 202316 23122 217496 213549 \
+            --expect-present 13446 13444 9421 19013 19060 227813 232433 4604 8008 2888 6947 7964 12643 18262 255663 275067 213564 277493 217495 > /dev/null
           git diff --exit-code --ignore-cr-at-eol ApothecaItems.lua
 
       # The tests' scaffolding (WowTestKit) at the commit tests/kit.pin names,
@@ -52,6 +57,14 @@ jobs:
         run: |
           bash tests/fetch_kit.sh "$RUNNER_TEMP/WowTestKit"
           echo "WOWTESTKIT=$RUNNER_TEMP/WowTestKit" >> "$GITHUB_ENV"
+
+      # The embedded LibGlass-1.0 (the wheel's glass) at the ref .pkgmeta pins,
+      # checked to BE that commit. The tests load it from $LIBGLASS, and the
+      # zip check compares the packaged copy with it.
+      - name: Fetch LibGlass at its pin
+        run: |
+          bash tests/fetch_external.sh Libs/LibGlass-1.0 "$RUNNER_TEMP/LibGlass"
+          echo "LIBGLASS=$RUNNER_TEMP/LibGlass" >> "$GITHUB_ENV"
 
       # The probe tests (test_probe, test_applytest, test_profprobe) need
       # ForeverProbe, which is private and local: they run in tests/run.ps1
@@ -71,8 +84,9 @@ jobs:
         with:
           args: -d
 
-      # The zip must hold the TOC, the Lua it lists and Bindings.xml, and
-      # nothing else (the release workflow runs the same check).
+      # The zip must hold the TOC, the Lua it lists, Bindings.xml, the wheel's
+      # sounds and LibGlass as the library ships it at the pin, and nothing
+      # else (the release workflow runs the same check).
       - name: The package ships only the addon files
         run: Tools/check_package.sh "$(ls .release/*.zip | head -1)"
 

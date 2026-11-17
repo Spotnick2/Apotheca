@@ -275,6 +275,20 @@ Every API (90 names: the stubbed globals and each `C_*` call in the addon) and e
 - **No probe run.** The owner has played with Apotheca on this build since launch with nothing wrong, and judged that enough: `MEASURED_ON_BUILD` is bumped to **70790** on that evidence and the API check (#88). The secret-value, aura and click-edge findings above were last measured on 70009.
 - The item data is still generated from the 70009 consumable scan. Items Blizzard added or changed since then are not in it until a re-scan (`/fp steps apo scan`).
 
+## The Mage Scrolls wheel (#94), 2026-11-09, build 70862
+
+`/fp steps apo wheel`, three runs on a level 22 mage (two-handed staff; Imbue Lesser Flame, Minor Evocation and Confuse Beast in the bags), with the probe's trace of the wheel opening and closing, the casts and the red error text from the third run on.
+
+- **The key binding** (`CLICK ApothecaButton_magescrolls:LeftButton`, bound to SHIFT-F1) works, and a `/reload` was enough for the new `Bindings.xml` line to show in Key Bindings: the game had run since before the deploy (the first run's "the keybind does not work" was a key not yet bound).
+- **Esc** while the wheel is open runs the override binding (`CLICK ApothecaWheelClose:LeftButton`), closes the wheel and does not open the game menu, and Esc is `TOGGLEGAMEMENU` again after. All three runs.
+- **A click on the bar button** opens the wheel and leaves it open; **a click on a scroll** then uses it once (Minor Evocation, 10 -> 9, `ActionButtonUseKeyDown` 0).
+- **A tap of the key** opens it and leaves it open; a second tap closes it, nothing used (`ActionButtonUseKeyDown` 1).
+- **Hold the key, move onto a scroll, let go** uses that scroll once (11 -> 10, `ActionButtonUseKeyDown` 0).
+- **An imbue through `target-slot` 16:** Imbue Lesser Flame from the wheel (click, and hold and release) starts its cast (spell 1295720) straight away, with **no targeting cursor**: the slot reaches the scroll as it does an oil (above). The owner cancelled each cast on purpose, to keep the scroll, so the enchant landing on the staff was not seen.
+- **The look:** in the third run, on LibGlass's Pearl glass with Glass UI's clear body, "it does, but we might need a bit more opacity" (the disc's backing now at least 0.6). The name readable on its plate.
+
+Not measured yet: the wheel **in combat** (the combat steps were skipped or done by hand: the scrolls left were on cooldown or needed a beast), and **a familiar's aura** (no familiar scroll in the bags), which the ready-check glow reads.
+
 ## Still to measure
 
 - **Professions (#42), still open:** the profession keys with `ActionButtonUseKeyDown` 0 (only 1 was measured; mouse clicks are measured on both). Characters with Mining, Herbalism, Alchemy, Blacksmithing, Engineering, Leatherworking at a higher rank, and a level-16 rogue (Pick Lock): `/fp apo prof <label>` and `/fp apo proftest`.
@@ -285,6 +299,7 @@ Every API (90 names: the stubbed globals and each `C_*` call in the addon) and e
 
   Each click writes a verdict line to the `/fp` console and is kept in `ApothecaProbeDB.applyTests`. To measure, with a dual-wielding rogue and real poisons: each method on each hand, re-applying the same poison, replacing with another family (the replace popup), moving while applying, and in combat. Record which events fired.
 
+- **The Mage Scrolls wheel (#94) in combat**, hold and release and click, with scrolls off cooldown; and **a familiar's aura** (the glow's `FAMILIAR_SPELLS`): `/fp steps apo wheel`.
 - **`C_Item.UseItemByName` on a real item** from the right-click alternate "Use X instead?" popup.
 - **Clicks in combat.** Measured out of combat only, since food can't be eaten in combat. Check once with a potion.
 - **Clicks with `ActionButtonUseKeyDown = 0`**, the other edge. The porting guide measured it with a forced attribute; Apotheca hasn't been checked on it yet.

@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Mage Scrolls wheel (mages).** One button, with its own key binding (Options > Keybindings > Apotheca > Mage Scrolls), for all the mage scrolls you carry: familiars, weapon imbues, Minor Evocation, Cryoblast and the rest. It opens a wheel of them around your cursor.
+  - **Hold the key**, move onto a scroll and let go: that scroll is used. Or **click the button** (or tap the key) and the wheel stays open: click a scroll. Esc, or another tap, closes it. It works in combat.
+  - Weapon imbues go straight onto your main-hand weapon, with no cursor to aim, and only the imbues your weapon can take are shown.
+  - On a ready check the button glows if you carry an imbue and your weapon has none, or a familiar scroll and no familiar is out.
+  - The wheel is glass. With Glass UI installed it follows Glass UI's tint (Clear, Smoked or Class) and accent, as its windows do. A short sound plays as it opens and closes. The button, its glow and the sound each have a switch in the Consumables options (Scrolls & Weapon Oil).
+- **Your conjured food and drink next to a bought one** *(option, off by default)*. When Food or Drink picks a bought item over the conjured one you carry, the conjured one also gets its own button, Conjured Food or Conjured Drink, with its own key binding, so you can eat the free one when there's time. Tick "Also offer my conjured food and drink when a bought one is picked" on Apotheca's main options page.
+
 ## [2.9.0] - 2026-11-06
 
 ### Added
