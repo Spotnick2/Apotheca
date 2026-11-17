@@ -27,7 +27,7 @@ tests/                 — Lua 5.1 unit tests on WowTestKit (tests/kit.pin) with
 Tools/deploy.ps1       — deploy to the local Forever AddOns folder
 Tools/*.py, *.lua      — scan export, item-table generator, consumables reference
 docs/FOREVER-PROBE.md  — in-game measurements this addon depends on
-.github/workflows/     — package-check: luac, tests, dry-run package, zip contents; github-release: a GitHub Release per tag
+.github/workflows/     — package-check: check (luac, tests, dry-run package, zip contents, release files); on a tag, release (GitHub) and wago
 CHANGELOG.md           — Version history
 README.md              — Feature overview and slash command docs
 AGENTS.md              — This file
@@ -208,7 +208,10 @@ Work is tracked on GitHub and lands through pull requests.
 
 ## Releasing
 
-CurseForge builds from the repository webhook (project `1498195`) when it sees a tag, and publishes `CHANGELOG.md` as the release notes.
+A tag publishes in three places (`C:\Projects\WoW\References\Docs\RELEASING.md` is the shared guide):
+- **CurseForge** (project `1498195`) builds from the repository webhook when it sees a tag, and publishes the whole `CHANGELOG.md` as the release notes.
+- **GitHub**: the tag's run of `package-check.yml` publishes a Release with the zip `check` built and checked, `release.json` (for WowUp) and the tag's changelog section.
+- **Wago Addons** (project `n6VYRZNd`, https://addons.wago.io/addons/n6VYRZNd; the TOC's `X-Wago-ID`): the same run uploads the same zip, with the tag's section and game version 1.60.1.
 
 **Every tag needs a `CHANGELOG.md` entry, committed before the tag is pushed.** A tag without one publishes the *previous* release's notes against the new build.
 
@@ -217,14 +220,14 @@ CurseForge builds from the repository webhook (project `1498195`) when it sees a
 - **Minor** (2.5.0): new features, or behaviour that changes on purpose (anything under "Read this after updating").
 - **Major** (3.0.0): a break, such as a new client target or settings that reset (2.0.0 moved to Forever).
 
-1. Add a `## [<version>] - <date>` section at the top. Write it for players, not from the diff: what changed for someone using the addon, in their words. Anything that resets or behaves differently after updating goes under its own heading.
+1. Add a `## v<version> - <date>` section at the top (rename `## Unreleased` to it). Write it for players, not from the diff: what changed for someone using the addon, in their words. Anything that resets or behaves differently after updating goes under its own heading.
    A release tag (`vX.Y.Z`, not an alpha or beta) also updates **both READMEs** in its prep PR (`References\Docs\RELEASING.md` §3): `README.md` and the untracked `README.curseforge.md` (in `.git/info/exclude`) describe what this release does, and nothing it no longer does. Say in the PR whether `README.curseforge.md` changed: the owner pastes it into CurseForge and Wago after the release.
 2. Commit, then tag and push: `git tag v2.0.1 && git push origin v2.0.1`.
 3. **The release type comes from the tag name**: `alpha` → Alpha, `beta` → Beta, anything else → Release. This is a distribution channel, not a stability claim. CurseForge defaults every user to Release, so tag `beta` only to hold a build back on purpose. The game client being in beta is not a reason: say that in the notes and ship a Release.
 4. Check the published file on CurseForge: the game flavor is **Forever** (derived from `## Interface: 16001`), and the zip holds exactly `Apotheca/` with the TOC and the files it lists. There is no probe and no `Tools`.
-5. Check the GitHub Release the tag made (Actions, "GitHub release"): its notes are the version's changelog section and its zip is the same build.
+5. Check the tag's run (Actions, "Package check": `check`, `release`, `wago` all green), the GitHub Release (the zip and `release.json`, notes = the version's section) and Wago's Releases tab (the right channel: it opens on Stable).
 
-**The GitHub Release is automatic (#36).** Pushing a `v*` tag runs `.github/workflows/github-release.yml`: it takes the version's `CHANGELOG.md` section as the notes (`Tools/changelog_section.sh`, which fails if the section is missing), packages with the packager's `-d` (no upload anywhere), checks the zip (`Tools/check_package.sh`, the same check as the package check) and creates the GitHub Release with the zip; `alpha`/`beta` tags become pre-releases. Run it by hand (Actions, "GitHub release", with a tag) to backfill or redo one. **Never let a workflow publish to CurseForge:** the webhook does, and a packager upload would publish a second time. Keep `-d` on every packager run.
+**GitHub and Wago are automatic (#36, #67).** `.github/workflows/package-check.yml` is the shared template (`References\Docs\release\`): `check` runs on every PR, push and tag, packages with the packager's `-d` (no upload anywhere), checks the zip (`Tools/check_package.sh`) and builds `notes.md` and `release.json` (`tests/release_files.sh`, the template **unchanged**: it reads `## v<version>`, and an alpha or beta tag falls back to `## v<version>`, then `## Unreleased`). On a tag, `release` (the only job that writes to the repo) and `wago` (the only one that sees `WAGO_API_TOKEN`) publish exactly those artifacts. `alpha`/`beta` tags are pre-releases on GitHub and alpha/beta on Wago. To publish a tag again where one target failed: Actions, "Package check", Run workflow **from `main`**, with the tag and `publish` (`both`, `github`, `wago`); a tag from before this workflow (v2.9.0 and older) can't be rebuilt this way. A new client build (`16002`) fails `wago` until Wago lists its patch: publish again then. **Never let a workflow publish to CurseForge:** the webhook does, and a packager upload would publish a second time. Keep `-d` on every packager run.
 
 TBC Classic Anniversary is archived on the `tbc-anniversary` branch (`v1.0.5`). Do not tag it again.
 

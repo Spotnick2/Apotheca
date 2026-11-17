@@ -4,7 +4,7 @@
 # TOC loads it, the embedded LibGlass-1.0 exactly as the library ships it
 # (its XML, every file the XML loads, LICENSE, Media/*.tga) at the .pkgmeta
 # pin, and nothing else: no ApothecaProbe, no Tools, no library tests or docs.
-# Used by the package check and the GitHub release workflow.
+# Used by the package check, whose zip the release and wago jobs publish.
 # Usage: Tools/check_package.sh <zip>
 # The library's checkout is $LIBGLASS, else fetched here at the pin
 # (tests/fetch_external.sh), so a backfilled tag checks its own pin.
@@ -41,6 +41,10 @@ fi
 diff -u "$work/expected.txt" "$work/actual.txt"
 extra=$(cd "$work/unpacked" && find . -mindepth 1 -maxdepth 1 ! -name Apotheca)
 test -z "$extra" || { echo "zip has entries outside Apotheca/: $extra"; exit 1; }
+# The packager wrote the version into the TOC (RELEASING.md §2).
+if grep -q "@project-version@" "$work/unpacked/Apotheca/Apotheca.toc"; then
+    echo "the packaged TOC still has @project-version@"; exit 1
+fi
 # The packager fetched its own copy of the library: it must be the pinned
 # commit's content. Its text filter rewrites .lua/.xml with CRLF, so those
 # compare with CRs stripped; textures and LICENSE byte for byte.

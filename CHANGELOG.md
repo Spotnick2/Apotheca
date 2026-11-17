@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## Unreleased
 
 ### Added
 - **Mage Scrolls wheel (mages).** One button, with its own key binding (Options > Keybindings > Apotheca > Mage Scrolls), for all the mage scrolls you carry: familiars, weapon imbues, Minor Evocation, Cryoblast and the rest. It opens a wheel of them around your cursor.
@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
   - The wheel is glass. With Glass UI installed it follows Glass UI's tint (Clear, Smoked or Class) and accent, as its windows do. A short sound plays as it opens and closes. The button, its glow and the sound each have a switch in the Consumables options (Scrolls & Weapon Oil).
 - **Your conjured food and drink next to a bought one** *(option, off by default)*. When Food or Drink picks a bought item over the conjured one you carry, the conjured one also gets its own button, Conjured Food or Conjured Drink, with its own key binding, so you can eat the free one when there's time. Tick "Also offer my conjured food and drink when a bought one is picked" on Apotheca's main options page.
 
-## [2.9.0] - 2026-11-06
+## v2.9.0 - 2026-11-06
 
 ### Added
 - **Comprehend Scroll on the profession bar.** Mages who know it get a button for it, with its own key binding under Apotheca in the game's Key Bindings.
@@ -21,7 +21,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Apotheca is now checked against client build 1.60.1.70790, so the "this client build is different" note no longer appears at login on it.
 
-## [2.8.0] - 2026-11-05
+## v2.8.0 - 2026-11-05
 
 ### Added
 - **Glass Action Bars.** With [Glass Action Bars](https://www.curseforge.com/wow/addons/glass-action-bars) installed, Apotheca's buttons (both bars) wear its glass: the same theme, hover and click feedback as your action bars, following its settings. Without it, Apotheca looks as it always has.
@@ -35,7 +35,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - The options were blank the first time you opened them in a session, and appeared only on the second opening.
 
-## [2.7.0] - 2026-10-14
+## v2.7.0 - 2026-10-14
 
 ### Added
 - **Key bindings for the main bar.** Every button has its own entry under Apotheca in the game's Key Bindings (Options > Keybindings > Apotheca). The key follows the button, not the item: your Mana Potion key always uses your best mana potion, whatever it is. The bound key shows on the button, like on an action bar.
@@ -45,7 +45,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Apotheca no longer fills the game's taint log (`Logs/taint.log`) with "arithmetic on a secret value was blocked" lines, about a hundred in a session. Nothing was broken in game; Apotheca now checks first whether your health and mana are hidden instead of trying the sum.
 
-## [2.6.0] - 2026-10-11
+## v2.6.0 - 2026-10-11
 
 ### Added
 - **Profession Bar (optional, off by default).** A second bar that builds itself from what this character knows, so you no longer set up the same professions bar by hand on every character. Turn it on with `/apo utility` or in the options' new Profession Bar tab. It can show:
@@ -63,12 +63,12 @@ All notable changes to this project will be documented in this file.
 - If combat starts while you're moving the bar, the bar now drops back where combat caught it once combat ends, and that spot is saved. Before, it could stay stuck to the cursor.
 - The layout options no longer show a stale note or greyed-out sliders after the matched action bar is lost or comes back.
 
-## [2.5.0] - 2026-09-28
+## v2.5.0 - 2026-09-28
 
 ### Added
 - **Weapon stones, experimental.** Choose a stone for each hand, per character, in the options under Scrolls & Weapon Oil: None (the default), "Damage stone first" or "Elemental first". The button offers a sharpening stone for a sharp weapon (axes, swords, daggers, polearms), a weightstone for a blunt one (maces, staves), or the Elemental Sharpening Stone (crit) for any melee weapon, whichever you can use. A stone on the main hand replaces the Weapon Oil button there, and a rogue's chosen poison keeps its hand. It hasn't been tried in game yet, so please tell us whether it works.
 
-## [2.4.0] - 2026-09-27
+## v2.4.0 - 2026-09-27
 
 ### Read this after updating
 - **Weapon Oil follows your role now.** Unless you had ticked "Include Wizard Oils", your Weapon Oil button may offer a different oil:
@@ -81,17 +81,17 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **Weapon Oil applies straight to your main hand.** Left-click: a 3-second cast and no weapon to pick. Right-click still lets you pick the weapon.
 
-## [2.3.0] - 2026-09-27
+## v2.3.0 - 2026-09-27
 
 ### Added
 - **Rogue poisons, experimental (off by default).** One button per hand, offering your strongest poison of the kind you choose for that hand (Instant on the main hand and Deadly on the off hand by default; the choice is per character). A click should apply it to that weapon. Turn it on in the options under Scrolls & Weapon Oil. It hasn't been tried on a rogue in game yet, so please tell us whether it works. The buttons glow on a ready check when a weapon has no poison, and after combat too if you switch that on.
 
-## [2.2.0] - 2026-09-27
+## v2.2.0 - 2026-09-27
 
 ### Added
 - **XP Food button (optional, off by default).** Forever's "Nutritious" food and drink give 5% more experience from kills on top of Well Fed. Turn the button on in the options (Consumables, Buff Food) and, while you're below max level, it offers one you can eat at your level, preferring a stat your role uses, then the highest level. When you leave combat without the XP buff, it glows for a few seconds to remind you to eat, and it glows on a ready check too. Well Fed doesn't stack, so XP food replaces another Well Fed buff, and the reminder shows even over other buff food. While the XP Food button offers a food, XP food is its own: the Buff Food, Food and Drink buttons offer only your other food and drink, so the same item never shows twice, and only one of XP Food and Buff Food glows. At max level, or when you carry no XP food you can eat yet, those buttons offer everything again.
 
-## [2.1.0] - 2026-09-25
+## v2.1.0 - 2026-09-25
 
 ### Read this after updating
 - **Your settings are kept between sessions again.** The Forever client fixed its saved-settings bug in build 1.60.1.70009, so the "settings reset at login" notice is gone. The bar's position, your options and your role choices now stick.
@@ -121,7 +121,7 @@ All notable changes to this project will be documented in this file.
 - Warriors and rogues no longer see mana buttons.
 - Buff food priority is saved per role, so switching from Healer to Damage switches your food too.
 
-## [2.0.0] - 2026-09-24
+## v2.0.0 - 2026-09-24
 
 **Apotheca now runs on World of Warcraft: Forever.** It is no longer for TBC Classic Anniversary: Anniversary players should stay on 1.0.5, which remains on CurseForge.
 
@@ -153,7 +153,7 @@ All notable changes to this project will be documented in this file.
 - Food that restores both health and mana appears on both the Food and Drink buttons. It no longer merges them into a single button.
 - The addon list shows an icon instead of a question mark.
 
-## [1.0.5] - 2026-09-23
+## v1.0.5 - 2026-09-23
 
 **This is the final release for TBC Classic Anniversary.** From 2.0.0, Apotheca targets World of Warcraft: Forever. 1.0.5 stays available on CurseForge for Anniversary players, but it will not get further updates.
 
@@ -182,7 +182,7 @@ All notable changes to this project will be documented in this file.
 - Fixed every bar button being completely unclickable. Making buttons act on release alone stopped them from doing anything at all on this client, which only performs a button's action on the press.
 - Fixed the waste-prevention confirmation appearing for resources that were no longer full. The bar cannot refresh during combat, so a conjured mana biscuit blocked at full health and mana would keep asking for confirmation even after mana had been spent. Buttons now re-check current health and mana when clicked and use the item without prompting when nothing would be wasted.
 
-## [1.0.4] - 2026-04-08
+## v1.0.4 - 2026-04-08
 
 ### Added
 - Added right-click alternate support for recovery items when waste prevention is set to **Ask**.
@@ -208,11 +208,11 @@ All notable changes to this project will be documented in this file.
 - Prevented secure button updates while in combat to avoid combat-lockdown issues during bar refreshes.
 - Cleared temporary alternate-item swaps on refresh so buttons always return to their proper primary item state.
 
-## [1.0.3] - 2026-04-05
+## v1.0.3 - 2026-04-05
 
 - Fixed changelog packaging
 
-## [1.0.2] - 2026-04-05
+## v1.0.2 - 2026-04-05
 
 ### Added
 - Added a **Bandage** button that shows the best available bandage from your bags.
@@ -246,7 +246,7 @@ All notable changes to this project will be documented in this file.
 - Existing custom orders are validated to remove duplicates/unknown keys and automatically append any missing buttons.
 
 
-## [1.0.0] - 2026-04-01
+## v1.0.0 - 2026-04-01
 
 ### Added
 - Initial full public release of Apotheca

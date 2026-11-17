@@ -9,6 +9,8 @@ local toc = assert(io.open("Apotheca.toc")):read("*a"):gsub("\r", "")
 
 check(toc:find("\n?## Interface: 16001\n"), "Interface is 16001 (1.60.1 -> %d%02d%02d; 11601 is a transposed-digit bug)")
 check(toc:find("## X%-Curse%-Project%-ID: 1498195\n"), "CurseForge project ID is 1498195")
+-- The wago job uploads to the project the packaged TOC names (#67).
+check(toc:find("## X%-Wago%-ID: n6VYRZNd\n"), "Wago project ID is n6VYRZNd")
 check(toc:find("## Version: @project%-version@\n"), "Version stays the packager token in the repo")
 check(toc:find("## IconTexture: "), "the addon list gets an icon, not a question mark")
 check(toc:find("## SavedVariables: ApothecaDB\n"), "ApothecaDB is the saved table")
