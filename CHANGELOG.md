@@ -12,6 +12,14 @@ All notable changes to this project will be documented in this file.
   - The wheel is glass. With Glass UI installed it follows Glass UI's tint (Clear, Smoked or Class) and accent, as its windows do. A short sound plays as it opens and closes. The button, its glow and the sound each have a switch in the Consumables options (Scrolls & Weapon Oil).
 - **Your conjured food and drink next to a bought one** *(option, off by default)*. When Food or Drink picks a bought item over the conjured one you carry, the conjured one also gets its own button, Conjured Food or Conjured Drink, with its own key binding, so you can eat the free one when there's time. Tick "Also offer my conjured food and drink when a bought one is picked" on Apotheca's main options page.
 
+### Changed: the item data is from client build 70959
+The consumables were re-scanned on the current client (the last scan was from 70009), so the bar follows what Blizzard changed since:
+- **XP Food:** 13 Vanilla recipes no longer give the 5% kill-XP bonus (Crocolisk Gumbo, Murloc Fin Soup, Roasted Kodo Meat, Strider Stew and others). The XP Food button doesn't offer them any more; they are on Buff Food now, for their stat.
+- **Lightning in a Bottle** no longer gives Well Fed: it's plain food.
+- Elixir of Wisdom (+3 Intellect now) and the four Hyjal flasks (+30 Stamina now) are ranked by their new, lower values.
+- New items are offered: the account-bound potions, stones and food (including Tender Wolf Steak and Grilled Squid as XP food), and the second Superior Healing and Mana Potions.
+- The new "Endless" elixirs (percentage bonuses that stack) aren't offered: none of the bar's slots ranks a percentage yet.
+
 ## v2.9.0 - 2026-11-06
 
 ### Added

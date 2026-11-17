@@ -28,9 +28,10 @@ local function glowing(b) local o = b.__apothecaGlow return o ~= nil and not o.a
 ------------------------------------------------------------
 -- Data
 ------------------------------------------------------------
-eq(#D.STONES.sharp, 5, "five sharpening stones")
+-- 70959 added account-bound copies of the Rough and the Elemental stone.
+eq(#D.STONES.sharp, 6, "six sharpening stones")
 eq(#D.STONES.blunt, 5, "five weightstones")
-eq(#D.STONES.any, 1, "Elemental, for any melee weapon")
+eq(#D.STONES.any, 2, "Elemental (two items), for any melee weapon")
 eq(D.STONES.any[1].effect, "meleeCrit", "Elemental is crit, not damage")
 eq(D.STONES.sharp[1].id, 12404, "Dense Sharpening Stone first")
 local consecrated = false
