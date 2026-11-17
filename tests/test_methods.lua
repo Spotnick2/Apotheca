@@ -84,10 +84,8 @@ WoW.step(1)
 WoW.leaveCombat()
 WoW.step(1)
 
-local recorded = Kit.checkMethods({ allow = {
-    ["GameTooltip:SetItemByID"] = "GameTooltipDataMixin's tooltip data accessor "
-        .. "(Blizzard_SharedXMLGame/Tooltip/TooltipDataHandler.lua:525, AddTooltipDataAccessor)",
-} })
+-- GameTooltip:SetItemByID is allowed in the stub (Kit.allowMethods), before the addon loads.
+local recorded = Kit.checkMethods()
 check(recorded >= 90, "the exercise reached the bars and the options (" .. recorded .. " recorded)")
 
 done("test_methods")

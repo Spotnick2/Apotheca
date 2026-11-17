@@ -46,27 +46,6 @@ function WoW.Reveal(v)
 end
 function WoW.IsSecret(v) return issecretvalue(v) end
 
--- WowTestKit #13: the client writes every blocked attempt on a secret to
--- Logs/taint.log, even when a pcall catches it. Count each one a pcall
--- swallowed (WoW.secretBlocked), and fail done() on one, as the old mock did:
--- code that tests issecretvalue first never gets there. Lua 5.1 refuses
--- `secret > 0` before any metamethod runs, with its own message.
-local rawpcall = pcall
-local function counted(ok, ...)
-    local err = ...
-    if not ok and type(err) == "string" and (err:find("secret value touched in Lua", 1, true)
-            or err:find("attempt to compare %a+ with userdata") or err:find("attempt to compare userdata with")) then
-        WoW.secretBlocked = WoW.secretBlocked + 1
-    end
-    return ok, ...
-end
-function pcall(f, ...) return counted(rawpcall(f, ...)) end
-local kitDone = done
-function done(name)
-    eq(WoW.secretBlocked, 0, "no arithmetic or comparison was attempted on a secret")
-    kitDone(name)
-end
-
 ------------------------------------------------------------
 -- Templates
 ------------------------------------------------------------
@@ -89,11 +68,13 @@ for template, regions in pairs(TEMPLATE_REGIONS) do
         end
     end
 end
--- A secure button and the frame that parents it are protected: in combat
--- the client refuses to change them.
-WoW.templates.SecureActionButtonTemplate = function(w)
-    w._protected = true
-    if w._parent then w._parent._protected = true end
+-- Its ScrollBar child, a Slider (SecureScrollTemplates.xml:46,
+-- parentKey="ScrollBar", "$parentScrollBar"), so the options take the
+-- client's branch.
+WoW.templates.UIPanelScrollFrameTemplate = function(w)
+    local bar = newWidget("Slider", w, w._name and (w._name .. "ScrollBar"))
+    w.ScrollBar = bar
+    if w._name then rawset(_G, w._name .. "ScrollBar", bar) end
 end
 
 ------------------------------------------------------------
@@ -124,7 +105,6 @@ function Methods.SetVerticalScroll(w, v) w._vscroll = v end
 function Methods.GetMinMaxValues(w) return w._min or 0, w._max or 1 end
 function Methods.GetStringWidth() return 50 end
 function Methods.GetStringHeight() return 12 end
-function Methods.GetID() return 1 end
 function Methods.IsDesaturated(t) return t._desaturated == true end
 -- A button's own font string (its label), made on first ask.
 function Methods.GetFontString(b)
@@ -156,214 +136,23 @@ function Methods.RegisterEvent(w, e)
     if WoW.refusedEvents[e] then return false end
     return kitRegister(w, e)
 end
-function Methods.RegisterUnitEvent(w, e) return Methods.RegisterEvent(w, e) end
+local kitRegisterUnit = Methods.RegisterUnitEvent
+function Methods.RegisterUnitEvent(w, e, ...)
+    if WoW.badEvents[e] then error("Attempt to register unknown event \"" .. tostring(e) .. "\"", 2) end
+    if WoW.refusedEvents[e] then return false end
+    return kitRegisterUnit(w, e, ...)
+end
 
--- Protected frames in combat. The core refuses Show / Hide / SetShown /
--- SetPoint / ClearAllPoints / SetAllPoints and records each in WoW.blocked.
--- WowTestKit #12: it drops SetAttribute silently and doesn't refuse
--- resizing or moving, which the client does (StopMovingOrSizing measured on
--- the bar, AGENTS.md "Drag Anchor"); refused and recorded here meanwhile.
--- WoW.strictLockdown (opt-in per test section) turns any of them into an
--- error at the call, which fails the test where it happened.
-local CORE_REFUSES = { Show = true, Hide = true, SetPoint = true, ClearAllPoints = true, SetAllPoints = true }
-for _, m in ipairs({ "Show", "Hide", "SetPoint", "ClearAllPoints", "SetAllPoints", "SetAttribute",
-                     "SetWidth", "SetHeight", "SetSize", "StartMoving", "StopMovingOrSizing", "SetClampedToScreen" }) do
-    local plain = Methods[m]
-    Methods[m] = function(w, ...)
-        if WoW.combat and w._protected then
-            if WoW.strictLockdown then
-                error("protected " .. m .. " on " .. tostring(w._name) .. " in combat", 2)
-            end
-            if not CORE_REFUSES[m] then
-                table.insert(WoW.blocked, (w._name or w._type) .. ":" .. m)
-                return
-            end
-        end
-        if plain then return plain(w, ...) end
+-- Protected frames in combat: the kit refuses WoW.PROTECTED on a protected
+-- frame (or one parenting it) and records it in WoW.blocked.
+-- WoW.strictLockdown (opt-in per test section) turns a refusal into an error
+-- at the call, which fails the test where it happened.
+local kitRefused = WoW.refused
+function WoW.refused(w, what)
+    if WoW.strictLockdown and WoW.combat and WoW.isProtected(w) then
+        error("protected " .. what .. " on " .. tostring(w._name) .. " in combat", 3)
     end
-end
-
--- WowTestKit #21: on the client, OnShow / OnHide also fire on each shown
--- descendant whose visibility changes with its parent's (the wheel's art is
--- an insecure child of the ring a snippet shows and hides). The core runs
--- only the frame's own; propagated here meanwhile.
-local function fireDown(w, script)
-    for _, c in ipairs(w._children or {}) do
-        if c._shown then
-            if c._scripts[script] then c._scripts[script](c) end
-            fireDown(c, script)
-        end
-    end
-end
-local guardedShow, guardedHide = Methods.Show, Methods.Hide
-function Methods.Show(w, ...)
-    local was = Methods.IsVisible(w)
-    guardedShow(w, ...)
-    if not was and Methods.IsVisible(w) then fireDown(w, "OnShow") end
-end
-function Methods.Hide(w, ...)
-    local was = Methods.IsVisible(w)
-    guardedHide(w, ...)
-    if was and not Methods.IsVisible(w) then fireDown(w, "OnHide") end
-end
-
-------------------------------------------------------------
--- WowTestKit #20: secure handlers (the Mage Scrolls wheel, #94)
---
--- The core has none. This is the subset the wheel uses, from the client's
--- own source (wow-ui-source, Blizzard_RestrictedAddOnEnvironment):
--- SecureHandlerWrapScript on OnClick (Wrapped_Click, SecureHandlers.lua:272),
--- SecureHandlerSetFrameRef, one environment per header, handles with the
--- methods below (RestrictedFrames.lua), and WoW.click to drive a click.
--- A snippet may change protected frames in combat: that's the point.
-------------------------------------------------------------
-
-for _, t in ipairs({ "SecureHandlerBaseTemplate", "SecureFrameTemplate" }) do
-    WoW.templates[t] = function(w) w._protected = true end
-end
-
--- What a snippet sees besides its handles: no insecure global.
-local RESTRICTED = { math = math, string = string, table = table, type = type, tostring = tostring,
-                     tonumber = tonumber, select = select, pairs = pairs, ipairs = ipairs }
-local function envOf(w)
-    w._secureEnv = w._secureEnv or setmetatable({}, { __index = RESTRICTED })
-    return w._secureEnv
-end
-
-local handles = setmetatable({}, { __mode = "k" })
-local HANDLE = {}
-HANDLE.__index = HANDLE
-local function handle(w)
-    if not w then return nil end
-    local h = handles[w]
-    if not h then
-        h = setmetatable({ _frame = w }, HANDLE)
-        handles[w] = h
-    end
-    return h
-end
-local function frameOf(h) return type(h) == "table" and rawget(h, "_frame") or h end
-
--- Run a snippet as the client does: `owner` the header's handle, then the
--- signature's names, in the header's environment.
-local function runSnippet(header, w, names, body, ...)
-    local chunk = assert(loadstring("local owner, " .. names .. " = ...\n" .. body, "snippet"))
-    setfenv(chunk, envOf(header))
-    return chunk(handle(header), handle(w), ...)
-end
-
--- Shown and hidden from secure code: allowed in combat, never refused.
-local function secureShow(w)
-    local was = Methods.IsVisible(w)
-    w._shown = true
-    if not was and Methods.IsVisible(w) then
-        if w._scripts.OnShow then w._scripts.OnShow(w) end
-        fireDown(w, "OnShow")
-    end
-end
-local function secureHide(w)
-    local was = Methods.IsVisible(w)
-    w._shown = false
-    if was then
-        if w._scripts.OnHide then w._scripts.OnHide(w) end
-        fireDown(w, "OnHide")
-    end
-end
-
-function HANDLE:GetAttribute(k) return Methods.GetAttribute(self._frame, k) end
-function HANDLE:SetAttribute(k, v)
-    local w = self._frame
-    w._attrs = w._attrs or {}
-    w._attrs[k] = v
-end
-function HANDLE:Show() secureShow(self._frame) end
-function HANDLE:Hide() secureHide(self._frame) end
-function HANDLE:IsShown() return self._frame._shown end
-function HANDLE:ClearAllPoints() self._frame._points = {} end
-function HANDLE:SetPoint(p, rel, rp, x, y) table.insert(self._frame._points, { p, frameOf(rel), rp, x, y }) end
-function HANDLE:GetWidth() return self._frame._width end
-function HANDLE:GetHeight() return self._frame._height end
--- The cursor as a fraction of the frame's rect, nil outside it
--- (RestrictedFrames.lua:307). The rect: _left / _bottom (0 if unset),
--- _width / _height; effective scale 1.
-function HANDLE:GetMousePosition()
-    local w = self._frame
-    local l, b, wd, ht = w._left or 0, w._bottom or 0, w._width, w._height
-    if not wd or not ht or wd == 0 or ht == 0 then return nil end
-    local x, y = GetCursorPosition()
-    x, y = x - l, y - b
-    if x < 0 or x > wd or y < 0 or y > ht then return nil end
-    return x / wd, y / ht
-end
-function HANDLE:GetFrameRef(name) return handle(self._frame._frameRefs and self._frame._frameRefs[name]) end
-function HANDLE:RunAttribute(name, ...)
-    local body = Methods.GetAttribute(self._frame, name)
-    if type(body) ~= "string" then error("RunAttribute: no snippet in " .. tostring(name), 2) end
-    return runSnippet(self._frame, self._frame, "self", body, ...)
-end
--- Override bindings owned by the frame (WoW.overrideBindings, as
--- SetOverrideBindingClick's).
-function HANDLE:SetBindingClick(_, key, name, button)
-    WoW.overrideBindings[key] = name .. ":" .. (button or "LeftButton")
-    WoW.bindingOwners[key] = self._frame
-end
-function HANDLE:ClearBindings()
-    for key, owner in pairs(WoW.bindingOwners) do
-        if owner == self._frame then WoW.overrideBindings[key], WoW.bindingOwners[key] = nil, nil end
-    end
-end
-
-function SecureHandlerSetFrameRef(header, name, frame)
-    header._frameRefs = header._frameRefs or {}
-    header._frameRefs[name] = frame
-end
-function SecureHandlerWrapScript(frame, script, header, pre, post)
-    if script ~= "OnClick" then error("the stub wraps OnClick only: " .. tostring(script), 2) end
-    frame._wraps = frame._wraps or {}
-    table.insert(frame._wraps, { header = header, pre = pre, post = post })
-end
-
--- The button's own secure action: it acts only on the edge where down ==
--- useOnKeyDown (the attribute, else ActionButtonUseKeyDown: WoW.useKeyDown;
--- measured, AGENTS.md). An item is recorded in WoW.secureActions.
-local function secureAction(b, down)
-    local attrs = b._attrs or {}
-    local onDown = attrs.useOnKeyDown
-    if onDown == nil then onDown = WoW.useKeyDown end
-    if down ~= (onDown and true or false) then return end
-    if attrs.type == "item" then
-        table.insert(WoW.secureActions, { button = b._name, item = attrs.item, targetSlot = attrs["target-slot"] })
-    end
-end
--- Wrapped_Click: the newest wrap outermost, each around the next.
-local function clickWrapped(b, i, mouse, down)
-    local wrap = b._wraps and b._wraps[i]
-    if not wrap then return secureAction(b, down) end
-    local newbutton, message
-    if not WoW.combat or b._protected then
-        newbutton, message = runSnippet(wrap.header, b, "self, button, down", wrap.pre, mouse, down)
-        if newbutton == false then return end
-        if newbutton then mouse = tostring(newbutton) end
-    end
-    clickWrapped(b, i - 1, mouse, down)
-    if wrap.post and message ~= nil then
-        runSnippet(wrap.header, b, "self, message, button, down", wrap.post, message, mouse, down)
-    end
-end
--- One edge of a click or key press on a button, as the client runs it.
-function WoW.click(b, mouse, down)
-    mouse, down = mouse or "LeftButton", down and true or false
-    if b._scripts.PreClick then b._scripts.PreClick(b, mouse, down) end
-    clickWrapped(b, b._wraps and #b._wraps or 0, mouse, down)
-    if b._scripts.PostClick then b._scripts.PostClick(b, mouse, down) end
-end
--- A key binding clicks the button it names (CLICK <name>:<button>), hidden or not.
-function WoW.pressKey(key, down)
-    local action = WoW.overrideBindings[key]
-    if not action then return false end
-    local name, mouse = action:match("^(.-):(.+)$")
-    WoW.click(_G[name], mouse, down)
-    return true
+    return kitRefused(w, what)
 end
 
 ------------------------------------------------------------
@@ -391,11 +180,7 @@ table.insert(WoW.onReset, function()
     WoW.itemsUsed    = {}        -- names passed to C_Item.UseItemByName
     WoW.curvesRefused = false    -- simulate a client that refuses colour curves
     WoW.strictLockdown = false   -- protected frames changed in combat fail the test
-    WoW.secretBlocked = 0        -- blocked secret operations a pcall swallowed (taint.log lines)
     WoW.fontStrings  = {}
-    WoW.secureActions = {}       -- secure item uses (WowTestKit #20 meanwhile)
-    WoW.bindingOwners = {}       -- [key] = the frame whose snippet set it
-    WoW.useKeyDown   = true      -- ActionButtonUseKeyDown, the client's default
 end)
 
 function WoW.AddItem(bag, slot, itemID, count, name)
@@ -429,12 +214,16 @@ function WoW.leaveCombat()
     WoW.fire("PLAYER_REGEN_ENABLED")
 end
 
--- WowTestKit #9: the core's WoW.tick doesn't move GetTime. One step of the
--- game: the clock (and any timer due) moves on by `elapsed` seconds, then
--- every visible frame's OnUpdate runs with it.
+-- One step of the game: the clock (and any timer due) moves on by `elapsed`
+-- seconds, then every visible frame's OnUpdate runs with it.
+-- WowTestKit #66: the kit's WoW.tick moves the clock too, and ticking with 0
+-- (MIGRATING's advice) hands every OnUpdate elapsed = 0, so the throttled
+-- ones (deferred update, role and layout polls) never run. The clock is set
+-- back before the tick meanwhile, so it moves once.
 function WoW.step(elapsed)
     elapsed = elapsed or 1
     WoW.advance(elapsed)
+    WoW.now = WoW.now - elapsed
     WoW.tick(elapsed)
 end
 
@@ -474,6 +263,11 @@ for i, names in ipairs(BARS) do
     end
     _G[names[2]] = button
 end
+-- GameTooltip's setters are Lua (TooltipDataHandlerMixin), unseen by the dump.
+Kit.allowMethods({
+    ["GameTooltip:SetItemByID"] = "GameTooltipDataMixin's tooltip data accessor "
+        .. "(Blizzard_SharedXMLGame/Tooltip/TooltipDataHandler.lua:525, AddTooltipDataAccessor)",
+})
 GameTooltip = newWidget("GameTooltip", UIParent, "GameTooltip")
 -- The tooltip's owner, so a test can see whose tooltip is up.
 function GameTooltip:SetOwner(owner) self._owner = owner end
@@ -510,9 +304,6 @@ function GetWeaponEnchantInfo()
 end
 WoW.targeting, WoW.popup = false, nil
 function SpellIsTargeting() return WoW.targeting end
--- The cursor in screen pixels (drag and drop in the options, #54).
-WoW.cursorX, WoW.cursorY = 0, 0
-function GetCursorPosition() return WoW.cursorX, WoW.cursorY end
 function StaticPopup_Visible(which) return WoW.popup == which and {} or nil end
 
 local function maybeSecret(v) if WoW.healthSecret then return Secret() end return v end
@@ -667,11 +458,16 @@ end
 C_SkillInfo = {}
 function C_SkillInfo.GetNumSkillLines() return 0 end
 function C_SkillInfo.GetSkillLineInfo() return nil end
-WoW.overrideBindings = {}     -- [key] = "buttonName:mouseButton"
+-- Override bindings in the kit's WoW.overrideBindings shape
+-- ({ owner, name, button, priority }, as a snippet's SetBindingClick).
 function SetOverrideBindingClick(owner, priority, key, name, button)
-    WoW.overrideBindings[key] = name .. ":" .. (button or "LeftButton")
+    WoW.overrideBindings[key] = { owner = owner, name = name, button = button, priority = priority }
 end
-function ClearOverrideBindings() WoW.overrideBindings, WoW.bindingOwners = {}, {} end
+function ClearOverrideBindings(owner)
+    for key, b in pairs(WoW.overrideBindings) do
+        if b.owner == owner then WoW.overrideBindings[key] = nil end
+    end
+end
 -- Sounds: an addon's own file plays (porting guide); WoW.sounds records them.
 WoW.sounds = {}
 function PlaySoundFile(path, channel)
