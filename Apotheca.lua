@@ -832,7 +832,7 @@ local MANAGEM_BUTTON_CONFIG = {
 -- snippet arms it for one click when a scroll is picked by key release.
 local MAGESCROLLS_BUTTON_CONFIG = {
     key = "magescrolls", label = "Mage Scrolls", classOnly = "MAGE", wheel = true,
-    emptyIcon = "Interface\Icons\INV_Scroll_03",
+    emptyIcon = "Interface\\Icons\\INV_Scroll_03",
     emptyTooltip = "No mage scroll in bags",
 }
 

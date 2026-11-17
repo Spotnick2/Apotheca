@@ -21,6 +21,14 @@ for _, f in ipairs(files) do
     check(io.open(f) ~= nil, "TOC file exists: " .. f)
 end
 check(seen["Apotheca.lua"] and seen["Apotheca_Options.lua"], "both main files are listed")
+-- A texture path with single backslashes loses them in Lua 5.1 ("\I" is no
+-- escape), so the icon never loads (Codex on #98: the Mage Scrolls empty icon).
+for _, f in ipairs(files) do
+    if f:find("%.lua$") and not f:find("^Libs") then
+        local src = io.open(f):read("*a")
+        check(not src:find("\"Interface\\%a"), "every Interface path is escaped: " .. f)
+    end
+end
 -- The client loads Bindings.xml by name from the addon folder (#42).
 check(io.open("Bindings.xml") ~= nil, "Bindings.xml exists")
 check(not seen["Bindings.xml"], "and is not in the TOC")
