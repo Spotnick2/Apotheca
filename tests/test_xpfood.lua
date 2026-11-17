@@ -21,9 +21,14 @@ H.loadAddon()
 D = Apotheca.DATA
 
 ------------------------------------------------------------
--- Data (generated from the 70009 scans)
+-- Data (generated from the 70959 scans)
 ------------------------------------------------------------
-check(#D.XP_FOOD > 100, "every XP food is in the data")
+check(#D.XP_FOOD > 90, "every XP food is in the data")
+-- 70959 took the kill-XP line out of 13 Vanilla recipes' tooltips
+-- (Crocolisk Gumbo, Murloc Fin Soup...): they are plain buff food now.
+local xpIDs = {}
+for _, e in ipairs(D.XP_FOOD) do xpIDs[e.id] = true end
+check(not xpIDs[3664] and not xpIDs[3663], "Crocolisk Gumbo and Murloc Fin Soup are no longer XP food (70959)")
 local sorted = true
 for i = 2, #D.XP_FOOD do if D.XP_FOOD[i].level > D.XP_FOOD[i - 1].level then sorted = false end end
 check(sorted, "XP food is ordered highest level first")

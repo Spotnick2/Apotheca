@@ -14,7 +14,7 @@ Input:  docs/forever-consumables-<build>.tsv, exported from an in-game
 Output: ApothecaItems.lua (Apotheca.DATA), loaded before Apotheca.lua.
 
 Usage:
-    python Tools/build_item_tables.py docs/forever-consumables-70009.tsv
+    python Tools/build_item_tables.py docs/forever-consumables-70959.tsv
 
 Rerun after a new client build: re-scan in game, re-export, regenerate,
 and review the diff. Anything the parser does not recognise is simply
@@ -172,7 +172,10 @@ STAT_WORDS = {
 def parse_stats(text):
     """Stats from a buff description. Returns {stat: value}."""
     s = {}
-    t = text
+    # A percentage is never a flat stat: "Increases Intellect by 2%" (Elixir
+    # of Endless Intellect, 70959) would otherwise read as +2 Intellect. The
+    # Well Fed crit pattern ("gain 1% Critical Strike chance") has no "by".
+    t = re.sub(r'\bby \d+%', 'by a percentage', text)
 
     def add(k, v):
         s[k] = max(s.get(k, 0), v)
@@ -235,10 +238,10 @@ def parse_stats(text):
     if m: add('hp5', int(m.group(1))); add('mp5', int(m.group(2)))
     m = re.search(r'Regenerate (\d+) health every 5 sec', t, re.I)
     if m: add('hp5', int(m.group(1)))
-    # crit
-    m = re.search(r'chance to (?:get a )?critical(?:ly)? hit by (\d+)%', t, re.I)
+    # crit, a percentage by nature: read from the text as written
+    m = re.search(r'chance to (?:get a )?critical(?:ly)? hit by (\d+)%', text, re.I)
     if m: add('crit', int(m.group(1)))
-    m = re.search(r'Spell Critical chance by (\d+)%', t, re.I)
+    m = re.search(r'Spell Critical chance by (\d+)%', text, re.I)
     if m: add('spellCrit', int(m.group(1)))
     # the rest
     m = re.search(r'(?:melee )?attack power by (\d+)', t, re.I)

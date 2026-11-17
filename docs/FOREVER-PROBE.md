@@ -289,7 +289,27 @@ Every API (90 names: the stubbed globals and each `C_*` call in the addon) and e
 
 Not measured yet: the wheel **in combat** (the combat steps were skipped or done by hand: the scrolls left were on cooldown or needed a beast), and **a familiar's aura** (no familiar scroll in the bags), which the ready-check glow reads.
 
+## Build 1.60.1.70959 (client built Nov 13), 2026-11-17
+
+- **API dump** `forever-api-1.60.1.70959.md`, diffed against 70790 (#100): documented functions +4 -2, events +1 -1, tables and widget methods unchanged. Nothing Apotheca calls was removed or changed. All 26 test files pass against the kit's 70959 data.
+- **Probe** (`/fp steps apo probe`, run #371, a level 2 mage with a staff): the same as on 70009, out of combat and in combat.
+  - Current health and power are **secret at rest**; their maximums are readable. `API.PlayerMissing` = `nil, nil`. The StatusBar readback is still `<secret>`.
+  - Out of combat, auras and cooldowns aren't secret. In combat, `ShouldAurasBeSecret` and `ShouldCooldownsBeSecret` are true, and `GetAuraDataByIndex` throws.
+  - In combat, the item cooldown of food **not** cooling down came back plain (`0, 0, 1`). Only the flag was measured on 70009. Apotheca hands cooldowns to `SetCooldown` without comparing them either way.
+  - Stack counts, `GetWeaponEnchantInfo`, the bags (0 to 5), the role sources, the single class-named spec (Mage, 1482), the templates and `GameTooltip.SetItemByID` are unchanged. `AnimateTexCoords` is still absent.
+- **Consumable scan** (`docs/forever-consumables-70959.tsv`, run #372, complete): 2476 consumables, 8 still without text. Catalog: `C:/Projects/WoW/References/Forever/consumables/forever-consumables-1.60.1.70959.md`. **Well Fed scan** (`docs/forever-wellfed-70959.tsv`): complete, the same 30 Well Fed spells as 70009, 13 hidden.
+  - The five Forever fruits (249791 to 249795) still load no item data, so their 69977 rows are carried over again.
+  - **The kill-XP bonus is gone from 13 Vanilla recipes**: Crocolisk Gumbo, Curiously Tasty Omelet, Gooey Spider Cake, Hot Lion Chops, Soothing Turtle Bisque, Lean Venison, Crocolisk Steak, Big Bear Steak, Crispy Lizard Tail, Murloc Fin Soup, Kaldorei Spider Kabob, Roasted Kodo Meat and Strider Stew. Their tooltips no longer say "experience gained from kills is increased by 5%", so they move from XP Food to Buff Food. Their food spells are unchanged, and **which aura eating one now applies isn't measured**. If it is still one of the XP Well Fed IDs, the XP Food reminder stays quiet after eating one.
+  - Lightning in a Bottle lost its Well Fed (+6 Stamina and Spirit) and is plain food now.
+  - Nerfs: Elixir of Wisdom went from +6 Intellect for 1 hour to +3 for 30 min. The four Hyjal flasks (Natural Accuracy, Aggression, Precision, Swiftness) went from +60 Stamina and 5% to +30 and 2%.
+  - New copies of existing items, under new IDs. Account-bound: the Minor, Lesser and Greater Healing Potions and the Minor and Lesser Mana Potions ("cannot be used in profession recipes or quest turn-ins"), a Rough and an Elemental Sharpening Stone, Tender Wolf Steak and Grilled Squid (XP food, no level requirement), Roasted Quail and Morning Glory Dew. Not bound: a second Superior Healing Potion and Superior Mana Potion (288896, 288897).
+  - Drinks restore a little more: Conjured Spring Water and its tier go from 1292 to 1344 mana, and the lower tiers rise alike.
+  - **New: the "Endless" elixirs** (289082 to 289334: Power, Healing, Rapidity, Opportunity, Intellect, Mana, Growth, Experience). They last 1 hour, give percentages (damage 3%, healing 2%, haste 4%, crit 4%, Intellect 2%, mana regeneration 30%, experience 200%) and most stack up to 5 times. Wowhead knows them with no source. They're reported as skipped, since no role profile ranks percentages. The generator read "Intellect by 2%" as +2 Intellect, so a percentage is now never a flat stat.
+- `MEASURED_ON_BUILD` is bumped to **70959**.
+
 ## Still to measure
+
+- **The aura of a former XP food (70959).** Eat Crocolisk Gumbo (or any of the 13 above), then `/fp apo probe` out of combat: the `player auras` line shows the Well Fed ID. If it is one of `XP_WELL_FED_SPELLS`, the generator has to tell those foods apart from real XP food.
 
 - **Professions (#42), still open:** the profession keys with `ActionButtonUseKeyDown` 0 (only 1 was measured; mouse clicks are measured on both). Characters with Mining, Herbalism, Alchemy, Blacksmithing, Engineering, Leatherworking at a higher rank, and a level-16 rogue (Pick Lock): `/fp apo prof <label>` and `/fp apo proftest`.
 
