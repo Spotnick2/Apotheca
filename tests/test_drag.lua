@@ -15,7 +15,7 @@ H.loadAddon()
 Apotheca.UpdateAllButtons()
 
 local frame, anchor = ApothecaFrame, ApothecaAnchor
-check(frame._protected, "the bar parents secure buttons")
+check(frame:IsProtected(), "the bar parents secure buttons, so it is protected")
 
 local function startDrag(x, y)
     frame._left, frame._bottom = nil, nil

@@ -53,8 +53,8 @@ check(not f.buttons.alchemy, "none for an unknown one")
 check(not f.buttons.mining, "none for a context-only family")
 eq(f.buttons.hearthstone:GetAttribute("item"), "item:6948", "the Hearthstone is an item button")
 local bound = 0
-for _, target in pairs(WoW.overrideBindings) do
-    if target:find("^ApothecaProbeProf_") then bound = bound + 1 end
+for _, b in pairs(WoW.overrideBindings) do
+    if b.name:find("^ApothecaProbeProf_") and b.button == "LeftButton" then bound = bound + 1 end
 end
 eq(bound, 5, "each button has a CTRL-SHIFT click binding")
 
