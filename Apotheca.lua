@@ -3713,6 +3713,21 @@ end
 -- SLASH COMMANDS
 -- ============================================================
 
+-- Opens Apotheca's options page; false before PLAYER_LOGIN builds it. Also
+-- Glass UI's "options" for Apotheca's card (#101).
+function Apotheca.OpenOptions()
+    local panel = Apotheca.optionsPanel
+    if Settings and Settings.OpenToCategory and panel and panel._category then
+        Settings.OpenToCategory(panel._category:GetID())
+        return true
+    elseif InterfaceOptionsFrame_OpenToCategory and panel then
+        InterfaceOptionsFrame_OpenToCategory(panel)
+        InterfaceOptionsFrame_OpenToCategory(panel)
+        return true
+    end
+    return false
+end
+
 SLASH_APOTHECA1 = "/apotheca"
 SLASH_APOTHECA2 = "/apo"
 SlashCmdList["APOTHECA"] = function(msg)
@@ -3749,18 +3764,10 @@ SlashCmdList["APOTHECA"] = function(msg)
                 print(string.format("|cff9966ff  %s:|r %s — %s", btn.cfg.label, name, why))
             end
         end
-    else
-        local panel = Apotheca.optionsPanel
-        if Settings and Settings.OpenToCategory and panel and panel._category then
-            Settings.OpenToCategory(panel._category:GetID())
-        elseif InterfaceOptionsFrame_OpenToCategory and panel then
-            InterfaceOptionsFrame_OpenToCategory(panel)
-            InterfaceOptionsFrame_OpenToCategory(panel)
-        else
-            print("|cff9966ffApotheca:|r Options panel not ready. Try again after login.")
-            print("|cff9966ffApotheca:|r /apo debug — toggle debug mode")
-            print("|cff9966ffApotheca:|r /apo status — why a button is or isn't clickable")
-        end
+    elseif not Apotheca.OpenOptions() then
+        print("|cff9966ffApotheca:|r Options panel not ready. Try again after login.")
+        print("|cff9966ffApotheca:|r /apo debug — toggle debug mode")
+        print("|cff9966ffApotheca:|r /apo status — why a button is or isn't clickable")
     end
 end
 
@@ -3974,6 +3981,8 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- DB is already initialised by ADDON_LOADED above.
         Apotheca.CreateOptionsPanel()
         Apotheca.ConnectGlassActionBars()
+        -- Glass UI's suite: ask once, before the wheel can first open (#101).
+        if Apotheca.Wheel then Apotheca.Wheel.JoinSuite() end
 
         -- No saved settings loaded is a first install, or the client bug
         -- fixed in 70009; the sentinel can't tell them apart.

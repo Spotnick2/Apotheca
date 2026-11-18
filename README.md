@@ -62,7 +62,7 @@ Measured in game so far: Cooking, First Aid, Fishing, Enchanting, Tailoring, Lea
 
 With [Glass Action Bars](https://www.curseforge.com/wow/addons/glass-action-bars) installed, Apotheca's buttons (both bars) wear its glass: the same theme, hover and click feedback as your action bars, following its settings. You can also dock the bar beside one of your action bars in Glass Action Bars' Dock settings; it then places the bar and can match that bar's icon size and padding. Apotheca keeps its own rows and orientation unless you also tick "Match the bar's rows and direction" there. Undock it and the bar goes back where you had it. Without Glass Action Bars, Apotheca looks as it always has.
 
-The Mage Scrolls wheel is glass of its own, whether or not you use Glass Action Bars. With Glass UI installed, it follows Glass UI's tint (Clear, Smoked or Class) and accent, like Glass UI's windows.
+The Mage Scrolls wheel is glass of its own, whether or not you use Glass Action Bars. With Glass UI installed, it follows Glass UI's tint (Clear, Smoked or Class) and accent, like Glass UI's windows. A Glass UI version that lists Apotheca gives it a card on Glass UI's page, where you can turn that off; the wheel then keeps its own look after a `/reload`.
 
 ## Also
 

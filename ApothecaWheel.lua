@@ -232,10 +232,16 @@ W.SOUNDS = {                      -- Portal Roulette's open and close
 
 -- One LibGlass instance for Apotheca, Pearl (the suite's only material; a
 -- copy older than r11 has no Pearl and builds its default).
+-- What was built goes into the suite report (#101): the copy's MINOR, and
+-- why Pearl wasn't built (a copy older than r11 has no Pearl).
 local Glass
 do
-    local lib = LibStub("LibGlass-1.0")
+    local lib, minor = LibStub("LibGlass-1.0")
     local ok, made = pcall(lib.New, lib, { preset = "pearl" })
+    W.glassMinor = type(minor) == "number" and minor or nil
+    if not ok then
+        W.glassFailed = (W.glassMinor or 0) < 11 and "library-too-old" or "build-failed"
+    end
     Glass = ok and made or lib:New()
 end
 W.Glass = Glass
@@ -333,10 +339,42 @@ local function ClassColor()
     if ok and type(c) == "table" and type(c.r) == "number" then return c.r, c.g, c.b end
 end
 
+-- Glass UI's suite (#101): Apotheca is a member, keyed "Apotheca", for what
+-- it paints itself (the wheel today; GAB skins the bar's buttons, under
+-- GAB's switch). It asks Theme once, at PLAYER_LOGIN (every ADDON_LOADED
+-- has run, so no OptionalDeps line), before the wheel can first open, and
+-- that answer holds until the next /reload:
+-- - a look: follow the suite, live on LookChanged (as before);
+-- - "not-following" (the player's switch in Glass UI): our own look;
+-- - anything else ("unknown" from a Glass UI older than Apotheca's roster
+--   entry, "not-ready", an error) or no Theme at all: follow read-only, as
+--   before, so an older Glass UI keeps tinting the wheel.
+-- Then Report says what was built. W.ownLook is the opt-out.
+W.ownLook = false
+local SUITE_KEY = "Apotheca"
+function W.JoinSuite()
+    local s = Suite()
+    if not (s and type(rawget(s, "Theme")) == "function" and type(rawget(s, "Report")) == "function") then
+        return nil
+    end
+    local ok, look, reason = pcall(s.Theme, SUITE_KEY)
+    if not ok then return nil end
+    local follow = type(look) == "table" and look.preset == "pearl"
+    if not follow and reason ~= "not-following" then return reason end
+    W.ownLook = not follow
+    local state = { api = 1, minor = W.glassMinor, live = true,
+                    options = function() return Apotheca.OpenOptions() end }
+    if follow then
+        if W.glassFailed then state.reason = W.glassFailed else state.built = "pearl" end
+    end
+    pcall(s.Report, SUITE_KEY, state)
+    return follow and "following" or reason
+end
+
 -- The look now: { backing = rgba, tint = rgb[a] or nil (the built tint),
 -- wash = factor, accent = rgb }.
 function W.Look()
-    local s = Suite()
+    local s = not W.ownLook and Suite()
     local body = s and SuiteCall(s, "Body")       -- nil: the suite's current tint
     local accent = s and SuiteCall(s, "Accent")
     accent = IsColor(accent, 3) and accent or W.GOLD
@@ -378,7 +416,8 @@ end
 function W.Paint() Paint(parts, W.Look()) end
 
 -- Live: Glass UI fires this when the player changes the suite look, in or
--- out of combat. Only our own textures change.
+-- out of combat. Only our own textures change. On our own look (W.ownLook)
+-- W.Look ignores the suite, so a repaint changes nothing.
 local registry = rawget(_G, "EventRegistry")
 if type(registry) == "table" and type(registry.RegisterCallback) == "function" then
     pcall(registry.RegisterCallback, registry, "GlassUI.Suite.LookChanged", function() W.Paint() end, W)
