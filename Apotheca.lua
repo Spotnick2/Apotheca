@@ -480,6 +480,32 @@ function Apotheca.IsVisible()
     return true
 end
 
+-- The bar's visibility is a secure state driver's (#110). The bar parents
+-- secure buttons, so insecure code can't show or hide it in combat, and the
+-- full update doesn't run then: "In combat only" never showed, "Out of
+-- combat" never hid. The driver re-resolves on its own in combat (state
+-- drivers work on Forever since 70425, porting guide). It also re-applies
+-- every 0.2 s, so nothing else may Show or Hide ApothecaFrame.
+local VISIBILITY_DRIVERS = {
+    ALWAYS        = "show",
+    HIDDEN        = "hide",
+    IN_COMBAT     = "[combat] show; hide",
+    OUT_OF_COMBAT = "[combat] hide; show",
+}
+function Apotheca.VisibilityDriver(active)
+    if not active then return "hide" end
+    return VISIBILITY_DRIVERS[DB().visibility or "ALWAYS"] or "show"
+end
+
+local appliedVisibility
+-- Out of combat only (registering changes a protected frame's state).
+local function ApplyVisibility(active)
+    local driver = Apotheca.VisibilityDriver(active)
+    if driver == appliedVisibility or InCombatLockdown() then return end
+    appliedVisibility = driver
+    RegisterStateDriver(ApothecaFrame, "visibility", driver)
+end
+
 -- ============================================================
 -- ITEM DATA
 -- Generated from the client's own tooltips into ApothecaItems.lua
@@ -3287,7 +3313,7 @@ function UpdateAllButtonsBody()
     -- wheel has its own secure slots, so it is emptied too, which disables
     -- its key and closes it if open (Codex review of #98).
     local function Inactive()
-        ApothecaFrame:Hide()
+        ApplyVisibility(false)
         remindPending = false   -- a hidden bar has nothing to remind
         Apotheca._activeKeys = {}
         if Apotheca.Wheel then Apotheca.Wheel.SetContents({}, false, false) end
@@ -3303,13 +3329,10 @@ function UpdateAllButtonsBody()
         return
     end
     -- The Visibility setting only hides the bar: its buttons stay set up,
-    -- so their key bindings work with the bar hidden (#49).
-    if Apotheca.IsVisible() then
-        ApothecaFrame:Show()
-    else
-        ApothecaFrame:Hide()
-        remindPending = false
-    end
+    -- so their key bindings work with the bar hidden (#49). Shown or hidden
+    -- by the state driver, in combat too (#110).
+    ApplyVisibility(true)
+    if not Apotheca.IsVisible() then remindPending = false end
 
     if db.debug then debugLabel:Show() else debugLabel:Hide() end
 
