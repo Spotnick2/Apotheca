@@ -1975,14 +1975,20 @@ local function GlassState()
     end
     local errs = {}
     for step, msg in pairs(G.errors) do errs[#errs + 1] = step .. ": " .. msg end
-    local mana = Apotheca.buttons.mana
+    -- A button on the bar: one the bar doesn't use (Mana on a warrior) is
+    -- never laid out and keeps its first size.
+    local shown
+    for _, key in ipairs(Apotheca.GetButtonOrder()) do
+        local btn = Apotheca.buttons[key]
+        if btn and btn:IsShown() then shown = btn break end
+    end
     return {
         reason = G.Reason() or "none", option = Apotheca.GetDB().glassButtons == true,
         skins = n, off = off, pending = G.pending, gab = G.gab == true,
         minor = Apotheca.Wheel.glassMinor, ownLook = Apotheca.Wheel.ownLook,
         tint = G._suiteLook.tint or "default", hover = G._suiteLook.hover or "default",
         press = G._suiteLook.press or "default",
-        iconSize = mana and mana:GetWidth(), errors = #errs > 0 and table.concat(errs, "; ") or "none",
+        iconSize = shown and shown:GetWidth(), errors = #errs > 0 and table.concat(errs, "; ") or "none",
     }
 end
 local function GlassOn()
