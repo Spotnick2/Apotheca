@@ -96,6 +96,18 @@ check(anchorPlate.glass and anchorPlate.glass:IsShown() and not anchorPlate.bg:I
 db.glassButtons = false
 GB.Apply()
 check(anchorPlate.glass:IsShown(), "whatever the option says (GAB styles the buttons)")
+local panel = Apotheca.optionsPanel
+panel._scripts.OnShow(panel)
+local glassCB
+for _, cb in ipairs(H.framesWithTemplate("InterfaceOptionsCheckButtonTemplate")) do
+    if cb.label and cb.label:GetText() == "Glass buttons" then glassCB = cb end
+end
+check(glassCB and not glassCB:IsEnabled(), "the Glass buttons option is greyed out")
+local gabNote
+for _, f in ipairs(WoW.fontStrings) do
+    if type(f._text) == "string" and f._text:find("Glass Action Bars styles the buttons", 1, true) then gabNote = f end
+end
+check(gabNote, "its note says GAB styles them")
 
 -- The icon stays Apotheca's: an empty button still greys out under glass.
 Apotheca.UpdateAllButtons()

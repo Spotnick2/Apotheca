@@ -682,7 +682,9 @@ function Apotheca.BuildOptionsPanelContent(pageContents)
     local glassNote = SmallLabel(" \n ")
     local function SyncGlass()
         local G = Apotheca.GlassButtons
-        local why = G and G.Reason() or "library"
+        -- Not `G and G.Reason() or "library"`: Reason's nil (usable) would read as "library".
+        local why = "library"
+        if G then why = G.Reason() end
         if why then glassCB:Disable() else glassCB:Enable() end
         glassCB.label:SetTextColor(why and 0.5 or 1, why and 0.5 or 1, why and 0.5 or 1)
         if why == "gab" then

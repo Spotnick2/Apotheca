@@ -51,6 +51,24 @@ check(nMain > 20, "the main bar's buttons exist")
 eq(#G.Buttons(), nMain + #Apotheca.Utility.ACTIONS + #W.slots,
    "the style covers both bars and every wheel slot")
 
+-- The option itself: usable, and saying what it does. (G.Reason() was nil
+-- while the page said "Unavailable": `G and G.Reason() or "library"`.)
+local panel = Apotheca.optionsPanel
+panel._scripts.OnShow(panel)
+local glassCB
+for _, cb in ipairs(H.framesWithTemplate("InterfaceOptionsCheckButtonTemplate")) do
+    if cb.label and cb.label:GetText() == "Glass buttons" then glassCB = cb end
+end
+check(glassCB, "the Glass buttons checkbox exists")
+check(glassCB:IsEnabled(), "and can be ticked")
+local function noteSaying(text)
+    for _, f in ipairs(WoW.fontStrings) do
+        if type(f._text) == "string" and f._text:find(text, 1, true) then return f end
+    end
+end
+check(noteSaying("Glass Action Bars' glass, without it"), "its note says what it does")
+check(not noteSaying("Unavailable: the LibGlass copy"), "never that the library lacks it")
+
 ------------------------------------------------------------
 -- Switched on
 ------------------------------------------------------------
