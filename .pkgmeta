@@ -1,15 +1,16 @@
 package-as: Apotheca
 enable-nolib-creation: no
 
-# The glass material, for the Mage Scrolls wheel (#94; owner, 2026-11-09:
-# embed it). Pinned, never `tag: latest` (the packager picks the newest tag
-# by creation date). CI reads the pin from here, so it is written once.
+# The glass material: the Mage Scrolls wheel (#94; owner, 2026-11-09:
+# embed it) and, from r13, the glass buttons (#41: Glass.Button). Pinned,
+# never `tag: latest` (the packager picks the newest tag by creation date).
+# CI reads the pin from here, so it is written once.
 # No comment on a value line: the packager's YAML reader keeps it as part of
 # the value (measured in GlassUnitFrames #64).
 externals:
   Libs/LibGlass-1.0:
     url: https://github.com/Spotnick2/LibGlass
-    tag: r11
+    tag: r13
 
 manual-changelog:
   filename: CHANGELOG.md

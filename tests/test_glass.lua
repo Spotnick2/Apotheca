@@ -81,6 +81,22 @@ for key, btn in pairs(Apotheca.Utility.buttons) do
 end
 eq(GAB.owners[1], "Apotheca", "the owner names Apotheca for Glass UI's page")
 
+-- GAB styles the buttons, so Apotheca's own glass buttons (#41) stay out:
+-- the option is greyed out, and turning it on builds nothing.
+local GB = Apotheca.GlassButtons
+check(GB.gab, "GAB took the buttons at login")
+eq(GB.Reason(), "gab", "the option says Glass Action Bars styles them")
+db.glassButtons = true
+GB.Apply()
+eq(next(GB.skins), nil, "no skin of Apotheca's own")
+eq(Apotheca.Wheel.Glass.ButtonSkin(mana), nil, "the library holds none of them")
+local anchorPlate = Apotheca.anchors[1]
+check(anchorPlate.glass and anchorPlate.glass:IsShown() and not anchorPlate.bg:IsShown(),
+      "the drag anchor is glass like the buttons")
+db.glassButtons = false
+GB.Apply()
+check(anchorPlate.glass:IsShown(), "whatever the option says (GAB styles the buttons)")
+
 -- The icon stays Apotheca's: an empty button still greys out under glass.
 Apotheca.UpdateAllButtons()
 local shown = {}

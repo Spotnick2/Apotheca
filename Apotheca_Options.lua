@@ -668,6 +668,37 @@ function Apotheca.BuildOptionsPanelContent(pageContents)
     SyncLayoutWidgets()
     refreshCallbacks[#refreshCallbacks + 1] = SyncLayoutWidgets
     Apotheca.SyncLayoutOptions = SyncLayoutWidgets   -- called when a new layout is applied
+
+    -- The glass buttons (#41, ApothecaGlass.lua). Greyed out while Glass
+    -- Action Bars styles the buttons: who styles them is decided at login.
+    SectionHeader("Button Style")
+    local glassCB = Checkbox("Glass buttons",
+        function() return DBGet("glassButtons") == true end,
+        function(v) DBSet(v, "glassButtons") end, nil,
+        function()
+            if Apotheca.GlassButtons then Apotheca.GlassButtons.Apply() end
+            Apotheca.RefreshOptions()
+        end)
+    local glassNote = SmallLabel(" \n ")
+    local function SyncGlass()
+        local G = Apotheca.GlassButtons
+        local why = G and G.Reason() or "library"
+        if why then glassCB:Disable() else glassCB:Enable() end
+        glassCB.label:SetTextColor(why and 0.5 or 1, why and 0.5 or 1, why and 0.5 or 1)
+        if why == "gab" then
+            glassNote:SetText("|cff888888Glass Action Bars styles the buttons, with its own look and settings.\n"
+                .. "Without it, or with its glass off, this gives them the same glass (after a /reload).|r")
+        elseif why then
+            glassNote:SetText("|cffff6666Unavailable: the LibGlass copy loaded has no button skin (r13 or newer).|r")
+        elseif G.pending then
+            glassNote:SetText("|cff888888Changes when combat ends.|r")
+        else
+            glassNote:SetText("|cff888888Glass Action Bars' glass, without it: both bars, the Mage Scrolls wheel and the\n"
+                .. "drag anchor. With Glass UI it follows Glass UI's tint, hover and click feedback.|r")
+        end
+    end
+    SyncGlass()
+    refreshCallbacks[#refreshCallbacks + 1] = SyncGlass
     FinalizeTarget()
 
     -- ════════════════════════════════════════════════════════════

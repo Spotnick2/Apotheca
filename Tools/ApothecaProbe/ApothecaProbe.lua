@@ -1958,3 +1958,129 @@ Probe:Steps("wheel", {
     { text = "Did you see any red error, or 'Interface action failed because of an AddOn'?", ask = true },
     { text = "Leave combat, then press Reload now (or type /reload) to write the results.", reload = true },
 })
+
+-- ── The glass buttons (#41) ──
+-- Apotheca's own Glass button style (LibGlass r13's Glass.Button), for a
+-- player without Glass Action Bars, or with GAB's glass off.
+local function GlassState()
+    local G = Apotheca and Apotheca.GlassButtons
+    if not G then
+        local v = C_AddOns.GetAddOnMetadata("Apotheca", "Version")
+        return { missing = "Apotheca " .. tostring(v) .. " has no glass buttons: deploy the dev build" }
+    end
+    local n, off = 0, 0
+    for _, s in pairs(G.skins) do
+        n = n + 1
+        if s.off then off = off + 1 end
+    end
+    local errs = {}
+    for step, msg in pairs(G.errors) do errs[#errs + 1] = step .. ": " .. msg end
+    local mana = Apotheca.buttons.mana
+    return {
+        reason = G.Reason() or "none", option = Apotheca.GetDB().glassButtons == true,
+        skins = n, off = off, pending = G.pending, gab = G.gab == true,
+        minor = Apotheca.Wheel.glassMinor, ownLook = Apotheca.Wheel.ownLook,
+        tint = G._suiteLook.tint or "default", hover = G._suiteLook.hover or "default",
+        press = G._suiteLook.press or "default",
+        iconSize = mana and mana:GetWidth(), errors = #errs > 0 and table.concat(errs, "; ") or "none",
+    }
+end
+local function GlassOn()
+    local s = GlassState()
+    return not s.missing and s.option and s.skins > 0 and s.off == 0
+end
+local function GlassOff()
+    local s = GlassState()
+    return not s.missing and not s.option and (s.skins == 0 or s.off == s.skins)
+end
+local function NoErrors()
+    local s = GlassState()
+    return s.errors == "none", s.errors
+end
+local glass = {}
+
+Probe:Command("glass", function()
+    for k, v in pairs(GlassState()) do say("glass " .. k .. " = " .. Probe.Show(v, true)) end
+end, "the glass buttons' state (#41)")
+
+local OPEN_OPTIONS = "Type /apo, and on the General page under Button Style, "
+Probe:Steps("glass", {
+    title = "The glass buttons without Glass Action Bars (#41)",
+    { text = "Out of combat, with some consumables on Apotheca's bar. Glass Action Bars must not style "
+          .. "the buttons: not installed, or its glass switched off. Press Check.", button = "Check",
+      run = function() return GlassState() end,
+      check = function()
+          local s = GlassState()
+          if s.missing then return false, s.missing end
+          return s.reason == "none", "reason " .. tostring(s.reason) .. ", LibGlass " .. tostring(s.minor)
+      end },
+    { text = "Debug mode on, so clicking a button in this test uses nothing.", auto = true,
+      run = function()
+          glass.debug = Apotheca.GetDB().debug == true
+          glass.iconSize = Apotheca.GetDB().iconSize
+          Apotheca.SetDebug(true)
+          return "debug was " .. tostring(glass.debug)
+      end },
+    { text = OPEN_OPTIONS .. "tick Glass buttons. Leave the options open, or close them.",
+      wait = function()
+          if not GlassOn() then return false, "waiting for the option" end
+          return true, GlassState()
+      end, timeout = 300, check = NoErrors },
+    { text = "Close the options so the bar is in view.", screenshot = "glass on",
+      wait = function() return not (SettingsPanel and SettingsPanel:IsShown()), "options closed" end,
+      timeout = 300 },
+    { text = "Do Apotheca's buttons look like Glass Action Bars' own: a glass rim over each icon, the icons' "
+          .. "corners rounded, no bronze frame, the stack counts and key text readable?", ask = true },
+    { text = "Move the mouse over a button. Is the glow a soft white, and its tooltip as before?", ask = true },
+    { text = "Click a button on Apotheca's main bar (debug mode: nothing is used). Does a bright rim flash "
+          .. "on the click?", ask = true },
+    { text = "Hold Alt with the mouse over the bar. The drag anchor shows. Keep holding.",
+      screenshot = "anchor glass",
+      wait = function() return ApothecaAnchor and ApothecaAnchor:IsShown(), "anchor shown" end, timeout = 120 },
+    { text = "Is the anchor a purple glass plate (rounded, with a rim) with 'Drag to move' readable on it, "
+          .. "where it was a flat purple box?", ask = true },
+    { text = "If the profession bar is on (/apo utility), do its buttons wear the same glass? Otherwise "
+          .. "answer Yes.", ask = true },
+    { text = "On a mage with scrolls: open the Mage Scrolls wheel. Do its scrolls wear the glass too, with "
+          .. "one glow on the scroll under the mouse (not two)? Then close it (Esc). Not a mage: Skip.",
+      ask = true },
+    { text = OPEN_OPTIONS .. "set Icon Size to 44 (under Layout), then close the options.",
+      wait = function()
+          local s = GlassState()
+          if s.iconSize ~= 44 then return false, "icon size " .. tostring(s.iconSize) end
+          return not (SettingsPanel and SettingsPanel:IsShown()), "44 px, options closed"
+      end, timeout = 300, screenshot = "glass 44" },
+    { text = "At 44 px: are the count and key text a bit larger, and does the glass still fit each icon?",
+      ask = true },
+    { text = "Get into combat (attack a training dummy or a low-level mob).",
+      wait = function() return InCombatLockdown(), "in combat" end, timeout = 300 },
+    { text = "Still in combat, press Untick: it switches Glass buttons off, as the option does. Nothing "
+          .. "changes until combat ends.", button = "Untick",
+      run = function()
+          Apotheca.GetDB().glassButtons = false
+          Apotheca.GlassButtons.Apply()
+          local s = GlassState()
+          return "in combat " .. tostring(InCombatLockdown()) .. ", pending " .. tostring(s.pending)
+              .. ", skins on " .. (s.skins - s.off)
+      end,
+      check = function()
+          local s = GlassState()
+          return s.pending == true and s.off == 0, "pending, unchanged in combat"
+      end },
+    { text = "Leave combat. The buttons go back to the bronze frame.",
+      wait = function()
+          if InCombatLockdown() then return false, "waiting for the end of combat" end
+          return GlassOff(), "off"
+      end, timeout = 300, screenshot = "glass off", check = NoErrors },
+    { text = "Are the buttons exactly as before: bronze frame, square icons, the gold flash on a click, the "
+          .. "count and key text in their old font? Is the drag anchor (Alt) the flat purple again?",
+      ask = true },
+    { text = "Putting debug mode and the icon size back.", auto = true,
+      run = function()
+          if glass.iconSize then Apotheca.GetDB().iconSize = glass.iconSize end
+          Apotheca.SetDebug(glass.debug)
+          return "debug " .. tostring(glass.debug) .. ", icon size " .. tostring(glass.iconSize)
+      end },
+    { text = "Did you see any red error, or 'Interface action failed because of an AddOn'?", ask = true },
+    { text = "Press Reload now (or type /reload) to write the results.", reload = true },
+})

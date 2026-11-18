@@ -70,6 +70,28 @@ ApothecaFrame._mouseOver = false
 WoW.fire("MODIFIER_STATE_CHANGED", "LALT", 0)
 WoW.step(0.2)
 
+-- The glass buttons (#41): on, hovered, resized, the anchor's plate shown,
+-- repainted, then off (Apotheca's own look put back).
+local db = Apotheca.GetDB()
+db.glassButtons = true
+Apotheca.GlassButtons.Apply()
+poke(ApothecaFrame)
+poke(ApothecaUtilityFrame)
+WoW.altDown = true
+ApothecaFrame._mouseOver = true
+WoW.fire("MODIFIER_STATE_CHANGED", "LALT", 1)
+WoW.step(0.2)
+WoW.altDown = false
+ApothecaFrame._mouseOver = false
+WoW.fire("MODIFIER_STATE_CHANGED", "LALT", 0)
+db.iconSize = 44
+Apotheca.UpdateAllButtons()
+Apotheca.GlassButtons.Refresh()
+db.iconSize = 36
+db.glassButtons = false
+Apotheca.GlassButtons.Apply()
+WoW.step(0.2)
+
 -- Every slash command.
 for _, cmd in ipairs({ "status", "debug", "debug", "utility", "utility", "" }) do
     SlashCmdList.APOTHECA(cmd)

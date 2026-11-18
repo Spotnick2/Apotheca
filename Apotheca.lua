@@ -43,6 +43,10 @@ local PROFILE_DEFAULTS = {
     -- orientation stay the bar's own: one Apotheca bar often sits beside
     -- several stacked action bars.
     matchBar            = 0,
+    -- Glass Action Bars' glass on Apotheca's buttons without GAB (#41,
+    -- ApothecaGlass.lua): both bars, the wheel's slots and the drag anchor.
+    -- Off by default. Greyed out while GAB styles the buttons (#68).
+    glassButtons        = false,
     -- The profession bar (#42, ApothecaUtility.lua): off by default. Its
     -- own layout, with the same keys as the main bar's. show[key] = false
     -- hides an action (nil is shown); order lists action keys, and any
@@ -211,6 +215,7 @@ function Apotheca.SetProfile(key)
     ApothecaDB.activeProfile = key
     Apotheca.UpdateAllButtons()
     if Apotheca.Utility then Apotheca.Utility.Refresh() end
+    if Apotheca.GlassButtons then Apotheca.GlassButtons.Apply() end
     if Apotheca.RefreshOptions then Apotheca.RefreshOptions() end
 end
 
@@ -2343,6 +2348,7 @@ function Apotheca.GridLayout(frame, buttons, layout)
         btn:SetWidth(btnSize)
         btn:SetHeight(btnSize)
         SizeButtonBorder(btn, btnSize)
+        if Apotheca.GlassButtons then Apotheca.GlassButtons.Resized(btn, btnSize) end
         btn:ClearAllPoints()
         btn:SetPoint("TOPLEFT", frame, "TOPLEFT", x, y)
         btn:Show()
@@ -2408,9 +2414,14 @@ anchorBg:SetAllPoints()
 anchorBg:SetColorTexture(0.40, 0.27, 0.66, 0.55)
 
 local anchorText = anchor:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-anchorText:SetPoint("CENTER")
+anchorText:SetPoint("CENTER", anchor, "CENTER")
 anchorText:SetTextColor(1, 1, 1, 0.9)
 anchorText:SetText("Drag to move")
+-- The glass buttons (#41, ApothecaGlass.lua) swap the flat purple for a
+-- glass plate and move the text onto it.
+anchor.bg, anchor.text = anchorBg, anchorText
+Apotheca.anchors = Apotheca.anchors or {}
+table.insert(Apotheca.anchors, anchor)
 
 local anchorDragging = false
 -- A drag that combat interrupts (#46). PLAYER_REGEN_DISABLED fires before
@@ -3805,6 +3816,7 @@ function Apotheca.WearGlass(btn)
         border = btn.btnBorder, empty = btn.emptyBg,
     }, "Apotheca")
     if ok ~= true then return false end
+    btn._gabGlass = true   -- GAB's until /reload: Apotheca's own skin keeps off it (#41)
     btn.btnBorder:Hide()
     btn.emptyBg:Hide()
     return true
@@ -3983,6 +3995,8 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         Apotheca.ConnectGlassActionBars()
         -- Glass UI's suite: ask once, before the wheel can first open (#101).
         if Apotheca.Wheel then Apotheca.Wheel.JoinSuite() end
+        -- Then who styles each button (#41): GAB's skin (above), else ours.
+        if Apotheca.GlassButtons then Apotheca.GlassButtons.Start() end
 
         -- No saved settings loaded is a first install, or the client bug
         -- fixed in 70009; the sentinel can't tell them apart.
@@ -4016,6 +4030,8 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         RestorePosition()
         RequestUpdate()
         Apotheca.RefreshHotkeys()
+        -- The class tint: the class colour may be unreadable at login.
+        if Apotheca.GlassButtons then Apotheca.GlassButtons.Refresh() end
 
     elseif event == "PLAYER_TALENT_UPDATE" or event == "ZONE_CHANGED_NEW_AREA" then
         if playerReady then RequestUpdate() end
@@ -4172,6 +4188,8 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- A drag combat interrupted first (#46), before an update can move
         -- or resize the frame.
         if dragStopPending then StopAnchorDrag(); UpdateAnchorState() end
+        -- The glass buttons switched in combat (#41).
+        if Apotheca.GlassButtons and Apotheca.GlassButtons.pending then Apotheca.GlassButtons.Apply() end
         -- Combat ended — reapply secure attributes that were skipped
         -- during lockdown so buttons are immediately clickable.
         for _, btn in pairs(Apotheca.buttons) do

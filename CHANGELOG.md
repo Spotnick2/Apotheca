@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## Unreleased
 
 ### Added
+- **Glass buttons without Glass Action Bars** *(option, off by default)*. Tick "Glass buttons" under Button Style on Apotheca's main options page, and the bar wears Glass Action Bars' glass without it: the same rim over each icon, rounded icons, the soft glow on hover and the flash on a click. It covers both bars, the Mage Scrolls wheel's scrolls and the Alt-drag box, and it follows Glass UI's tint (Clear, Smoked or Class) and its hover and click settings when Glass UI is installed. Switching it on or off takes effect at once, or when combat ends. With Glass Action Bars styling the buttons nothing changes, and the option is greyed out: if you turn Glass Action Bars' glass off, the option works after a `/reload`.
 - **Glass UI lists Apotheca.** With a Glass UI version that knows Apotheca, it gets its own card on Glass UI's page, for the glass Apotheca draws itself (the Mage Scrolls wheel). The wheel follows Glass UI's look as before; turn Apotheca's switch off there and, after a `/reload`, the wheel keeps its own look. The bar's buttons still follow Glass Action Bars, under its own switch. With an older Glass UI nothing changes.
 
 ## v2.10.0 - 2026-11-17

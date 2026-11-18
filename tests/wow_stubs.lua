@@ -112,6 +112,37 @@ function Methods.GetFontString(b)
     return b._fs
 end
 function Methods.RegisterForClicks(b, ...) b._clicks = { ... } end
+-- WowTestKit #68: the widget hierarchy as far as asked (LibGlass's
+-- Glass.Button checks region roles with it) and taking a mask off.
+local KIND_OF = { CheckButton = "Button", Button = "Frame", Cooldown = "Frame", Slider = "Frame" }
+function Methods.IsObjectType(w, t)
+    local k = w._type
+    while k do
+        if k == t then return true end
+        k = KIND_OF[k]
+    end
+    return false
+end
+function Methods.RemoveMaskTexture(t, m)
+    for i, x in ipairs(t._masks or {}) do
+        if x == m then table.remove(t._masks, i); return end
+    end
+end
+-- WowTestKit #70: a button's pushed and highlight textures. A file sets it
+-- on the button's own texture (made on first use), a texture is taken.
+local function stateTexture(b, field, tex, blend)
+    if type(tex) == "table" then
+        b[field] = tex
+    else
+        b[field] = b[field] or newWidget("Texture", b)
+        b[field]._file = tex
+    end
+    if blend then b[field]._blend = blend end
+end
+function Methods.SetPushedTexture(b, tex) stateTexture(b, "_pushed", tex) end
+function Methods.GetPushedTexture(b) return b._pushed end
+function Methods.SetHighlightTexture(b, tex, blend) stateTexture(b, "_highlight", tex, blend) end
+function Methods.GetHighlightTexture(b) return b._highlight end
 -- Every font string made, in order (WoW.fontStrings): the tests find a
 -- label, a note or an options row by its text.
 local kitFontString = Methods.CreateFontString

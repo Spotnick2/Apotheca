@@ -27,4 +27,5 @@ ApothecaItems.lua
 Apotheca.lua
 ApothecaUtility.lua
 ApothecaWheel.lua
+ApothecaGlass.lua
 Apotheca_Options.lua
