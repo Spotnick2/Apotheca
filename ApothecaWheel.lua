@@ -338,6 +338,8 @@ local function ClassColor()
     local ok, c = pcall(cc.GetClassColor, class)
     if ok and type(c) == "table" and type(c.r) == "number" then return c.r, c.g, c.b end
 end
+-- Shared with the glass buttons (ApothecaGlass.lua, #41).
+W.Suite, W.SuiteCall, W.ClassColor = Suite, SuiteCall, ClassColor
 
 -- Glass UI's suite (#101): Apotheca is a member, keyed "Apotheca", for what
 -- it paints itself (the wheel today; GAB skins the bar's buttons, under

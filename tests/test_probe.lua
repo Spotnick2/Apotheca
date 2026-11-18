@@ -254,4 +254,26 @@ eq(saved[#saved]:match("after clear$"), "after clear", "a new line reaches the s
 eq(H.probeMatching("after clear$"), 1, "and the console")
 
 eq(H.messagesMatching("."), 0, "nothing the probe did reached chat")
+
+-- /fp steps apo glass (#41): what it changes is saved until put back, so a
+-- stopped run can't make the next one take its debug mode as the player's.
+-- (Apotheca's own "Debug ON" line goes to chat: it is the addon's, not the probe's.)
+local adb = Apotheca.GetDB()
+adb.debug, adb.iconSize, adb.matchBar = false, 36, 2
+SlashCmdList.FOREVERPROBE("steps apo glass")
+Steps.Run()                                       -- 1: check
+WoW.step(1)
+check(adb.debug == true, "step 2 turns debug mode on")
+eq(ApothecaProbeDB.glassRestore and ApothecaProbeDB.glassRestore.debug, false, "and saves the player's")
+Steps.Stop("test")
+SlashCmdList.FOREVERPROBE("steps apo glass")      -- a second run, debug still on
+Steps.Run()
+WoW.step(1)
+eq(ApothecaProbeDB.glassRestore.debug, false, "a second run keeps the first run's saved setting")
+Steps.Stop("test")
+adb.matchBar, adb.iconSize = 0, 44
+fp("glassrestore")
+check(adb.debug == false and adb.iconSize == 36 and adb.matchBar == 2, "glassrestore puts them all back")
+eq(ApothecaProbeDB.glassRestore, nil, "and forgets them")
+
 done("test_probe")

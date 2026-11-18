@@ -217,9 +217,13 @@ do
     bg:SetAllPoints()
     bg:SetColorTexture(0.40, 0.27, 0.66, 0.55)
     local text = anchor:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    text:SetPoint("CENTER")
+    text:SetPoint("CENTER", anchor, "CENTER")
     text:SetTextColor(1, 1, 1, 0.9)
     text:SetText("Drag")
+    -- Glass with the glass buttons (#41), as the main bar's.
+    anchor.bg, anchor.text = bg, text
+    Apotheca.anchors = Apotheca.anchors or {}
+    table.insert(Apotheca.anchors, anchor)
 end
 
 -- Dragging. No StartMoving or StopMovingOrSizing in combat: the client
