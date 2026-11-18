@@ -8,6 +8,8 @@
 
 What it offers follows your role: Tank, Healer or Damage. Apotheca reads it from the game's role selector (or your class), or you set it per character in the options. Druids and Shamans also choose Spell or Physical damage. Warriors and Rogues get no mana buttons. "Only show the bar while my role is Healer" is there if you want the old healer-only bar.
 
+Get it from [CurseForge](https://www.curseforge.com/wow/addons/apotheca), [Wago](https://addons.wago.io/addons/n6VYRZNd) or [GitHub Releases](https://github.com/Spotnick2/Apotheca/releases) (which WowUp reads).
+
 > **TBC Classic Anniversary** players: 1.0.5 was the last Anniversary release. It stays available on CurseForge, but won't get updates.
 
 ## Settings
@@ -33,7 +35,7 @@ What it offers follows your role: Tank, Healer or Damage. Apotheca reads it from
 | Poisons *(rogues, experimental, off by default)* | One button per hand: your strongest poison of the kind you pick for that hand (Instant and Deadly by default), applied to that weapon on click. Not yet tried on a rogue in game, so please report whether it works. |
 | Bandage | The strongest bandage. Battleground bandages are only offered inside their battleground. |
 
-Every value comes from the WoW: Forever client itself, not from a Vanilla database, because Forever changed many of them. For example, Nightfin Soup now gives spell damage, and a plain healthstone restores what an Improved one did in Vanilla.
+Every value comes from the WoW: Forever client itself, not from a Vanilla database, because Forever changed many of them. For example, Nightfin Soup now gives spell damage, and a plain healthstone restores what an Improved one did in Vanilla. The items are re-scanned when Blizzard changes them: this release is from client build 1.60.1.70959, where 13 Vanilla recipes lost their XP bonus.
 
 Battleground-only items (PvP draughts, Warsong Gulch, Arathi Basin, Alterac Valley and Darkspear Islands rations and bandages) are offered only inside their battleground. Darkspear Islands is new in Forever, and its items are recognised on English clients only for now.
 
