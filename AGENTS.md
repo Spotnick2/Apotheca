@@ -22,7 +22,7 @@ Sounds/                — The wheel's open/close sounds (Portal Roulette's), sh
 Libs/LibGlass-1.0/     — NOT in git: the embedded glass material (the wheel's, the glass buttons'), from .pkgmeta externals (packager) or ..\LibGlass (deploy, tests)
 Apotheca_Options.lua   — In-game options: a page and four sub-pages in Esc > Options > AddOns, DB read/write helpers
 Bindings.xml           — Key bindings (main bar and profession bar); loaded by name, NOT listed in the TOC
-Tools/ApothecaProbe/   — DEV-ONLY ForeverProbe module (never packaged): /fp apo probe, scan, scan2, scan3, applytest, bar, prof, proftest, wheel, glass; /fp steps apo scan | probe | wheel | glass; `deploy.ps1 -Probe`
+Tools/ApothecaProbe/   — DEV-ONLY ForeverProbe module (never packaged): /fp apo probe, scan, scan2, scan3, applytest, bar, prof, proftest, wheel, glass, glassrestore; /fp steps apo scan | probe | wheel | glass; `deploy.ps1 -Probe`
 .pkgmeta               — BigWigs packager config (release packaging only, not used locally)
 tests/                 — Lua 5.1 unit tests on WowTestKit (tests/kit.pin) with Apotheca's stub; tests/run.ps1
 Tools/deploy.ps1       — deploy to the local Forever AddOns folder

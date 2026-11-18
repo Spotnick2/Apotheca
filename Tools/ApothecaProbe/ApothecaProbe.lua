@@ -1997,11 +1997,27 @@ local function NoErrors()
     local s = GlassState()
     return s.errors == "none", s.errors
 end
-local glass = {}
+-- The player's settings this procedure changes, kept in the probe's saved
+-- table until put back: a stopped run (or a /reload) must not make the next
+-- run take its debug mode as the player's own.
+local function GlassSaved() return ProbeDB().glassRestore end
+local function GlassRestore()
+    local saved = GlassSaved()
+    if not saved then return "nothing to put back" end
+    local db = Apotheca.GetDB()
+    db.iconSize, db.matchBar = saved.iconSize, saved.matchBar
+    Apotheca.SetDebug(saved.debug)
+    Apotheca.UpdateAllButtons()
+    ProbeDB().glassRestore = nil
+    return "debug " .. tostring(saved.debug) .. ", icon size " .. tostring(saved.iconSize)
+        .. ", match bar " .. tostring(saved.matchBar)
+end
 
 Probe:Command("glass", function()
     for k, v in pairs(GlassState()) do say("glass " .. k .. " = " .. Probe.Show(v, true)) end
 end, "the glass buttons' state (#41)")
+Probe:Command("glassrestore", function() say("glass: " .. GlassRestore()) end,
+    "put back what /fp steps apo glass changed (debug mode, icon size, match bar)")
 
 local OPEN_OPTIONS = "Type /apo, and on the General page under Button Style, "
 Probe:Steps("glass", {
@@ -2016,10 +2032,14 @@ Probe:Steps("glass", {
       end },
     { text = "Debug mode on, so clicking a button in this test uses nothing.", auto = true,
       run = function()
-          glass.debug = Apotheca.GetDB().debug == true
-          glass.iconSize = Apotheca.GetDB().iconSize
+          local db = Apotheca.GetDB()
+          local saved, kept = GlassSaved(), true
+          if not saved then
+              saved, kept = { debug = db.debug == true, iconSize = db.iconSize, matchBar = db.matchBar }, false
+              ProbeDB().glassRestore = saved
+          end
           Apotheca.SetDebug(true)
-          return "debug was " .. tostring(glass.debug)
+          return "your debug mode " .. tostring(saved.debug) .. (kept and " (from a run not finished)" or "")
       end },
     { text = OPEN_OPTIONS .. "tick Glass buttons. Leave the options open, or close them.",
       wait = function()
@@ -2044,12 +2064,18 @@ Probe:Steps("glass", {
     { text = "On a mage with scrolls: open the Mage Scrolls wheel. Do its scrolls wear the glass too, with "
           .. "one glow on the scroll under the mouse (not two)? Then close it (Esc). Not a mage: Skip.",
       ask = true },
-    { text = OPEN_OPTIONS .. "set Icon Size to 44 (under Layout), then close the options.",
-      wait = function()
+    { text = "Close the options if they are open, then press Resize: the bar goes to 44 px buttons (not "
+          .. "matching an action bar meanwhile). A later step puts your size back.", button = "Resize",
+      run = function()
+          local db = Apotheca.GetDB()
+          db.matchBar, db.iconSize = 0, 44
+          Apotheca.UpdateAllButtons()
+          return GlassState()
+      end,
+      check = function()
           local s = GlassState()
-          if s.iconSize ~= 44 then return false, "icon size " .. tostring(s.iconSize) end
-          return not (SettingsPanel and SettingsPanel:IsShown()), "44 px, options closed"
-      end, timeout = 300, screenshot = "glass 44" },
+          return s.iconSize == 44 and s.errors == "none", "icon size " .. tostring(s.iconSize) .. ", errors " .. s.errors
+      end, screenshot = "glass 44" },
     { text = "At 44 px: are the count and key text a bit larger, and does the glass still fit each icon?",
       ask = true },
     { text = "Get into combat (attack a training dummy or a low-level mob).",
@@ -2067,20 +2093,18 @@ Probe:Steps("glass", {
           local s = GlassState()
           return s.pending == true and s.off == 0, "pending, unchanged in combat"
       end },
-    { text = "Leave combat. The buttons go back to the bronze frame.",
+    { text = "Leave combat: the buttons go back to the bronze frame. (If you skipped the fight: type /apo, "
+          .. "untick Glass buttons under Button Style, then close the options.)",
       wait = function()
           if InCombatLockdown() then return false, "waiting for the end of combat" end
-          return GlassOff(), "off"
+          if not GlassOff() then return false, "waiting for Glass buttons to be off" end
+          return not (SettingsPanel and SettingsPanel:IsShown()), "off, options closed"
       end, timeout = 300, screenshot = "glass off", check = NoErrors },
     { text = "Are the buttons exactly as before: bronze frame, square icons, the gold flash on a click, the "
           .. "count and key text in their old font? Is the drag anchor (Alt) the flat purple again?",
       ask = true },
-    { text = "Putting debug mode and the icon size back.", auto = true,
-      run = function()
-          if glass.iconSize then Apotheca.GetDB().iconSize = glass.iconSize end
-          Apotheca.SetDebug(glass.debug)
-          return "debug " .. tostring(glass.debug) .. ", icon size " .. tostring(glass.iconSize)
-      end },
+    { text = "Putting debug mode, the icon size and the matched action bar back.", auto = true,
+      run = GlassRestore },
     { text = "Did you see any red error, or 'Interface action failed because of an AddOn'?", ask = true },
     { text = "Press Reload now (or type /reload) to write the results.", reload = true },
 })
