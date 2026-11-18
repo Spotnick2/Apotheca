@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Fixed
+- **Visibility "In combat only" and "Out of combat" work.** With "In combat only" the bar never showed at all, and with "Out of combat" it stayed up during fights; only "Always" behaved. The bar now appears and disappears as combat starts and ends.
+
 ## v2.11.0 - 2026-11-18
 
 ### Added
@@ -295,4 +300,4 @@ The consumables were re-scanned on the current client (the last scan was from 70
 
 ### Notes
 - This release establishes the first complete configurable version of Apotheca
-- Future updates may expand item coverage, polish UI behavior, and refine category logic
+- Future updates may expand item coverage, polish UI behavior, and refine category logic

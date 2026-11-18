@@ -229,19 +229,67 @@ end
 -- (the last moment a protected frame may change), then combat is on.
 -- WoW.enterLockdown skips that moment, for code that must cope with
 -- lockdown already being on.
+-- WowTestKit #77: secure state drivers aren't modelled by the kit yet.
+-- SecureStateDriver.lua (wow-ui-source forever, 70959): RegisterStateDriver
+-- sets "state-<name>", resolved at once and then every 0.2 s (sooner after
+-- PLAYER_REGEN_*) by secure code, so a "visibility" driver shows or hides a
+-- protected frame in combat too. Modelled: "visibility" only, clauses
+-- "[combat]" / "[nocombat]" / unconditional, resolved at registration, when
+-- combat starts or ends (WoW.enterCombat, enterLockdown, leaveCombat), and at
+-- every WoW.step. Any other condition fails the test.
+local stateDrivers = {}   -- frame -> { [state] = values }
+WoW.stateDrivers = stateDrivers
+local function parseOptions(values)
+    for clause in (values .. ";"):gmatch("%s*([^;]*);") do
+        local conds, value = clause:match("^%[([^%]]*)%]%s*(.-)%s*$")
+        if not conds then conds, value = "", clause:match("^%s*(.-)%s*$") end
+        local ok = true
+        for cond in conds:gmatch("[^,%s]+") do
+            if cond == "combat" then ok = ok and WoW.combat == true
+            elseif cond == "nocombat" then ok = ok and not WoW.combat
+            else error("state driver condition not modelled: " .. cond, 3) end
+        end
+        if ok then return value end
+    end
+end
+local function resolveDriver(frame, state, values)
+    local v = parseOptions(values)
+    if state == "visibility" then
+        if v == "show" then WoW.setShown(frame, true)
+        elseif v == "hide" then WoW.setShown(frame, false) end
+    end
+end
+function WoW.resolveDrivers()
+    for frame, drivers in pairs(stateDrivers) do
+        for state, values in pairs(drivers) do resolveDriver(frame, state, values) end
+    end
+end
+function RegisterStateDriver(frame, state, values)
+    stateDrivers[frame] = stateDrivers[frame] or {}
+    if values == nil or values == "" then stateDrivers[frame][state] = nil return end
+    stateDrivers[frame][state] = values
+    resolveDriver(frame, state, values)
+end
+function UnregisterStateDriver(frame, state)
+    if stateDrivers[frame] then stateDrivers[frame][state] = nil end
+end
+
 function WoW.enterCombat()
     WoW.aurasThrow = true
     WoW.fire("PLAYER_REGEN_DISABLED")
     WoW.combat = true
+    WoW.resolveDrivers()
 end
 
 function WoW.enterLockdown()
     WoW.combat, WoW.aurasThrow = true, true
     WoW.fire("PLAYER_REGEN_DISABLED")
+    WoW.resolveDrivers()
 end
 
 function WoW.leaveCombat()
     WoW.combat, WoW.aurasThrow = false, false
+    WoW.resolveDrivers()
     WoW.fire("PLAYER_REGEN_ENABLED")
 end
 
@@ -255,6 +303,7 @@ function WoW.step(elapsed)
     elapsed = elapsed or 1
     WoW.advance(elapsed)
     WoW.now = WoW.now - elapsed
+    WoW.resolveDrivers()
     WoW.tick(elapsed)
 end
 
