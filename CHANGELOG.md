@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+- **Glass UI lists Apotheca.** With a Glass UI version that knows Apotheca, it gets its own card on Glass UI's page, for the glass Apotheca draws itself (the Mage Scrolls wheel). The wheel follows Glass UI's look as before; turn Apotheca's switch off there and, after a `/reload`, the wheel keeps its own look. The bar's buttons still follow Glass Action Bars, under its own switch. With an older Glass UI nothing changes.
+
 ## v2.10.0 - 2026-11-17
 
 ### Added
