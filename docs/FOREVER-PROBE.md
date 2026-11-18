@@ -307,6 +307,10 @@ Not measured yet: the wheel **in combat** (the combat steps were skipped or done
   - **New: the "Endless" elixirs** (289082 to 289334: Power, Healing, Rapidity, Opportunity, Intellect, Mana, Growth, Experience). They last 1 hour, give percentages (damage 3%, healing 2%, haste 4%, crit 4%, Intellect 2%, mana regeneration 30%, experience 200%) and most stack up to 5 times. Wowhead knows them with no source. They're reported as skipped, since no role profile ranks percentages. The generator read "Intellect by 2%" as +2 Intellect, so a percentage is now never a flat stat.
 - `MEASURED_ON_BUILD` is bumped to **70959**.
 
+## Visibility in combat (#110), 2026-11-18, build 70959
+
+- `RegisterStateDriver(ApothecaFrame, "visibility", "[combat] show; hide")` (and `[combat] hide; show`) shows and hides the bar as combat starts and ends. The owner checked both modes in game, after the fix. Before it, the bar was shown or hidden only by the full update, which doesn't run in combat. The state driver is the porting guide's, measured since 70425.
+
 ## Still to measure
 
 - **The aura of a former XP food (70959).** Eat Crocolisk Gumbo (or any of the 13 above), then `/fp apo probe` out of combat: the `player auras` line shows the Well Fed ID. If it is one of `XP_WELL_FED_SPELLS`, the generator has to tell those foods apart from real XP food.

@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v2.11.1 - 2026-11-18
 
 ### Fixed
 - **Visibility "In combat only" and "Out of combat" work.** With "In combat only" the bar never showed at all, and with "Out of combat" it stayed up during fights; only "Always" behaved. The bar now appears and disappears as combat starts and ends.
