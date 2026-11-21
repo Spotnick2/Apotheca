@@ -35,7 +35,7 @@ Get it from [CurseForge](https://www.curseforge.com/wow/addons/apotheca), [Wago]
 | Poisons *(rogues, experimental, off by default)* | One button per hand: your strongest poison of the kind you pick for that hand (Instant and Deadly by default), applied to that weapon on click. Not yet tried on a rogue in game, so please report whether it works. |
 | Bandage | The strongest bandage. Battleground bandages are only offered inside their battleground. |
 
-Every value comes from the WoW: Forever client itself, not from a Vanilla database, because Forever changed many of them. For example, Nightfin Soup now gives spell damage, and a plain healthstone restores what an Improved one did in Vanilla. The items are re-scanned when Blizzard changes them: this release is from client build 1.60.1.70959, where 13 Vanilla recipes lost their XP bonus.
+Every value comes from the WoW: Forever client itself, not from a Vanilla database, because Forever changed many of them. For example, Nightfin Soup now gives spell damage, and a plain healthstone restores what an Improved one did in Vanilla. The items are re-scanned when Blizzard changes them: this release is from client build 1.60.1.71037, where 13 Vanilla recipes got back the XP bonus the previous build took away.
 
 Battleground-only items (PvP draughts, Warsong Gulch, Arathi Basin, Alterac Valley and Darkspear Islands rations and bandages) are offered only inside their battleground. Darkspear Islands is new in Forever, and its items are recognised on English clients only for now.
 
