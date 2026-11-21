@@ -1201,7 +1201,7 @@ function Apotheca.BuildOptionsPanelContent(pageContents)
     local charCB = CreateFrame("CheckButton", nil, curContent, "InterfaceOptionsCheckButtonTemplate")
     charCB:SetPoint("TOPLEFT", curContent, "TOPLEFT", PAD, Y())
     charCB.Text:SetText("Use character-specific profile" ..
-        (charKey ~= "" and ("  |cff888888(" .. charKey .. ")|r") or ""))
+        (charKey ~= "" and ("  |cff888888(" .. Apotheca.ProfileLabel(charKey) .. ")|r") or ""))
     charCB:SetScript("OnClick", function(self)
         local v = self:GetChecked()
         local key = charKey ~= "" and charKey or (Apotheca.GetCharProfileKey and Apotheca.GetCharProfileKey() or "Global")

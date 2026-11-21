@@ -13,9 +13,13 @@ Apotheca = Apotheca or {}
 -- ============================================================
 -- SAVED VARIABLES STRUCTURE
 -- ApothecaDB = {
---   profiles    = { ["Global"] = {...}, ["Realm-Name"] = {...} }
---   activeProfile = "Global"   -- "Global" or a "Realm-CharName" key
+--   profiles    = { ["Global"] = {...}, ["Realm-Name"] = {...}, ["Full Name-#serial"] = {...} }
+--   activeProfile = "Global"   -- this session's profile, set from ApothecaCharDB.profile
+--   legacyActiveProfile = ...  -- the account-wide choice from before #115
+--   profileOwners = { [key] = GUID }  -- which character took each profile as its own
 -- }
+-- ApothecaCharDB.profile / .profileKey: which profile this character uses,
+-- and its own key (#115; see GetCharProfileKey).
 -- DB() always returns the active profile table.
 -- ============================================================
 
@@ -182,12 +186,101 @@ local function ApplyDefaults(dst, src)
     end
 end
 
--- Returns the character-specific profile key: "RealmName-CharName"
--- Only valid after PLAYER_LOGIN.
+-- A string the client really gave: not nil, not secret, not blank.
+local function Readable(s)
+    if type(s) ~= "string" then return false end
+    if issecretvalue and issecretvalue(s) then return false end
+    return s:find("%S") ~= nil
+end
+
+-- The player's full name, surname included. UnitName("player") gave the
+-- first name alone on 70374 (surname in the second return), and first names
+-- are not unique on Forever (PORTING-TBC-TO-FOREVER.md, "Characters have
+-- surnames"). GetUnitName gives the full one: on Forever it is
+-- Blizzard_FrameXMLUtil/Camelot/NameUtil.lua, name and surname from UnitName
+-- joined, whatever its second argument.
+local function PlayerFullName()
+    local full = GetUnitName and GetUnitName("player", false)
+    if Readable(full) then return full end
+    local first, second = UnitName("player")
+    if not Readable(first) then return "Unknown" end
+    if Readable(second) and not first:find(" ") then return first .. " " .. second end
+    return first
+end
+
+local function PlayerGUID()
+    local guid = UnitGUID and UnitGUID("player")
+    return Readable(guid) and guid or nil
+end
+
+-- The realm, or nil: since the 2026-11-20 hotfix GetRealmName() returns ""
+-- on purpose (#115; AltStable#408 and #412).
+local function RealmName()
+    local realm = GetRealmName and GetRealmName()
+    return Readable(realm) and realm or nil
+end
+
+-- Which character (GUID) took each profile as its own, so two characters
+-- that read alike can never both take one.
+local function ProfileOwners()
+    if type(ApothecaDB.profileOwners) ~= "table" then ApothecaDB.profileOwners = {} end
+    return ApothecaDB.profileOwners
+end
+
+-- Could the saved profile `key` be this character's, by the old key scheme?
+-- "Realm-Name" (before #115) and "-Name" (v2.11.1 after the hotfix) were
+-- built from UnitName's first return, so only a key naming the FULL name
+-- counts: a first name alone could be another character's. With the realm
+-- readable, it must be this realm (or the hotfix's empty one). A profile
+-- another character took is not this one's.
+local function OldKeyFits(key, realm, full, guid)
+    if type(key) ~= "string" or key == "Global" then return false end
+    if type(ApothecaDB.profiles[key]) ~= "table" then return false end
+    local kRealm, kName = key:match("^(.-)%-([^%-]+)$")
+    if kName ~= full then return false end
+    if realm and kRealm ~= realm and kRealm ~= "" then return false end
+    local owner = ApothecaDB.profileOwners and ApothecaDB.profileOwners[key]
+    return owner == nil or owner == guid
+end
+
+-- This character's profile under the old scheme, or nil.
+-- - "-Name" first, if it fits: v2.11.1 made it after the hotfix when the box
+--   was ticked, so it is the profile in use since, even beside an older
+--   "Realm-Name" of the same character (Codex on #116).
+-- - Else the one saved "Realm-Name" that fits; none if several do (two
+--   realms: nothing tells them apart without the realm).
+local function OwnOldKey()
+    local realm, full, guid = RealmName(), PlayerFullName(), PlayerGUID()
+    if OldKeyFits("-" .. full, realm, full, guid) then return "-" .. full end
+    local found
+    for key in pairs(ApothecaDB.profiles) do
+        if OldKeyFits(key, realm, full, guid) then
+            if found then return nil end
+            found = key
+        end
+    end
+    return found
+end
+
+-- Returns this character's own profile key. Only valid after PLAYER_LOGIN.
+-- Once given, it is kept (ApothecaCharDB.profileKey). Else the one old-scheme
+-- profile that is this character's (OwnOldKey), else a new key from the full
+-- name and the GUID's serial, which needs no realm and is the character's
+-- alone (AltStable keys characters by GUID since the hotfix).
 function Apotheca.GetCharProfileKey()
-    local realm = GetRealmName and GetRealmName() or "Unknown"
-    local name  = UnitName and UnitName("player") or "Unknown"
-    return realm .. "-" .. name
+    local c = ApothecaCharDB
+    if type(c) == "table" and type(c.profileKey) == "string" then return c.profileKey end
+    local own = ApothecaDB and ApothecaDB.profiles and OwnOldKey()
+    if own then return own end
+    local full, guid = PlayerFullName(), PlayerGUID()
+    local serial = guid and guid:match("%-(%x+)$")
+    if serial then return full .. "-#" .. serial end
+    return (RealmName() or "Unknown") .. "-" .. full
+end
+
+-- How a profile key reads in the options: the serial means nothing to a player.
+function Apotheca.ProfileLabel(key)
+    return (tostring(key):gsub("%-#%x+$", ""))
 end
 
 -- Returns the active profile table.
@@ -200,10 +293,10 @@ end
 
 Apotheca.GetDB = DB
 
--- Switch to a named profile, creating it from defaults if it doesn't exist.
-function Apotheca.SetProfile(key)
-    if not ApothecaDB then return end
-    if not ApothecaDB.profiles[key] then
+-- Make `key` this session's profile, creating it from defaults if needed.
+-- Nothing is refreshed.
+local function UseProfile(key)
+    if type(ApothecaDB.profiles[key]) ~= "table" then
         ApothecaDB.profiles[key] = DeepCopy(PROFILE_DEFAULTS)
     else
         -- InitDB only backfills the profile that was active at load, so a
@@ -213,6 +306,44 @@ function Apotheca.SetProfile(key)
         ApplyDefaults(ApothecaDB.profiles[key], PROFILE_DEFAULTS)
     end
     ApothecaDB.activeProfile = key
+end
+
+-- Which profile a character uses is PER CHARACTER (#115):
+-- ApothecaCharDB.profile, "Global" or the character's own key.
+-- ApothecaDB.activeProfile is only this session's copy of it. Until #115 it
+-- was the only record, and account-wide: ticking "character-specific" on one
+-- character moved every character onto that character's profile.
+local function SetCharProfile(key)
+    ApothecaCharDB = type(ApothecaCharDB) == "table" and ApothecaCharDB or {}
+    ApothecaCharDB.profile = key
+    if key ~= "Global" then
+        ApothecaCharDB.profileKey = key
+        local guid = PlayerGUID()
+        if guid then ProfileOwners()[key] = guid end
+    end
+end
+
+-- At PLAYER_LOGIN, when the character's name is known: this character's
+-- profile. A character with no choice saved yet (first login since #115)
+-- keeps the old account-wide one only if it is its own by the same test as
+-- GetCharProfileKey (OwnOldKey); every other character goes back to Global.
+local function ResolveCharProfile()
+    local c = type(ApothecaCharDB) == "table" and ApothecaCharDB or nil
+    local key = c and c.profile
+    if type(key) ~= "string" then
+        local legacy = ApothecaDB.legacyActiveProfile
+        key = (legacy ~= "Global" and legacy == OwnOldKey()) and legacy or "Global"
+        SetCharProfile(key)
+    end
+    UseProfile(key)
+end
+Apotheca._ResolveCharProfile = ResolveCharProfile
+
+-- Switch to a named profile, creating it from defaults if it doesn't exist.
+function Apotheca.SetProfile(key)
+    if not ApothecaDB then return end
+    UseProfile(key)
+    SetCharProfile(key)
     Apotheca.UpdateAllButtons()
     if Apotheca.Utility then Apotheca.Utility.Refresh() end
     if Apotheca.GlassButtons then Apotheca.GlassButtons.Apply() end
@@ -334,7 +465,17 @@ local function InitDB()
 
         -- Already in the new profile structure — just ensure defaults
         if type(ApothecaDB.profiles) == "table" then
-            local key = ApothecaDB.activeProfile or "Global"
+            -- The account-wide choice from before #115, kept once for each
+            -- character's first login since (ResolveCharProfile). Then this
+            -- session's profile: the character's own choice, or Global until
+            -- PLAYER_LOGIN resolves a character that has none yet.
+            if ApothecaDB.legacyActiveProfile == nil then
+                ApothecaDB.legacyActiveProfile = ApothecaDB.activeProfile or "Global"
+            end
+            local c = ApothecaCharDB
+            ApothecaDB.activeProfile = type(c) == "table" and type(c.profile) == "string"
+                and c.profile or "Global"
+            local key = ApothecaDB.activeProfile
             if type(ApothecaDB.profiles[key]) ~= "table" then
                 ApothecaDB.profiles[key] = DeepCopy(PROFILE_DEFAULTS)
             else
@@ -355,6 +496,7 @@ local function InitDB()
         for k in pairs(ApothecaDB) do ApothecaDB[k] = nil end
         ApothecaDB.profiles      = { Global = DeepCopy(PROFILE_DEFAULTS) }
         ApothecaDB.activeProfile = "Global"
+        ApothecaDB.legacyActiveProfile = "Global"
         -- Salvage flat keys that match known profile fields
         local safe = { "debug","showOnlyHealingSpec","preventWaste","visibility",
                        "showEmptyButtons","orientation","rows",
@@ -382,6 +524,7 @@ local function InitDB()
         ApothecaDB = {
             profiles      = { Global = DeepCopy(PROFILE_DEFAULTS) },
             activeProfile = "Global",
+            legacyActiveProfile = "Global",
         }
     end
 end
@@ -4014,6 +4157,8 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- PLAYER_LOGIN fires after all addons are loaded and the UI is fully ready.
         -- Safe to build the options panel here — no loading-screen crash risk.
         -- DB is already initialised by ADDON_LOADED above.
+        -- First this character's profile (#115): the name is known now.
+        ResolveCharProfile()
         Apotheca.CreateOptionsPanel()
         Apotheca.ConnectGlassActionBars()
         -- Glass UI's suite: ask once, before the wheel can first open (#101).
