@@ -54,16 +54,19 @@ Everything lives under a single global table: `Apotheca = {}` (declared at line 
 
 ### Saved Variables
 - `ApothecaDB` — global SavedVariables (profiles, active profile key)
-- `ApothecaCharDB` — per-character SavedVariables (declared in `.toc` but reserved for future use)
+- `ApothecaCharDB` — per-character SavedVariables: which profile the character uses (#115), its role settings, poison and stone choices, bar positions
 
 ### Profile System
 ```lua
 ApothecaDB = {
-    profiles    = { ["Global"] = { ... }, ["RealmName-CharName"] = { ... } },
-    activeProfile = "Global"  -- or "RealmName-CharName"
+    profiles    = { ["Global"] = { ... }, ["RealmName-CharName"] = { ... }, ["CharName-#serial"] = { ... } },
+    activeProfile = "Global",       -- this session's profile only, set from ApothecaCharDB.profile
+    legacyActiveProfile = "...",    -- the account-wide choice from before #115: never overwrite it
 }
 ```
 - `DB()` (local in each file) always returns the active profile table.
+- **Which profile a character uses is per character (#115):** `ApothecaCharDB.profile` (`"Global"` or the character's key), with its own key in `ApothecaCharDB.profileKey`. `ApothecaDB.activeProfile` is only this session's copy: until #115 it was the only record, and account-wide, so ticking "character-specific" on one character switched them all. A character's first login since gets the old choice only if it was its own (`IsOwnRealmKey`), else Global; `ResolveCharProfile` runs at `PLAYER_LOGIN`, when the name is known.
+- **The realm is hidden since the 2026-11-20 hotfix:** `GetRealmName()` returns `""` (and `GetRealmID()` 0), on purpose (AltStable#408, #412). `Apotheca.GetCharProfileKey()` builds `"Realm-Name"` only from a readable realm; without one it adopts the one saved `"<realm>-Name"` profile of this name, else `"Name-#<GUID serial>"` (`Apotheca.ProfileLabel` shows just the name). Never build anything else from the realm.
 - `PROFILE_DEFAULTS` (top of `Apotheca.lua`) is the canonical schema — add new settings here with defaults.
 - `ApplyDefaults(dst, src)` fills in missing keys **two levels deep** (a nested table's own members, not deeper); this runs on every load. Keep new settings flat, or fill deeper keys in `MigrateProfile`.
 - Always add migration logic in `InitDB()` when renaming or changing the type of existing settings.

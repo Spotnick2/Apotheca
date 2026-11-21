@@ -363,8 +363,14 @@ function IsAltKeyDown() return WoW.altDown end
 function IsControlKeyDown() return WoW.ctrlDown == true end
 function IsShiftKeyDown() return WoW.shiftDown == true end
 function GetBuildInfo() return "1.60.1", WoW.build, "Sep 22 2026", 16001 end
-function GetRealmName() return "ClassicBetaPvE" end
-function UnitName() return "Testcase Surname", nil end
+-- Since the 2026-11-20 hotfix the realm is hidden: "" (#115). A test can set
+-- WoW.realm to a name, as before it.
+WoW.realm = ""
+WoW.playerName = "Testcase"
+WoW.playerGUID = "Player-5826-0A1B2C3D"
+function GetRealmName() return WoW.realm end
+function UnitName() return WoW.playerName, nil end
+function UnitGUID(unit) if unit == "player" then return WoW.playerGUID end end
 function UnitClass() return WoW.class:sub(1, 1) .. WoW.class:sub(2):lower(), WoW.class, 5 end
 -- Outdoors this client returns the CONTINENT, not an empty name.
 function GetInstanceInfo() return WoW.instanceName, WoW.instanceType, 0, "", 0, 0, false, WoW.instanceMap end

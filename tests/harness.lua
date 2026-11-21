@@ -106,6 +106,7 @@ function H.loadAddon(opts)
     if opts.probe then H.loadForeverProbe() end
     loadFiles(H.loadOrder(), "Apotheca", {})
     if opts.savedDB then rawset(_G, "ApothecaDB", opts.savedDB) end
+    if opts.savedCharDB then rawset(_G, "ApothecaCharDB", opts.savedCharDB) end
     WoW.fire("ADDON_LOADED", "Apotheca")
     if opts.probe then
         local ns = {}
