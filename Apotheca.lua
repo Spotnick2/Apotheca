@@ -243,11 +243,15 @@ local function OldKeyFits(key, realm, full, guid)
     return owner == nil or owner == guid
 end
 
--- This character's profile under the old scheme: the one saved profile that
--- fits, or nil when none does or several do (two realms, a character of the
--- same name: nothing tells them apart without the realm).
+-- This character's profile under the old scheme, or nil.
+-- - "-Name" first, if it fits: v2.11.1 made it after the hotfix when the box
+--   was ticked, so it is the profile in use since, even beside an older
+--   "Realm-Name" of the same character (Codex on #116).
+-- - Else the one saved "Realm-Name" that fits; none if several do (two
+--   realms: nothing tells them apart without the realm).
 local function OwnOldKey()
     local realm, full, guid = RealmName(), PlayerFullName(), PlayerGUID()
+    if OldKeyFits("-" .. full, realm, full, guid) then return "-" .. full end
     local found
     for key in pairs(ApothecaDB.profiles) do
         if OldKeyFits(key, realm, full, guid) then

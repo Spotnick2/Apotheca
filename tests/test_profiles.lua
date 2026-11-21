@@ -100,6 +100,24 @@ rawset(_G, "ApothecaDB", { activeProfile = "Global",
 login("Testcase", "Player-5826-000000AA", {})
 eq(Apotheca.GetCharProfileKey(), "-Testcase", "unticked since: ticking again finds it")
 
+-- Both: the pre-hotfix "Stonebrow-Testcase", then "-Testcase" made and
+-- customised on v2.11.1 after the hotfix (Codex on #116). The hotfix one is
+-- what the character has used since: kept at login and found when ticked.
+rawset(_G, "ApothecaDB", { activeProfile = "-Testcase",
+    profiles = { Global = {}, ["Stonebrow-Testcase"] = { iconSize = 44 }, ["-Testcase"] = { iconSize = 50 } } })
+login("Testcase", "Player-5826-000000AA", {})
+eq(ApothecaDB.activeProfile, "-Testcase", "with both formats, the hotfix profile in use is kept")
+eq(Apotheca.GetDB().iconSize, 50, "with its settings")
+eq(ApothecaDB.profiles["Stonebrow-Testcase"].iconSize, 44, "the older one is left as it was")
+rawset(_G, "ApothecaDB", { activeProfile = "Global",
+    profiles = { Global = {}, ["Stonebrow-Testcase"] = { iconSize = 44 }, ["-Testcase"] = { iconSize = 50 } } })
+login("Testcase", "Player-5826-000000AA", {})
+eq(Apotheca.GetCharProfileKey(), "-Testcase", "unticked: ticking again finds the hotfix one, not a third")
+rawset(_G, "ApothecaDB", { activeProfile = "Global", profileOwners = { ["-Testcase"] = "Player-5826-000000CC" },
+    profiles = { Global = {}, ["Stonebrow-Testcase"] = {}, ["-Testcase"] = {} } })
+login("Testcase", "Player-5826-000000AA", {})
+eq(Apotheca.GetCharProfileKey(), "Stonebrow-Testcase", "a hotfix profile another character took isn't preferred")
+
 -- Surnames (PORTING-TBC-TO-FOREVER.md): "Second Surname" and "Second
 -- Othername" are two characters. An old key built from the first name alone
 -- can't say whose it is; one naming the full name can (Codex on #116).
