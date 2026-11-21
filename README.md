@@ -14,7 +14,7 @@ Get it from [CurseForge](https://www.curseforge.com/wow/addons/apotheca), [Wago]
 
 ## Settings
 
-`/apo` opens them: Apotheca in Esc > Options > AddOns, with Consumables, Profession Bar, Button Order and Profile as its sub-pages. Your settings are saved per profile (global or per character), and your role choices are saved per character. The first WoW: Forever beta builds didn't load addon settings back at all. That was a client bug, fixed in build 1.60.1.70009.
+`/apo` opens them: Apotheca in Esc > Options > AddOns, with Consumables, Profession Bar, Button Order and Profile as its sub-pages. Your settings are saved per profile: the shared Global one, or your own for a character (the "Use character-specific profile" box affects only the character you tick it on). Your role choices are saved per character. The first WoW: Forever beta builds didn't load addon settings back at all. That was a client bug, fixed in build 1.60.1.70009.
 
 ## What it offers
 

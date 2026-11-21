@@ -2,13 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v2.12.0 - 2026-11-20
 
 ### Read this after updating
 - **"Use character-specific profile" now affects only the character you tick it on.** Before, ticking it moved **every** character onto that character's settings, although the options said it didn't. After updating, the character whose profile was in use keeps it, and every other character goes back to the shared (Global) settings. Nothing is deleted: tick the box on another character to give it its own settings again.
 
 ### Fixed
-- **Character-specific profiles work with the realm hidden.** Since the 2026-11-20 server hotfix the game no longer tells addons which realm you're on, so ticking "Use character-specific profile" made a new profile from defaults instead of finding the one you had. It now finds your existing profile by your character's full name, and a new one no longer needs the realm. Two characters with the same name, on different realms or with different surnames, each get their own and never share one. If Apotheca can't tell which character an old profile belonged to (two realms, or a profile saved under the first name only), that character starts from the shared settings.
+- **Character-specific profiles work with the realm hidden.** Since the 2026-11-20 server hotfix the game no longer tells addons which realm you're on, so ticking "Use character-specific profile" made a new profile from defaults instead of finding the one you had. It now finds your existing profile by your character's full name, and a new one no longer needs the realm. Two characters who share a first name but not a surname each get their own and never share one. If Apotheca can't tell which character an old profile belonged to (one saved under the first name only), that character starts from the shared settings; the old profile isn't deleted.
 
 ## v2.11.1 - 2026-11-18
 
