@@ -59,10 +59,12 @@ local TEMPLATE_REGIONS = {
     UIDropDownMenuTemplate              = { "Text" },
     OptionsSliderTemplate               = { "Low", "High", "Text" },
 }
+-- Their font strings have the template's font (the client's templates give
+-- each one), so SetText works on them (WowTestKit #69 refuses one without).
 for template, regions in pairs(TEMPLATE_REGIONS) do
     WoW.templates[template] = function(w)
         for _, region in ipairs(regions) do
-            local r = Methods.CreateFontString(w)
+            local r = Methods.CreateFontString(w, nil, "ARTWORK", "GameFontHighlight")
             w[region] = r
             if w._name then rawset(_G, w._name .. region, r) end
         end
@@ -112,37 +114,6 @@ function Methods.GetFontString(b)
     return b._fs
 end
 function Methods.RegisterForClicks(b, ...) b._clicks = { ... } end
--- WowTestKit #68: the widget hierarchy as far as asked (LibGlass's
--- Glass.Button checks region roles with it) and taking a mask off.
-local KIND_OF = { CheckButton = "Button", Button = "Frame", Cooldown = "Frame", Slider = "Frame" }
-function Methods.IsObjectType(w, t)
-    local k = w._type
-    while k do
-        if k == t then return true end
-        k = KIND_OF[k]
-    end
-    return false
-end
-function Methods.RemoveMaskTexture(t, m)
-    for i, x in ipairs(t._masks or {}) do
-        if x == m then table.remove(t._masks, i); return end
-    end
-end
--- WowTestKit #70: a button's pushed and highlight textures. A file sets it
--- on the button's own texture (made on first use), a texture is taken.
-local function stateTexture(b, field, tex, blend)
-    if type(tex) == "table" then
-        b[field] = tex
-    else
-        b[field] = b[field] or newWidget("Texture", b)
-        b[field]._file = tex
-    end
-    if blend then b[field]._blend = blend end
-end
-function Methods.SetPushedTexture(b, tex) stateTexture(b, "_pushed", tex) end
-function Methods.GetPushedTexture(b) return b._pushed end
-function Methods.SetHighlightTexture(b, tex, blend) stateTexture(b, "_highlight", tex, blend) end
-function Methods.GetHighlightTexture(b) return b._highlight end
 -- Every font string made, in order (WoW.fontStrings): the tests find a
 -- label, a note or an options row by its text.
 local kitFontString = Methods.CreateFontString
@@ -192,7 +163,7 @@ end
 
 table.insert(WoW.onReset, function()
     WoW.now          = 10000     -- the client's clock is never near 0
-    WoW.build        = "70959"
+    WoW.build        = "71037"
     WoW.class        = "PRIEST"
     WoW.instanceName, WoW.instanceType, WoW.instanceMap = "Kalimdor", "none", 1
     WoW.health, WoW.healthMax = 1000, 1000
@@ -229,82 +200,20 @@ end
 -- (the last moment a protected frame may change), then combat is on.
 -- WoW.enterLockdown skips that moment, for code that must cope with
 -- lockdown already being on.
--- WowTestKit #77: secure state drivers aren't modelled by the kit yet.
--- SecureStateDriver.lua (wow-ui-source forever, 70959): RegisterStateDriver
--- sets "state-<name>", resolved at once and then every 0.2 s (sooner after
--- PLAYER_REGEN_*) by secure code, so a "visibility" driver shows or hides a
--- protected frame in combat too. Modelled: "visibility" only, clauses
--- "[combat]" / "[nocombat]" / unconditional, resolved at registration, when
--- combat starts or ends (WoW.enterCombat, enterLockdown, leaveCombat), and at
--- every WoW.step. Any other condition fails the test.
-local stateDrivers = {}   -- frame -> { [state] = values }
-WoW.stateDrivers = stateDrivers
-local function parseOptions(values)
-    for clause in (values .. ";"):gmatch("%s*([^;]*);") do
-        local conds, value = clause:match("^%[([^%]]*)%]%s*(.-)%s*$")
-        if not conds then conds, value = "", clause:match("^%s*(.-)%s*$") end
-        local ok = true
-        for cond in conds:gmatch("[^,%s]+") do
-            if cond == "combat" then ok = ok and WoW.combat == true
-            elseif cond == "nocombat" then ok = ok and not WoW.combat
-            else error("state driver condition not modelled: " .. cond, 3) end
-        end
-        if ok then return value end
-    end
-end
-local function resolveDriver(frame, state, values)
-    local v = parseOptions(values)
-    if state == "visibility" then
-        if v == "show" then WoW.setShown(frame, true)
-        elseif v == "hide" then WoW.setShown(frame, false) end
-    end
-end
-function WoW.resolveDrivers()
-    for frame, drivers in pairs(stateDrivers) do
-        for state, values in pairs(drivers) do resolveDriver(frame, state, values) end
-    end
-end
-function RegisterStateDriver(frame, state, values)
-    stateDrivers[frame] = stateDrivers[frame] or {}
-    if values == nil or values == "" then stateDrivers[frame][state] = nil return end
-    stateDrivers[frame][state] = values
-    resolveDriver(frame, state, values)
-end
-function UnregisterStateDriver(frame, state)
-    if stateDrivers[frame] then stateDrivers[frame][state] = nil end
-end
-
 function WoW.enterCombat()
     WoW.aurasThrow = true
     WoW.fire("PLAYER_REGEN_DISABLED")
     WoW.combat = true
-    WoW.resolveDrivers()
 end
 
 function WoW.enterLockdown()
     WoW.combat, WoW.aurasThrow = true, true
     WoW.fire("PLAYER_REGEN_DISABLED")
-    WoW.resolveDrivers()
 end
 
 function WoW.leaveCombat()
     WoW.combat, WoW.aurasThrow = false, false
-    WoW.resolveDrivers()
     WoW.fire("PLAYER_REGEN_ENABLED")
-end
-
--- One step of the game: the clock (and any timer due) moves on by `elapsed`
--- seconds, then every visible frame's OnUpdate runs with it.
--- WowTestKit #66: the kit's WoW.tick moves the clock too, and ticking with 0
--- (MIGRATING's advice) hands every OnUpdate elapsed = 0, so the throttled
--- ones (deferred update, role and layout polls) never run. The clock is set
--- back before the tick meanwhile, so it moves once.
-function WoW.step(elapsed)
-    elapsed = elapsed or 1
-    WoW.advance(elapsed)
-    WoW.now = WoW.now - elapsed
-    WoW.resolveDrivers()
-    WoW.tick(elapsed)
 end
 
 ------------------------------------------------------------

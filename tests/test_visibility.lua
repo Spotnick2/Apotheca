@@ -12,7 +12,7 @@ WoW.strictLockdown = true      -- no insecure Show/Hide on the bar in combat
 local db = ApothecaDB.profiles[ApothecaDB.activeProfile]
 local F = ApothecaFrame
 local mana = Apotheca.buttons.mana
-local function driver() return WoW.stateDrivers[F] and WoW.stateDrivers[F].visibility end
+local function driver() return WoW.stateDrivers[F] and WoW.stateDrivers[F]["state-visibility"] end
 local function fight()
     WoW.enterCombat()
     WoW.step(0.5)
@@ -46,7 +46,9 @@ check(not fight(), "Out of combat: hidden in combat")
 check(F:IsShown(), "Out of combat: shown again after combat")
 
 -- Combat already locked down (no PLAYER_REGEN_DISABLED moment first).
+-- The driver resolves on the next frame, as the client's manager does.
 WoW.enterLockdown()
+WoW.step(0.02)
 check(not F:IsShown(), "Out of combat: hidden under lockdown too")
 WoW.leaveCombat()
 WoW.step(0.5)
