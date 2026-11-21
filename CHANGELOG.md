@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v2.13.0 - 2026-11-20
 
 ### Changed: the item data is from client build 71037
 - **XP Food offers 13 Vanilla recipes again.** Blizzard took their 5% kill-XP bonus away in the previous build and gave it back in this one: Crocolisk Gumbo, Curiously Tasty Omelet, Gooey Spider Cake, Hot Lion Chops, Soothing Turtle Bisque, Lean Venison, Crocolisk Steak, Big Bear Steak, Crispy Lizard Tail, Murloc Fin Soup, Kaldorei Spider Kabob, Roasted Kodo Meat and Strider Stew. They move from Buff Food back to the XP Food button.
