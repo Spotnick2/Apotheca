@@ -163,7 +163,7 @@ end
 
 table.insert(WoW.onReset, function()
     WoW.now          = 10000     -- the client's clock is never near 0
-    WoW.build        = "70959"
+    WoW.build        = "71037"
     WoW.class        = "PRIEST"
     WoW.instanceName, WoW.instanceType, WoW.instanceMap = "Kalimdor", "none", 1
     WoW.health, WoW.healthMax = 1000, 1000

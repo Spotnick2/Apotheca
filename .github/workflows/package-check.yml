@@ -72,7 +72,7 @@ jobs:
           # Instant Poison, the stones (sharpening, weight, Elemental), and
           # the mage scrolls on the wheel (#94): Imbue Chillknife, Minor
           # Evocation, Familiar: Cat, Cryoblast.
-          python3 Tools/build_item_tables.py docs/forever-consumables-70959.tsv \
+          python3 Tools/build_item_tables.py docs/forever-consumables-71037.tsv \
             --expect-skipped 11951 1072 282018 8243 8008 238641 202316 23122 217496 213549 289082 \
             --expect-present 13446 13444 9421 19013 19060 227813 232433 4604 8008 2888 6947 7964 12643 18262 255663 275067 213564 277493 217495 > /dev/null
           git diff --exit-code --ignore-cr-at-eol ApothecaItems.lua

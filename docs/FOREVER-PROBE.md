@@ -311,9 +311,25 @@ Not measured yet: the wheel **in combat** (the combat steps were skipped or done
 
 - `RegisterStateDriver(ApothecaFrame, "visibility", "[combat] show; hide")` (and `[combat] hide; show`) shows and hides the bar as combat starts and ends. The owner checked both modes in game, after the fix. Before it, the bar was shown or hidden only by the full update, which doesn't run in combat. The state driver is the porting guide's, measured since 70425.
 
+## Build 1.60.1.71037 (client built Nov 18), 2026-11-20
+
+- **API dump** `forever-api-1.60.1.71037.md`, diffed against 70959 (#114). It only grew: `C_BattleNet.IsGameAccountOnSameRealm` (new) and `BNetGameAccountInfo.hasRealmInfo`. Apotheca calls neither. All 30 test files pass against the kit's 71037 data (WowTestKit `a9b2ee0`).
+- **Probe** (`/fp steps apo probe`, run #460, a level 1 paladin with a two-handed mace): the same as on 70959, out of combat and in combat.
+  - Current health and power are **secret at rest**, and their maximums are readable. `API.PlayerMissing` = `nil, nil`, and comparing `UnitHealthMissing` throws.
+  - Out of combat, auras and cooldowns aren't secret. In combat, `ShouldAurasBeSecret` and `ShouldCooldownsBeSecret` are true, and `GetAuraDataByIndex` throws. Food and drink not cooling down still come back plain (`0, 0, 1`) in combat.
+  - These are unchanged: `GetWeaponEnchantInfo`, the bags (0 to 5), the role sources (all unset), the single class-named spec (Paladin, 1486), the templates and `GameTooltip.SetItemByID`. `AnimateTexCoords` is still absent.
+- **Consumable scan** (`docs/forever-consumables-71037.tsv`, run #461, complete): 2476 consumables, 8 still without text. Catalog: `C:/Projects/WoW/References/Forever/consumables/forever-consumables-1.60.1.71037.md`. **Well Fed scan** (`docs/forever-wellfed-71037.tsv`): complete, identical to 70959's (30 Well Fed spells, 13 hidden).
+  - **The kill-XP bonus is back on the 13 Vanilla recipes 70959 took it from** (Crocolisk Gumbo, Murloc Fin Soup, Roasted Kodo Meat, Strider Stew and the rest, listed above). Their tooltips say "Additionally, experience gained from kills is increased by 5%" again. Wowhead's Forever tooltip for Crocolisk Gumbo, fetched the same day, agrees. Their food spells (1248377 to 1248389) never changed. The generator puts them back on XP Food, and that's the only change to `ApothecaItems.lua`.
+  - The two level-55 feasts (Specklefin Feast, Grand Lobster Banquet) now describe their Well Fed (+20 Attack Power, +23 Spell Damage, +44 Healing, +10 Stamina for 45 min). They're still reported as skipped: a feast is placed for the group, not eaten from the bag.
+  - Scroll of Cryoblast and Greater Cryoblast hit a little harder (the wheel shows no numbers).
+  - The five Forever fruits (249791 to 249795) still load no item data, so their 69977 rows are carried over again.
+  - The other differences from 70959 are a spell description the client had cached or not (the TSV's `|| DESC:` suffix), not a change to the items.
+- **The realm is hidden** since the 2026-11-20 server hotfix (porting guide). The 2.12.0 migration (#115) ran at this login without error: the character's `ApothecaCharDB.profile` is `Global`, and this account only ever used Global.
+- `MEASURED_ON_BUILD` is bumped to **71037**.
+
 ## Still to measure
 
-- **The aura of a former XP food (70959).** Eat Crocolisk Gumbo (or any of the 13 above), then `/fp apo probe` out of combat: the `player auras` line shows the Well Fed ID. If it is one of `XP_WELL_FED_SPELLS`, the generator has to tell those foods apart from real XP food.
+- **The aura of a former-and-again XP food (70959, 71037).** Eat Crocolisk Gumbo (or any of the 13 above), then `/fp apo probe` out of combat: the `player auras` line shows the Well Fed ID. It should be one of `XP_WELL_FED_SPELLS`. If it isn't, the XP Food reminder keeps asking after eating one.
 
 - **Professions (#42), still open:** the profession keys with `ActionButtonUseKeyDown` 0 (only 1 was measured; mouse clicks are measured on both). Characters with Mining, Herbalism, Alchemy, Blacksmithing, Engineering, Leatherworking at a higher rank, and a level-16 rogue (Pick Lock): `/fp apo prof <label>` and `/fp apo proftest`.
 
