@@ -128,7 +128,10 @@ Apotheca.UpdateAllButtons()
 -- The snippets
 ------------------------------------------------------------
 
+-- The screen frame covers UIParent: its rect starts at 0, 0 (the kit's
+-- GetMousePosition measures from the frame's left and bottom, as the client's).
 screen._width, screen._height = 1920, 1080
+screen._left, screen._bottom = 0, 0
 local CX, CY = 960, 540
 local function cursor(x, y) WoW.cursorX, WoW.cursorY = x, y end
 local function slotAt(i) return CX + screen:GetAttribute("sx" .. i), CY + screen:GetAttribute("sy" .. i) end
