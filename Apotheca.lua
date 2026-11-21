@@ -13,9 +13,10 @@ Apotheca = Apotheca or {}
 -- ============================================================
 -- SAVED VARIABLES STRUCTURE
 -- ApothecaDB = {
---   profiles    = { ["Global"] = {...}, ["Realm-Name"] = {...}, ["Name-#serial"] = {...} }
+--   profiles    = { ["Global"] = {...}, ["Realm-Name"] = {...}, ["Full Name-#serial"] = {...} }
 --   activeProfile = "Global"   -- this session's profile, set from ApothecaCharDB.profile
 --   legacyActiveProfile = ...  -- the account-wide choice from before #115
+--   profileOwners = { [key] = GUID }  -- which character took each profile as its own
 -- }
 -- ApothecaCharDB.profile / .profileKey: which profile this character uses,
 -- and its own key (#115; see GetCharProfileKey).
@@ -192,9 +193,24 @@ local function Readable(s)
     return s:find("%S") ~= nil
 end
 
-local function PlayerName()
-    local name = UnitName and UnitName("player")
-    return Readable(name) and name or "Unknown"
+-- The player's full name, surname included. UnitName("player") gave the
+-- first name alone on 70374 (surname in the second return), and first names
+-- are not unique on Forever (PORTING-TBC-TO-FOREVER.md, "Characters have
+-- surnames"). GetUnitName gives the full one: on Forever it is
+-- Blizzard_FrameXMLUtil/Camelot/NameUtil.lua, name and surname from UnitName
+-- joined, whatever its second argument.
+local function PlayerFullName()
+    local full = GetUnitName and GetUnitName("player", false)
+    if Readable(full) then return full end
+    local first, second = UnitName("player")
+    if not Readable(first) then return "Unknown" end
+    if Readable(second) and not first:find(" ") then return first .. " " .. second end
+    return first
+end
+
+local function PlayerGUID()
+    local guid = UnitGUID and UnitGUID("player")
+    return Readable(guid) and guid or nil
 end
 
 -- The realm, or nil: since the 2026-11-20 hotfix GetRealmName() returns ""
@@ -204,39 +220,58 @@ local function RealmName()
     return Readable(realm) and realm or nil
 end
 
--- Is `key` this character's own profile under the "Realm-Name" scheme? With
--- the realm hidden, any realm will do: the name is all there is.
-local function IsOwnRealmKey(key)
-    if type(key) ~= "string" or key == "Global" then return false end
-    local name, realm = PlayerName(), RealmName()
-    if realm then return key == realm .. "-" .. name end
-    local suffix = "-" .. name
-    return #key > #suffix and key:sub(-#suffix) == suffix
+-- Which character (GUID) took each profile as its own, so two characters
+-- that read alike can never both take one.
+local function ProfileOwners()
+    if type(ApothecaDB.profileOwners) ~= "table" then ApothecaDB.profileOwners = {} end
+    return ApothecaDB.profileOwners
 end
 
--- Returns this character's own profile key. Only valid after PLAYER_LOGIN.
--- Once given, it is kept (ApothecaCharDB.profileKey), so it never depends on
--- what the realm reads later. A new one is "Realm-Name" while the realm is
--- readable. With it hidden: the one saved "Realm-Name" profile of this name,
--- else the name and the GUID's serial, which tells characters apart without
--- the realm (AltStable keys characters by GUID since the hotfix).
-function Apotheca.GetCharProfileKey()
-    local c = ApothecaCharDB
-    if type(c) == "table" and type(c.profileKey) == "string" then return c.profileKey end
-    local name, realm = PlayerName(), RealmName()
-    if realm then return realm .. "-" .. name end
+-- Could the saved profile `key` be this character's, by the old key scheme?
+-- "Realm-Name" (before #115) and "-Name" (v2.11.1 after the hotfix) were
+-- built from UnitName's first return, so only a key naming the FULL name
+-- counts: a first name alone could be another character's. With the realm
+-- readable, it must be this realm (or the hotfix's empty one). A profile
+-- another character took is not this one's.
+local function OldKeyFits(key, realm, full, guid)
+    if type(key) ~= "string" or key == "Global" then return false end
+    if type(ApothecaDB.profiles[key]) ~= "table" then return false end
+    local kRealm, kName = key:match("^(.-)%-([^%-]+)$")
+    if kName ~= full then return false end
+    if realm and kRealm ~= realm and kRealm ~= "" then return false end
+    local owner = ApothecaDB.profileOwners and ApothecaDB.profileOwners[key]
+    return owner == nil or owner == guid
+end
+
+-- This character's profile under the old scheme: the one saved profile that
+-- fits, or nil when none does or several do (two realms, a character of the
+-- same name: nothing tells them apart without the realm).
+local function OwnOldKey()
+    local realm, full, guid = RealmName(), PlayerFullName(), PlayerGUID()
     local found
-    for key in pairs(ApothecaDB and ApothecaDB.profiles or {}) do
-        if IsOwnRealmKey(key) then
-            if found then found = false break end
+    for key in pairs(ApothecaDB.profiles) do
+        if OldKeyFits(key, realm, full, guid) then
+            if found then return nil end
             found = key
         end
     end
-    if found then return found end
-    local guid = UnitGUID and UnitGUID("player")
-    local serial = Readable(guid) and guid:match("%-(%x+)$")
-    if serial then return name .. "-#" .. serial end
-    return "Unknown-" .. name
+    return found
+end
+
+-- Returns this character's own profile key. Only valid after PLAYER_LOGIN.
+-- Once given, it is kept (ApothecaCharDB.profileKey). Else the one old-scheme
+-- profile that is this character's (OwnOldKey), else a new key from the full
+-- name and the GUID's serial, which needs no realm and is the character's
+-- alone (AltStable keys characters by GUID since the hotfix).
+function Apotheca.GetCharProfileKey()
+    local c = ApothecaCharDB
+    if type(c) == "table" and type(c.profileKey) == "string" then return c.profileKey end
+    local own = ApothecaDB and ApothecaDB.profiles and OwnOldKey()
+    if own then return own end
+    local full, guid = PlayerFullName(), PlayerGUID()
+    local serial = guid and guid:match("%-(%x+)$")
+    if serial then return full .. "-#" .. serial end
+    return (RealmName() or "Unknown") .. "-" .. full
 end
 
 -- How a profile key reads in the options: the serial means nothing to a player.
@@ -257,7 +292,7 @@ Apotheca.GetDB = DB
 -- Make `key` this session's profile, creating it from defaults if needed.
 -- Nothing is refreshed.
 local function UseProfile(key)
-    if not ApothecaDB.profiles[key] then
+    if type(ApothecaDB.profiles[key]) ~= "table" then
         ApothecaDB.profiles[key] = DeepCopy(PROFILE_DEFAULTS)
     else
         -- InitDB only backfills the profile that was active at load, so a
@@ -277,19 +312,23 @@ end
 local function SetCharProfile(key)
     ApothecaCharDB = type(ApothecaCharDB) == "table" and ApothecaCharDB or {}
     ApothecaCharDB.profile = key
-    if key ~= "Global" then ApothecaCharDB.profileKey = key end
+    if key ~= "Global" then
+        ApothecaCharDB.profileKey = key
+        local guid = PlayerGUID()
+        if guid then ProfileOwners()[key] = guid end
+    end
 end
 
 -- At PLAYER_LOGIN, when the character's name is known: this character's
 -- profile. A character with no choice saved yet (first login since #115)
--- keeps the old account-wide one only if it was its own; every other
--- character goes back to Global.
+-- keeps the old account-wide one only if it is its own by the same test as
+-- GetCharProfileKey (OwnOldKey); every other character goes back to Global.
 local function ResolveCharProfile()
     local c = type(ApothecaCharDB) == "table" and ApothecaCharDB or nil
     local key = c and c.profile
     if type(key) ~= "string" then
         local legacy = ApothecaDB.legacyActiveProfile
-        key = IsOwnRealmKey(legacy) and legacy or "Global"
+        key = (legacy ~= "Global" and legacy == OwnOldKey()) and legacy or "Global"
         SetCharProfile(key)
     end
     UseProfile(key)
